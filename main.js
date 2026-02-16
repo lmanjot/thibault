@@ -24,6 +24,8 @@ const STONE_FIRE = 'FIRE';
 const STONE_WATER = 'WATER';
 const STONE_LIGHTNING = 'LIGHTNING';
 
+const BONUS_HORNS = 'HORNS';
+
 // ============================================
 // SECTION 2: GAME STATE
 // ============================================
@@ -34,6 +36,8 @@ let levelTransitionTimer = 0;
 let levelTransitionMessage = '';
 let particles = [];
 let screenShake = 0;
+let bonuses = [];
+let bonusSpawnTimer = 0;
 
 // ============================================
 // SECTION 3: CANVAS SETUP
@@ -121,6 +125,206 @@ function renderParticles() {
 }
 
 // ============================================
+// SECTION 5.5: SOUND SYSTEM
+// ============================================
+
+const sounds = {
+    attack: null,
+    jump: null,
+    hit: null,
+    enemyHit: null,
+    bonusPickup: null,
+    bossHit: null
+};
+
+function initSounds() {
+    // Create audio context for sound generation
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Generate attack sound (sword swipe)
+    sounds.attack = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.value = 200;
+        osc.type = 'sawtooth';
+        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.1);
+    };
+    
+    // Generate jump sound
+    sounds.jump = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(300, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.15);
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.15);
+    };
+    
+    // Generate hit sound (player takes damage)
+    sounds.hit = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.value = 150;
+        osc.type = 'square';
+        gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.2);
+    };
+    
+    // Generate enemy hit sound
+    sounds.enemyHit = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(400, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.1);
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.1);
+    };
+    
+    // Generate bonus pickup sound
+    sounds.bonusPickup = () => {
+        const osc1 = audioContext.createOscillator();
+        const osc2 = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioContext.destination);
+        osc1.frequency.value = 600;
+        osc2.frequency.value = 800;
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        osc1.start(audioContext.currentTime);
+        osc2.start(audioContext.currentTime);
+        osc1.stop(audioContext.currentTime + 0.3);
+        osc2.stop(audioContext.currentTime + 0.3);
+    };
+    
+    // Generate boss hit sound
+    sounds.bossHit = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(250, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.15);
+        osc.type = 'sawtooth';
+        gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.15);
+    };
+}
+
+// Initialize sounds when page loads
+initSounds();
+
+// ============================================
+// SECTION 5.6: ENTITY - BONUS
+// ============================================
+
+class Bonus {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.width = 24;
+        this.height = 24;
+        this.type = type;
+        this.vy = 0;
+        this.onGround = false;
+        this.pulseTimer = 0;
+        this.collected = false;
+    }
+    
+    update(platforms) {
+        this.pulseTimer++;
+        
+        // Gravity
+        this.vy += GRAVITY;
+        if (this.vy > 15) this.vy = 15;
+        this.y += this.vy;
+        
+        // Ground collision
+        this.onGround = false;
+        if (this.y + this.height >= GROUND_Y) {
+            this.y = GROUND_Y - this.height;
+            this.vy = 0;
+            this.onGround = true;
+        }
+        
+        // Platform collision
+        for (const plat of platforms) {
+            if (this.vy >= 0 &&
+                this.x + this.width > plat.x && this.x < plat.x + plat.width &&
+                this.y + this.height >= plat.y && this.y + this.height <= plat.y + plat.height + 8) {
+                this.y = plat.y - this.height;
+                this.vy = 0;
+                this.onGround = true;
+            }
+        }
+    }
+    
+    render(ctx) {
+        ctx.save();
+        
+        // Pulse effect
+        const pulse = Math.sin(this.pulseTimer * 0.15) * 0.15 + 1;
+        const size = this.width * pulse;
+        const offsetX = (this.width - size) / 2;
+        const offsetY = (this.height - size) / 2;
+        
+        if (this.type === BONUS_HORNS) {
+            // Glow effect
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ffaa00';
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            
+            // Horns icon
+            ctx.fillStyle = '#ff8800';
+            // Left horn
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width / 2 - 6, this.y + this.height / 2 + 4);
+            ctx.lineTo(this.x + this.width / 2 - 8, this.y + this.height / 2 - 4);
+            ctx.lineTo(this.x + this.width / 2 - 2, this.y + this.height / 2);
+            ctx.closePath();
+            ctx.fill();
+            // Right horn
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width / 2 + 6, this.y + this.height / 2 + 4);
+            ctx.lineTo(this.x + this.width / 2 + 8, this.y + this.height / 2 - 4);
+            ctx.lineTo(this.x + this.width / 2 + 2, this.y + this.height / 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+}
+
+// ============================================
 // SECTION 6: ENTITY - PLAYER
 // ============================================
 
@@ -144,6 +348,12 @@ class Player {
         this.invincible = 0;
         this.flashTimer = 0;
         this.animTimer = 0;
+        this.hasHorns = false;
+        this.hornsTimer = 0;
+        this.swordAngle = 0;
+        this.swordSwingProgress = 0;
+        this.hornHitIds = new Set();
+        this.hornHitCooldowns = new Map();
     }
 
     update(platforms) {
@@ -167,6 +377,7 @@ class Player {
             this.onGround = false;
             jumpPressed = true;
             spawnParticles(this.x + this.width / 2, this.y + this.height, '#aaa', 5, 3);
+            if (sounds.jump) sounds.jump();
         }
         if (!isJump()) {
             jumpPressed = false;
@@ -209,6 +420,7 @@ class Player {
             this.attackDuration = 12;
             this.attackCooldown = 20;
             this.attackHitIds.clear();
+            this.swordSwingProgress = 0;
             attackPressed = true;
             spawnParticles(
                 this.x + this.width / 2 + this.facing * 30,
@@ -216,13 +428,45 @@ class Player {
                 this.getSwordColor(),
                 4, 4
             );
+            if (sounds.attack) sounds.attack();
         }
         if (!isAttack()) {
             attackPressed = false;
         }
 
         if (this.attackCooldown > 0) this.attackCooldown--;
-        if (this.attackDuration > 0) this.attackDuration--;
+        if (this.attackDuration > 0) {
+            this.attackDuration--;
+            // Sword swing animation
+            this.swordSwingProgress = 1 - (this.attackDuration / 12);
+            this.swordAngle = this.facing === 1 
+                ? -Math.PI * 0.6 + (Math.PI * 0.8 * this.swordSwingProgress)
+                : Math.PI * 0.4 - (Math.PI * 0.8 * this.swordSwingProgress);
+        } else {
+            this.swordAngle = 0;
+            this.swordSwingProgress = 0;
+        }
+        
+        // Horns timer countdown
+        if (this.hornsTimer > 0) {
+            this.hornsTimer--;
+            if (this.hornsTimer <= 0) {
+                this.hasHorns = false;
+                this.hornHitIds.clear();
+                this.hornHitCooldowns.clear();
+            }
+        }
+        
+        // Update horn hit cooldowns
+        for (const [id, cooldown] of this.hornHitCooldowns.entries()) {
+            const newCooldown = cooldown - 1;
+            if (newCooldown <= 0) {
+                this.hornHitCooldowns.delete(id);
+                this.hornHitIds.delete(id);
+            } else {
+                this.hornHitCooldowns.set(id, newCooldown);
+            }
+        }
 
         // Invincibility countdown
         if (this.invincible > 0) this.invincible--;
@@ -252,6 +496,8 @@ class Player {
     }
 
     takeDamage(amount) {
+        // Horns power-up makes player invincible to enemy damage
+        if (this.hasHorns) return;
         if (this.invincible > 0) return;
         this.hp -= amount;
         if (this.hp < 0) this.hp = 0;
@@ -259,6 +505,19 @@ class Player {
         this.flashTimer = 20;
         screenShake = 6;
         spawnParticles(this.x + this.width / 2, this.y + this.height / 2, '#ff0000', 8, 5);
+        if (sounds.hit) sounds.hit();
+    }
+    
+    getHornHitbox() {
+        if (!this.hasHorns) return null;
+        const w = 40;
+        const h = 30;
+        return {
+            x: this.facing === 1 ? this.x + this.width - 10 : this.x - w + 10,
+            y: this.y + 5,
+            width: w,
+            height: h
+        };
     }
 
     addStone(stoneType) {
@@ -329,27 +588,33 @@ class Player {
         ctx.fillStyle = '#8b6914';
         ctx.fillRect(bx + 2, by + bh * 0.55, bw - 4, 5);
 
-        // Sword
+        // Sword with animation
         const sLen = 38;
-        const sX = this.facing === 1 ? bx + bw : bx - sLen;
-        const sY = by + 20;
-
-        // Sword handle
         const handleX = this.facing === 1 ? bx + bw - 2 : bx - 6;
+        const handleY = by + 20;
+        const handleCenterX = handleX + 4;
+        const handleCenterY = handleY + 3;
+        
+        ctx.save();
+        ctx.translate(handleCenterX, handleCenterY);
+        ctx.rotate(this.swordAngle);
+        
+        // Sword handle
         ctx.fillStyle = '#8b4513';
-        ctx.fillRect(handleX, sY - 3, 8, 12);
+        ctx.fillRect(-4, -3, 8, 12);
         ctx.fillStyle = '#ffd700';
-        ctx.fillRect(handleX - 2, sY - 1, 12, 3);
-
-        // Blade
+        ctx.fillRect(-6, -1, 12, 3);
+        
+        // Blade (positioned relative to handle)
+        const bladeX = this.facing === 1 ? 0 : -sLen;
+        const bladeY = -3;
         ctx.fillStyle = '#ddd';
-        ctx.fillRect(sX, sY, sLen, 5);
+        ctx.fillRect(bladeX, bladeY, sLen, 5);
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillRect(sX, sY, sLen, 2);
-
+        ctx.fillRect(bladeX, bladeY, sLen, 2);
+        
         // Sword glow
         if (this.stones.length > 0) {
-            ctx.save();
             ctx.shadowBlur = 25;
             if (this.hasAllStones()) {
                 const t = Date.now() * 0.005;
@@ -368,9 +633,10 @@ class Player {
                 ctx.shadowColor = '#ff4500';
                 ctx.fillStyle = 'rgba(255,69,0,0.5)';
             }
-            ctx.fillRect(sX, sY - 1, sLen, 7);
-            ctx.restore();
+            ctx.fillRect(bladeX, bladeY - 1, sLen, 7);
         }
+        
+        ctx.restore();
 
         // Attack slash arc
         if (this.attackDuration > 0) {
@@ -388,6 +654,33 @@ class Player {
             const sweep = this.facing * Math.PI * 0.8 * progress;
             ctx.arc(cx, cy, 45, startAngle, startAngle + sweep);
             ctx.stroke();
+            ctx.restore();
+        }
+        
+        // Horns power-up visual
+        if (this.hasHorns) {
+            ctx.save();
+            const hornColor = '#ffaa00';
+            ctx.fillStyle = hornColor;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = hornColor;
+            
+            // Left horn
+            ctx.beginPath();
+            ctx.moveTo(bx + 8, by + 4);
+            ctx.lineTo(bx + 4, by - 8);
+            ctx.lineTo(bx + 14, by + 2);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Right horn
+            ctx.beginPath();
+            ctx.moveTo(bx + bw - 8, by + 4);
+            ctx.lineTo(bx + bw - 4, by - 8);
+            ctx.lineTo(bx + bw - 14, by + 2);
+            ctx.closePath();
+            ctx.fill();
+            
             ctx.restore();
         }
 
@@ -474,6 +767,7 @@ class Enemy {
             this.dead = true;
             spawnParticles(this.x + this.width / 2, this.y + this.height / 2, '#ff4444', 10, 5);
         }
+        if (sounds.enemyHit) sounds.enemyHit();
         return this.dead;
     }
 
@@ -650,6 +944,7 @@ class Boss {
             screenShake = 10;
             spawnParticles(this.x + this.width / 2, this.y + this.height / 2, '#ffaa00', 20, 8);
         }
+        if (sounds.bossHit) sounds.bossHit();
         return this.dead;
     }
 
@@ -847,15 +1142,21 @@ function loadLevel(levelNum) {
 
     const oldHp = player ? player.hp : 100;
     const oldStones = player ? [...player.stones] : [];
+    const hadHorns = player ? player.hasHorns : false;
+    const hornsTimer = player ? player.hornsTimer : 0;
     player = new Player(60, GROUND_Y - 60);
     player.stones = oldStones;
     player.hp = levelNum > 1 ? Math.min(oldHp + 30, player.maxHp) : player.maxHp;
     player.updateDamageMultiplier();
+    player.hasHorns = hadHorns;
+    player.hornsTimer = hornsTimer;
 
     platforms = level.platforms.map(p => ({ ...p }));
     enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.type));
     boss = new Boss(level.bossX, 100, levelNum);
     particles = [];
+    bonuses = [];
+    bonusSpawnTimer = 0;
     screenShake = 0;
     entityIdCounter = 100;
 }
@@ -922,6 +1223,15 @@ function renderUI() {
         ctx.fillStyle = '#ffcc00';
         ctx.fillText('Lightning', 28, py + 14);
         py += 24;
+    }
+    
+    // Horns power-up indicator
+    if (player.hasHorns) {
+        const timeLeft = Math.ceil(player.hornsTimer / 60);
+        ctx.fillStyle = 'rgba(255,170,0,0.35)';
+        ctx.fillRect(18, py - 2, 95, 20);
+        ctx.fillStyle = '#ffaa00';
+        ctx.fillText(`Horns (${timeLeft}s)`, 28, py + 14);
     }
 
     // Boss health bar
@@ -1169,6 +1479,11 @@ function renderGame() {
     if (boss && !boss.dead) {
         boss.render(ctx);
     }
+    
+    // Bonuses
+    for (const bonus of bonuses) {
+        bonus.render(ctx);
+    }
 
     // Player
     player.render(ctx);
@@ -1200,8 +1515,38 @@ function update() {
         if (boss && !boss.dead) {
             boss.update(player, platforms);
         }
+        
+        // Spawn bonuses periodically
+        bonusSpawnTimer++;
+        if (bonusSpawnTimer >= 600 && Math.random() < 0.02) { // Spawn chance every ~10 seconds
+            const spawnX = 100 + Math.random() * (CANVAS_WIDTH - 200);
+            const spawnY = 100;
+            bonuses.push(new Bonus(spawnX, spawnY, BONUS_HORNS));
+            bonusSpawnTimer = 0;
+        }
+        
+        // Update bonuses
+        for (let i = bonuses.length - 1; i >= 0; i--) {
+            const bonus = bonuses[i];
+            if (bonus.collected) {
+                bonuses.splice(i, 1);
+                continue;
+            }
+            bonus.update(platforms);
+            
+            // Check collision with player
+            if (rectsOverlap(bonus, player)) {
+                if (bonus.type === BONUS_HORNS) {
+                    player.hasHorns = true;
+                    player.hornsTimer = 600; // 10 seconds at 60fps
+                    spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ffaa00', 15, 6);
+                    if (sounds.bonusPickup) sounds.bonusPickup();
+                }
+                bonus.collected = true;
+            }
+        }
 
-        // Player attack vs enemies
+        // Player attack vs enemies (sword)
         const hitbox = player.getAttackHitbox();
         if (hitbox) {
             for (const e of enemies) {
@@ -1236,6 +1581,31 @@ function update() {
                     boss.takeDamage(dmg);
                     player.attackHitIds.add(boss.id);
                 }
+            }
+        }
+        
+        // Horns attack (when player has horns power-up) - only when moving forward
+        const hornHitbox = player.getHornHitbox();
+        if (hornHitbox && Math.abs(player.vx) > 0.5) {
+            for (const e of enemies) {
+                if (player.hornHitIds.has(e.id)) continue;
+                if (rectsOverlap(hornHitbox, e)) {
+                    const dmg = 20;
+                    e.takeDamage(dmg);
+                    player.hornHitIds.add(e.id);
+                    player.hornHitCooldowns.set(e.id, 30); // 0.5 second cooldown
+                    spawnParticles(e.x + e.width / 2, e.y + e.height / 2, '#ffaa00', 6, 4);
+                }
+            }
+            enemies = enemies.filter(e => !e.dead);
+            
+            // Horns attack vs boss
+            if (boss && !boss.dead && !player.hornHitIds.has(boss.id) && rectsOverlap(hornHitbox, boss)) {
+                const dmg = 25;
+                boss.takeDamage(dmg);
+                player.hornHitIds.add(boss.id);
+                player.hornHitCooldowns.set(boss.id, 30);
+                spawnParticles(boss.x + boss.width / 2, boss.y + boss.height / 2, '#ffaa00', 8, 5);
             }
         }
 
@@ -1314,6 +1684,8 @@ function startGame() {
     enemies = [];
     boss = null;
     particles = [];
+    bonuses = [];
+    bonusSpawnTimer = 0;
     screenShake = 0;
     jumpPressed = false;
     attackPressed = false;
