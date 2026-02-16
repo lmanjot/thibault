@@ -25,6 +25,7 @@ const STONE_WATER = 'WATER';
 const STONE_LIGHTNING = 'LIGHTNING';
 
 const BONUS_HORNS = 'HORNS';
+const BONUS_PISTOL = 'PISTOL';
 
 // ============================================
 // SECTION 2: GAME STATE
@@ -38,6 +39,8 @@ let particles = [];
 let screenShake = 0;
 let bonuses = [];
 let bonusSpawnTimer = 0;
+let cameraX = 0;
+let playerBullets = [];
 
 // ============================================
 // SECTION 3: CANVAS SETUP
@@ -81,6 +84,7 @@ function isLeft()   { return keys['ArrowLeft']  || keys['KeyA']; }
 function isRight()  { return keys['ArrowRight'] || keys['KeyD']; }
 function isJump()   { return keys['Space']      || keys['ArrowUp'] || keys['KeyW']; }
 function isAttack() { return keys['KeyX']       || keys['KeyZ'] || keys['KeyJ']; }
+function isShoot()  { return keys['KeyC']       || keys['KeyK']; }
 
 // ============================================
 // SECTION 5: PARTICLE SYSTEM
@@ -318,6 +322,28 @@ class Bonus {
             ctx.lineTo(this.x + this.width / 2 + 2, this.y + this.height / 2);
             ctx.closePath();
             ctx.fill();
+        } else if (this.type === BONUS_PISTOL) {
+            // Glow effect
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#4444ff';
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#4444ff';
+            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            
+            // Pistol icon
+            ctx.fillStyle = '#333';
+            // Handle
+            ctx.fillRect(this.x + this.width / 2 - 4, this.y + this.height / 2 + 2, 8, 6);
+            // Barrel
+            ctx.fillRect(this.x + this.width / 2 + 4, this.y + this.height / 2, 6, 4);
+            // Trigger guard
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x + this.width / 2, this.y + this.height / 2 + 4, 3, 0, Math.PI);
+            ctx.stroke();
         }
         
         ctx.restore();
@@ -354,6 +380,10 @@ class Player {
         this.swordSwingProgress = 0;
         this.hornHitIds = new Set();
         this.hornHitCooldowns = new Map();
+        this.hasPistol = false;
+        this.pistolTimer = 0;
+        this.shootCooldown = 0;
+        this.shootPressed = false;
     }
 
     update(platforms) {
@@ -390,7 +420,7 @@ class Player {
         // Move horizontally, then vertically (separated for better collision)
         this.x += this.vx;
         if (this.x < 0) this.x = 0;
-        if (this.x + this.width > CANVAS_WIDTH) this.x = CANVAS_WIDTH - this.width;
+        if (this.x + this.width > worldWidth) this.x = worldWidth - this.width;
 
         this.y += this.vy;
 
@@ -466,6 +496,37 @@ class Player {
             } else {
                 this.hornHitCooldowns.set(id, newCooldown);
             }
+        }
+        
+        // Pistol timer countdown
+        if (this.pistolTimer > 0) {
+            this.pistolTimer--;
+            if (this.pistolTimer <= 0) {
+                this.hasPistol = false;
+            }
+        }
+        
+        // Shooting with pistol
+        if (this.shootCooldown > 0) this.shootCooldown--;
+        if (isShoot() && this.hasPistol && this.shootCooldown <= 0 && !this.shootPressed) {
+            // Create bullet
+            const bulletX = this.facing === 1 ? this.x + this.width : this.x;
+            const bulletY = this.y + this.height / 2;
+            playerBullets.push({
+                x: bulletX,
+                y: bulletY,
+                vx: this.facing * 12,
+                vy: 0,
+                width: 8,
+                height: 4,
+                damage: 15
+            });
+            this.shootCooldown = 10; // Fast shooting rate
+            this.shootPressed = true;
+            if (sounds.attack) sounds.attack();
+        }
+        if (!isShoot()) {
+            this.shootPressed = false;
         }
 
         // Invincibility countdown
@@ -680,6 +741,27 @@ class Player {
             ctx.lineTo(bx + bw - 14, by + 2);
             ctx.closePath();
             ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // Pistol visual (when equipped)
+        if (this.hasPistol) {
+            ctx.save();
+            const pistolX = this.facing === 1 ? bx + bw - 8 : bx - 12;
+            const pistolY = by + 20;
+            
+            // Pistol handle
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(pistolX, pistolY, 6, 8);
+            // Barrel
+            ctx.fillStyle = '#333';
+            ctx.fillRect(this.facing === 1 ? pistolX + 6 : pistolX - 10, pistolY + 2, 10, 4);
+            // Muzzle flash (when shooting)
+            if (this.shootCooldown > 7) {
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(this.facing === 1 ? pistolX + 16 : pistolX - 16, pistolY + 1, 4, 6);
+            }
             
             ctx.restore();
         }
@@ -1080,36 +1162,70 @@ function rectsOverlap(a, b) {
 
 const levels = [
     {
+        worldWidth: 4000,
         platforms: [
             { x: 200, y: 420, width: 150, height: 18 },
             { x: 500, y: 370, width: 150, height: 18 },
             { x: 800, y: 320, width: 150, height: 18 },
-            { x: 1000, y: 420, width: 150, height: 18 }
+            { x: 1200, y: 420, width: 150, height: 18 },
+            { x: 1500, y: 370, width: 150, height: 18 },
+            { x: 1800, y: 320, width: 150, height: 18 },
+            { x: 2200, y: 420, width: 150, height: 18 },
+            { x: 2500, y: 370, width: 150, height: 18 },
+            { x: 2800, y: 320, width: 150, height: 18 },
+            { x: 3200, y: 420, width: 150, height: 18 },
+            { x: 3500, y: 370, width: 150, height: 18 }
         ],
         enemies: [
             { x: 350, y: 100, type: 'basic' },
-            { x: 650, y: 100, type: 'basic' }
+            { x: 650, y: 100, type: 'basic' },
+            { x: 950, y: 100, type: 'basic' },
+            { x: 1300, y: 100, type: 'medium' },
+            { x: 1600, y: 100, type: 'basic' },
+            { x: 1900, y: 100, type: 'medium' },
+            { x: 2300, y: 100, type: 'basic' },
+            { x: 2600, y: 100, type: 'hard' },
+            { x: 2900, y: 100, type: 'medium' },
+            { x: 3300, y: 100, type: 'hard' }
         ],
-        bossX: 1080
+        bossX: 3800
     },
     {
+        worldWidth: 4500,
         platforms: [
             { x: 150, y: 450, width: 130, height: 18 },
             { x: 350, y: 390, width: 130, height: 18 },
             { x: 550, y: 340, width: 130, height: 18 },
             { x: 750, y: 390, width: 130, height: 18 },
             { x: 950, y: 450, width: 130, height: 18 },
-            { x: 1050, y: 320, width: 130, height: 18 }
+            { x: 1200, y: 320, width: 130, height: 18 },
+            { x: 1500, y: 450, width: 130, height: 18 },
+            { x: 1800, y: 390, width: 130, height: 18 },
+            { x: 2100, y: 340, width: 130, height: 18 },
+            { x: 2400, y: 390, width: 130, height: 18 },
+            { x: 2700, y: 450, width: 130, height: 18 },
+            { x: 3000, y: 320, width: 130, height: 18 },
+            { x: 3300, y: 450, width: 130, height: 18 },
+            { x: 3600, y: 390, width: 130, height: 18 }
         ],
         enemies: [
             { x: 250, y: 100, type: 'basic' },
             { x: 450, y: 100, type: 'medium' },
             { x: 700, y: 100, type: 'basic' },
-            { x: 900, y: 100, type: 'medium' }
+            { x: 900, y: 100, type: 'medium' },
+            { x: 1300, y: 100, type: 'hard' },
+            { x: 1600, y: 100, type: 'medium' },
+            { x: 1900, y: 100, type: 'basic' },
+            { x: 2200, y: 100, type: 'hard' },
+            { x: 2500, y: 100, type: 'medium' },
+            { x: 2800, y: 100, type: 'hard' },
+            { x: 3100, y: 100, type: 'medium' },
+            { x: 3400, y: 100, type: 'hard' }
         ],
-        bossX: 1080
+        bossX: 4200
     },
     {
+        worldWidth: 5000,
         platforms: [
             { x: 100, y: 460, width: 110, height: 18 },
             { x: 260, y: 410, width: 110, height: 18 },
@@ -1118,7 +1234,23 @@ const levels = [
             { x: 740, y: 460, width: 110, height: 18 },
             { x: 880, y: 360, width: 110, height: 18 },
             { x: 1020, y: 410, width: 110, height: 18 },
-            { x: 1080, y: 310, width: 110, height: 18 }
+            { x: 1200, y: 310, width: 110, height: 18 },
+            { x: 1400, y: 460, width: 110, height: 18 },
+            { x: 1560, y: 410, width: 110, height: 18 },
+            { x: 1720, y: 360, width: 110, height: 18 },
+            { x: 1880, y: 410, width: 110, height: 18 },
+            { x: 2040, y: 460, width: 110, height: 18 },
+            { x: 2200, y: 360, width: 110, height: 18 },
+            { x: 2360, y: 410, width: 110, height: 18 },
+            { x: 2520, y: 310, width: 110, height: 18 },
+            { x: 2700, y: 460, width: 110, height: 18 },
+            { x: 2860, y: 410, width: 110, height: 18 },
+            { x: 3020, y: 360, width: 110, height: 18 },
+            { x: 3180, y: 410, width: 110, height: 18 },
+            { x: 3340, y: 460, width: 110, height: 18 },
+            { x: 3500, y: 360, width: 110, height: 18 },
+            { x: 3660, y: 410, width: 110, height: 18 },
+            { x: 3820, y: 310, width: 110, height: 18 }
         ],
         enemies: [
             { x: 200, y: 100, type: 'basic' },
@@ -1126,9 +1258,21 @@ const levels = [
             { x: 520, y: 100, type: 'hard' },
             { x: 670, y: 100, type: 'basic' },
             { x: 820, y: 100, type: 'medium' },
-            { x: 960, y: 100, type: 'hard' }
+            { x: 960, y: 100, type: 'hard' },
+            { x: 1300, y: 100, type: 'hard' },
+            { x: 1500, y: 100, type: 'medium' },
+            { x: 1700, y: 100, type: 'hard' },
+            { x: 1900, y: 100, type: 'basic' },
+            { x: 2100, y: 100, type: 'hard' },
+            { x: 2300, y: 100, type: 'medium' },
+            { x: 2500, y: 100, type: 'hard' },
+            { x: 2700, y: 100, type: 'hard' },
+            { x: 2900, y: 100, type: 'medium' },
+            { x: 3100, y: 100, type: 'hard' },
+            { x: 3300, y: 100, type: 'hard' },
+            { x: 3500, y: 100, type: 'hard' }
         ],
-        bossX: 1060
+        bossX: 4700
     }
 ];
 
@@ -1136,6 +1280,7 @@ let player = null;
 let enemies = [];
 let boss = null;
 let platforms = [];
+let worldWidth = 1200;
 
 function loadLevel(levelNum) {
     const level = levels[levelNum - 1];
@@ -1144,19 +1289,26 @@ function loadLevel(levelNum) {
     const oldStones = player ? [...player.stones] : [];
     const hadHorns = player ? player.hasHorns : false;
     const hornsTimer = player ? player.hornsTimer : 0;
+    const hadPistol = player ? player.hasPistol : false;
+    const pistolTimer = player ? player.pistolTimer : 0;
     player = new Player(60, GROUND_Y - 60);
     player.stones = oldStones;
     player.hp = levelNum > 1 ? Math.min(oldHp + 30, player.maxHp) : player.maxHp;
     player.updateDamageMultiplier();
     player.hasHorns = hadHorns;
     player.hornsTimer = hornsTimer;
+    player.hasPistol = hadPistol;
+    player.pistolTimer = pistolTimer;
 
+    worldWidth = level.worldWidth || 1200;
     platforms = level.platforms.map(p => ({ ...p }));
     enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.type));
     boss = new Boss(level.bossX, 100, levelNum);
     particles = [];
     bonuses = [];
+    playerBullets = [];
     bonusSpawnTimer = 0;
+    cameraX = 0;
     screenShake = 0;
     entityIdCounter = 100;
 }
@@ -1232,6 +1384,16 @@ function renderUI() {
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#ffaa00';
         ctx.fillText(`Horns (${timeLeft}s)`, 28, py + 14);
+        py += 24;
+    }
+    
+    // Pistol power-up indicator
+    if (player.hasPistol) {
+        const timeLeft = Math.ceil(player.pistolTimer / 60);
+        ctx.fillStyle = 'rgba(68,68,255,0.35)';
+        ctx.fillRect(18, py - 2, 95, 20);
+        ctx.fillStyle = '#4444ff';
+        ctx.fillText(`Pistol (${timeLeft}s)`, 28, py + 14);
     }
 
     // Boss health bar
@@ -1321,7 +1483,8 @@ function renderTitleScreen() {
     ctx.fillText('Arrow Keys / WASD : Move + Jump', CANVAS_WIDTH / 2, boxY + 70);
     ctx.fillText('Space / W / Up Arrow : Jump', CANVAS_WIDTH / 2, boxY + 100);
     ctx.fillText('X / Z / J : Attack', CANVAS_WIDTH / 2, boxY + 130);
-    ctx.fillText('Enter : Confirm', CANVAS_WIDTH / 2, boxY + 160);
+    ctx.fillText('C / K : Shoot (with pistol)', CANVAS_WIDTH / 2, boxY + 160);
+    ctx.fillText('Enter : Confirm', CANVAS_WIDTH / 2, boxY + 190);
 
     // Blinking start prompt
     if (Math.sin(t * 3) > 0) {
@@ -1399,8 +1562,21 @@ function renderVictory() {
 // SECTION 13: RENDERING - GAME WORLD
 // ============================================
 
+function updateCamera() {
+    // Camera follows player, keeping them centered horizontally
+    const targetX = player.x - CANVAS_WIDTH / 2 + player.width / 2;
+    cameraX = targetX;
+    
+    // Clamp camera to world bounds
+    if (cameraX < 0) cameraX = 0;
+    if (cameraX + CANVAS_WIDTH > worldWidth) cameraX = worldWidth - CANVAS_WIDTH;
+}
+
 function renderGame() {
     ctx.save();
+
+    // Update camera
+    updateCamera();
 
     // Screen shake offset
     let shakeX = 0, shakeY = 0;
@@ -1409,20 +1585,20 @@ function renderGame() {
         shakeY = (Math.random() - 0.5) * screenShake * 2;
         screenShake--;
     }
-    ctx.translate(shakeX, shakeY);
+    ctx.translate(-cameraX + shakeX, shakeY);
 
-    // Sky gradient
+    // Sky gradient (full world width)
     const skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
     skyGrad.addColorStop(0, '#1a1a3e');
     skyGrad.addColorStop(0.6, '#0f1a2e');
     skyGrad.addColorStop(1, '#0a0e27');
     ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, GROUND_Y);
+    ctx.fillRect(0, 0, worldWidth, GROUND_Y);
 
     // Stars
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    for (let i = 0; i < 60; i++) {
-        ctx.fillRect((i * 37 + 5) % CANVAS_WIDTH, (i * 23 + 3) % GROUND_Y, 2, 2);
+    for (let i = 0; i < Math.ceil(worldWidth / 20); i++) {
+        ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % GROUND_Y, 2, 2);
     }
 
     // Ground
@@ -1430,19 +1606,19 @@ function renderGame() {
     groundGrad.addColorStop(0, '#3d6026');
     groundGrad.addColorStop(1, '#1d3006');
     ctx.fillStyle = groundGrad;
-    ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
+    ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
 
     // Ground line
     ctx.strokeStyle = '#4d7036';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, GROUND_Y);
-    ctx.lineTo(CANVAS_WIDTH, GROUND_Y);
+    ctx.lineTo(worldWidth, GROUND_Y);
     ctx.stroke();
 
     // Grass tufts
     ctx.fillStyle = '#4d7036';
-    for (let i = 0; i < CANVAS_WIDTH; i += 30) {
+    for (let i = 0; i < worldWidth; i += 30) {
         ctx.fillRect(i, GROUND_Y - 4, 8, 6);
     }
 
@@ -1484,6 +1660,16 @@ function renderGame() {
     for (const bonus of bonuses) {
         bonus.render(ctx);
     }
+    
+    // Player bullets
+    for (const bullet of playerBullets) {
+        ctx.save();
+        ctx.fillStyle = '#ffff00';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ffff00';
+        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        ctx.restore();
+    }
 
     // Player
     player.render(ctx);
@@ -1519,10 +1705,13 @@ function update() {
         // Spawn bonuses periodically
         bonusSpawnTimer++;
         if (bonusSpawnTimer >= 600 && Math.random() < 0.02) { // Spawn chance every ~10 seconds
-            const spawnX = 100 + Math.random() * (CANVAS_WIDTH - 200);
-            const spawnY = 100;
-            bonuses.push(new Bonus(spawnX, spawnY, BONUS_HORNS));
-            bonusSpawnTimer = 0;
+            const spawnX = player.x + 200 + Math.random() * 400; // Spawn ahead of player
+            if (spawnX < worldWidth - 100) {
+                const spawnY = 100;
+                const bonusType = Math.random() < 0.5 ? BONUS_HORNS : BONUS_PISTOL;
+                bonuses.push(new Bonus(spawnX, spawnY, bonusType));
+                bonusSpawnTimer = 0;
+            }
         }
         
         // Update bonuses
@@ -1541,8 +1730,46 @@ function update() {
                     player.hornsTimer = 600; // 10 seconds at 60fps
                     spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ffaa00', 15, 6);
                     if (sounds.bonusPickup) sounds.bonusPickup();
+                } else if (bonus.type === BONUS_PISTOL) {
+                    player.hasPistol = true;
+                    player.pistolTimer = 900; // 15 seconds at 60fps
+                    spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#4444ff', 15, 6);
+                    if (sounds.bonusPickup) sounds.bonusPickup();
                 }
                 bonus.collected = true;
+            }
+        }
+        
+        // Update player bullets
+        for (let i = playerBullets.length - 1; i >= 0; i--) {
+            const bullet = playerBullets[i];
+            bullet.x += bullet.vx;
+            
+            // Remove if off screen
+            if (bullet.x < -50 || bullet.x > worldWidth + 50) {
+                playerBullets.splice(i, 1);
+                continue;
+            }
+            
+            // Check collision with enemies
+            let hit = false;
+            for (const e of enemies) {
+                if (rectsOverlap(bullet, e)) {
+                    e.takeDamage(bullet.damage);
+                    spawnParticles(bullet.x, bullet.y, '#ffff00', 4, 3);
+                    playerBullets.splice(i, 1);
+                    hit = true;
+                    break;
+                }
+            }
+            
+            if (hit) continue;
+            
+            // Check collision with boss
+            if (boss && !boss.dead && rectsOverlap(bullet, boss)) {
+                boss.takeDamage(bullet.damage);
+                spawnParticles(bullet.x, bullet.y, '#ffff00', 6, 4);
+                playerBullets.splice(i, 1);
             }
         }
 
