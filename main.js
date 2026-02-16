@@ -43,6 +43,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
+canvas.focus();
 
 // ============================================
 // INPUT HANDLING
@@ -55,50 +56,51 @@ const keys = {
     attack: false
 };
 
-document.addEventListener('keydown', (e) => {
-    switch(e.key) {
-        case 'ArrowLeft':
-            keys.left = true;
-            e.preventDefault();
-            break;
-        case 'ArrowRight':
-            keys.right = true;
-            e.preventDefault();
-            break;
-        case ' ':
-            keys.jump = true;
-            e.preventDefault();
-            break;
-        case 'x':
-        case 'X':
-            keys.attack = true;
-            e.preventDefault();
-            break;
-        case 'Enter':
-            if (gameState === STATE_TITLE || gameState === STATE_GAME_OVER || gameState === STATE_VICTORY) {
-                startGame();
-            }
-            break;
+function handleKeyDown(e) {
+    const key = e.key.toLowerCase();
+    const code = e.code;
+    
+    if (code === 'ArrowLeft' || key === 'a') {
+        keys.left = true;
+        e.preventDefault();
+    } else if (code === 'ArrowRight' || key === 'd') {
+        keys.right = true;
+        e.preventDefault();
+    } else if (code === 'Space' || key === ' ') {
+        keys.jump = true;
+        e.preventDefault();
+    } else if (key === 'x') {
+        keys.attack = true;
+        e.preventDefault();
+    } else if (code === 'Enter') {
+        if (gameState === STATE_TITLE || gameState === STATE_GAME_OVER || gameState === STATE_VICTORY) {
+            startGame();
+        }
+        e.preventDefault();
     }
-});
+}
 
-document.addEventListener('keyup', (e) => {
-    switch(e.key) {
-        case 'ArrowLeft':
-            keys.left = false;
-            break;
-        case 'ArrowRight':
-            keys.right = false;
-            break;
-        case ' ':
-            keys.jump = false;
-            break;
-        case 'x':
-        case 'X':
-            keys.attack = false;
-            break;
+function handleKeyUp(e) {
+    const key = e.key.toLowerCase();
+    const code = e.code;
+    
+    if (code === 'ArrowLeft' || key === 'a') {
+        keys.left = false;
+    } else if (code === 'ArrowRight' || key === 'd') {
+        keys.right = false;
+    } else if (code === 'Space' || key === ' ') {
+        keys.jump = false;
+    } else if (key === 'x') {
+        keys.attack = false;
     }
-});
+}
+
+// Add event listeners to both window and canvas
+window.addEventListener('keydown', handleKeyDown);
+window.addEventListener('keyup', handleKeyUp);
+canvas.addEventListener('keydown', handleKeyDown);
+canvas.addEventListener('keyup', handleKeyUp);
+canvas.addEventListener('click', () => canvas.focus());
 
 // ============================================
 // ENTITY CLASSES
@@ -237,22 +239,54 @@ class Player {
     }
 
     render(ctx) {
-        // Draw player body
-        ctx.fillStyle = '#4a90e2';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-
-        // Draw sword
-        const swordLength = 30;
-        const swordX = this.facing === 1 ? this.x + this.width : this.x - swordLength;
-        const swordY = this.y + 15;
+        ctx.save();
         
-        ctx.fillStyle = '#c0c0c0';
-        ctx.fillRect(swordX, swordY, swordLength, 5);
-
+        // Draw shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(this.x + 5, this.y + this.height + 2, this.width - 10, 8);
+        
+        // Draw player body with gradient
+        const bodyGradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+        bodyGradient.addColorStop(0, '#5a9fe2');
+        bodyGradient.addColorStop(0.5, '#4a90e2');
+        bodyGradient.addColorStop(1, '#3a80d2');
+        ctx.fillStyle = bodyGradient;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // Draw armor/outline
+        ctx.strokeStyle = '#2a5a92';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x + 2, this.y + 2, this.width - 4, this.height - 4);
+        
+        // Draw helmet
+        ctx.fillStyle = '#3a70b2';
+        ctx.fillRect(this.x + 8, this.y + 5, this.width - 16, 12);
+        ctx.fillStyle = '#2a5a92';
+        ctx.fillRect(this.x + 10, this.y + 7, this.width - 20, 8);
+        
+        // Draw sword
+        const swordLength = 35;
+        const swordX = this.facing === 1 ? this.x + this.width : this.x - swordLength;
+        const swordY = this.y + 18;
+        
+        // Sword blade gradient
+        const swordGradient = ctx.createLinearGradient(swordX, swordY, swordX + (this.facing === 1 ? swordLength : -swordLength), swordY);
+        swordGradient.addColorStop(0, '#e0e0e0');
+        swordGradient.addColorStop(0.5, '#ffffff');
+        swordGradient.addColorStop(1, '#c0c0c0');
+        ctx.fillStyle = swordGradient;
+        ctx.fillRect(swordX, swordY, swordLength, 6);
+        
+        // Sword handle
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(swordX + (this.facing === 1 ? swordLength - 8 : 0), swordY - 2, 8, 10);
+        
         // Draw sword glow effects based on stones
         if (this.stones.length > 0) {
             ctx.save();
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 25;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
             
             if (this.hasAllStones()) {
                 // Ultimate sword - cycling colors
@@ -261,32 +295,52 @@ class Player {
                 const g = Math.sin(time + 2) * 0.5 + 0.5;
                 const b = Math.sin(time + 4) * 0.5 + 0.5;
                 ctx.shadowColor = `rgb(${r * 255}, ${g * 255}, ${b * 255})`;
+                ctx.fillStyle = `rgba(${r * 255}, ${g * 255}, ${b * 255}, 0.8)`;
             } else {
                 // Individual stone glows
                 if (this.stones.includes(STONE_FIRE)) {
                     ctx.shadowColor = '#ff4500';
+                    ctx.fillStyle = 'rgba(255, 69, 0, 0.7)';
                 }
                 if (this.stones.includes(STONE_WATER)) {
                     ctx.shadowColor = '#00bfff';
+                    ctx.fillStyle = 'rgba(0, 191, 255, 0.7)';
                 }
                 if (this.stones.includes(STONE_LIGHTNING)) {
                     ctx.shadowColor = '#ffd700';
+                    ctx.fillStyle = 'rgba(255, 215, 0, 0.7)';
                 }
             }
             
-            ctx.fillRect(swordX, swordY, swordLength, 5);
+            ctx.fillRect(swordX, swordY, swordLength, 6);
             ctx.restore();
         }
-
-        // Draw attack hitbox (debug - can be removed)
+        
+        // Attack slash effect
         if (this.attackDuration > 0) {
-            const hitbox = this.getAttackHitbox();
-            if (hitbox) {
-                ctx.strokeStyle = 'yellow';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            const slashX = this.facing === 1 ? this.x + this.width : this.x - 40;
+            const slashY = this.y + 10;
+            
+            if (this.hasAllStones()) {
+                const time = Date.now() * 0.01;
+                ctx.fillStyle = `rgba(${Math.sin(time) * 127 + 127}, ${Math.sin(time + 2) * 127 + 127}, ${Math.sin(time + 4) * 127 + 127}, 0.5)`;
+            } else if (this.stones.includes(STONE_FIRE)) {
+                ctx.fillStyle = 'rgba(255, 100, 0, 0.5)';
+            } else if (this.stones.includes(STONE_WATER)) {
+                ctx.fillStyle = 'rgba(0, 150, 255, 0.5)';
+            } else if (this.stones.includes(STONE_LIGHTNING)) {
+                ctx.fillStyle = 'rgba(255, 220, 0, 0.5)';
+            } else {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             }
+            
+            ctx.fillRect(slashX, slashY, 40, 30);
+            ctx.restore();
         }
+        
+        ctx.restore();
     }
 }
 
@@ -361,10 +415,45 @@ class Enemy {
     }
 
     render(ctx) {
-        // Draw enemy body
-        ctx.fillStyle = this.type === 'basic' ? '#e74c3c' : 
-                       this.type === 'medium' ? '#c0392b' : '#8b0000';
+        ctx.save();
+        
+        // Draw shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(this.x + 3, this.y + this.height + 2, this.width - 6, 6);
+        
+        // Draw enemy body with gradient
+        const enemyGradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+        if (this.type === 'basic') {
+            enemyGradient.addColorStop(0, '#ff6b6b');
+            enemyGradient.addColorStop(1, '#e74c3c');
+        } else if (this.type === 'medium') {
+            enemyGradient.addColorStop(0, '#e74c3c');
+            enemyGradient.addColorStop(1, '#c0392b');
+        } else {
+            enemyGradient.addColorStop(0, '#c0392b');
+            enemyGradient.addColorStop(1, '#8b0000');
+        }
+        ctx.fillStyle = enemyGradient;
         ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // Draw outline
+        ctx.strokeStyle = '#8b0000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x + 1, this.y + 1, this.width - 2, this.height - 2);
+        
+        // Draw eyes
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(this.x + 8, this.y + 10, 6, 6);
+        ctx.fillRect(this.x + this.width - 14, this.y + 10, 6, 6);
+        
+        // Draw mouth
+        ctx.strokeStyle = '#8b0000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x + this.width / 2, this.y + 25, 8, 0, Math.PI);
+        ctx.stroke();
+        
+        ctx.restore();
     }
 }
 
@@ -497,22 +586,73 @@ class Boss extends Enemy {
     }
 
     render(ctx) {
-        // Draw boss body
+        ctx.save();
+        
+        // Draw shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(this.x + 8, this.y + this.height + 3, this.width - 16, 12);
+        
         if (this.level === 3) {
-            // Demon King - dark purple/black
-            ctx.fillStyle = '#2d1b4e';
+            // Demon King - dark purple/black with glow
+            const demonGradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+            demonGradient.addColorStop(0, '#4b0082');
+            demonGradient.addColorStop(0.5, '#2d1b4e');
+            demonGradient.addColorStop(1, '#1a0d2e');
+            ctx.fillStyle = demonGradient;
             ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.fillStyle = '#4b0082';
+            
+            // Inner glow
+            ctx.fillStyle = '#6a1b9a';
             ctx.fillRect(this.x + 5, this.y + 5, this.width - 10, this.height - 10);
+            
+            // Eyes glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff0000';
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(this.x + 15, this.y + 20, 12, 12);
+            ctx.fillRect(this.x + this.width - 27, this.y + 20, 12, 12);
+            
+            // Crown/horns
+            ctx.fillStyle = '#1a0d2e';
+            ctx.fillRect(this.x + this.width / 2 - 15, this.y - 10, 30, 15);
+            ctx.fillRect(this.x + this.width / 2 - 20, this.y - 5, 10, 10);
+            ctx.fillRect(this.x + this.width / 2 + 10, this.y - 5, 10, 10);
         } else {
-            ctx.fillStyle = '#8b0000';
+            // Regular boss
+            const bossGradient = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
+            bossGradient.addColorStop(0, '#a00000');
+            bossGradient.addColorStop(1, '#8b0000');
+            ctx.fillStyle = bossGradient;
             ctx.fillRect(this.x, this.y, this.width, this.height);
+            
+            // Armor plates
+            ctx.fillStyle = '#6b0000';
+            ctx.fillRect(this.x + 8, this.y + 8, this.width - 16, 12);
+            ctx.fillRect(this.x + 8, this.y + this.height - 20, this.width - 16, 12);
+            
+            // Eyes
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(this.x + 12, this.y + 15, 10, 10);
+            ctx.fillRect(this.x + this.width - 22, this.y + 15, 10, 10);
         }
-
-        // Draw projectiles
-        ctx.fillStyle = '#ff6347';
+        
+        // Outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.x, this.y, this.width, this.height);
+        
+        ctx.restore();
+        
+        // Draw projectiles with glow
         for (let proj of this.projectiles) {
-            ctx.fillRect(proj.x, proj.y, proj.width, proj.height);
+            ctx.save();
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff6347';
+            ctx.fillStyle = '#ff6347';
+            ctx.beginPath();
+            ctx.arc(proj.x + proj.width / 2, proj.y + proj.height / 2, proj.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
     }
 }
@@ -617,99 +757,185 @@ function loadLevel(levelNum) {
 // ============================================
 
 function renderUI() {
-    // Player health bar
-    const barWidth = 200;
-    const barHeight = 20;
+    ctx.save();
+    
+    // Player health bar background
+    const barWidth = 220;
+    const barHeight = 24;
     const barX = 20;
     const barY = 20;
     
-    ctx.fillStyle = '#333';
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(barX + 2, barY + 2, barWidth, barHeight);
+    
+    // Background
+    ctx.fillStyle = '#222';
     ctx.fillRect(barX, barY, barWidth, barHeight);
     
     const hpPercent = player.hp / player.maxHp;
-    ctx.fillStyle = hpPercent > 0.5 ? '#2ecc71' : hpPercent > 0.25 ? '#f39c12' : '#e74c3c';
-    ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
     
+    // Health bar gradient
+    const hpGradient = ctx.createLinearGradient(barX, barY, barX + barWidth * hpPercent, barY);
+    if (hpPercent > 0.5) {
+        hpGradient.addColorStop(0, '#2ecc71');
+        hpGradient.addColorStop(1, '#27ae60');
+    } else if (hpPercent > 0.25) {
+        hpGradient.addColorStop(0, '#f39c12');
+        hpGradient.addColorStop(1, '#e67e22');
+    } else {
+        hpGradient.addColorStop(0, '#e74c3c');
+        hpGradient.addColorStop(1, '#c0392b');
+    }
+    ctx.fillStyle = hpGradient;
+    ctx.fillRect(barX + 2, barY + 2, (barWidth - 4) * hpPercent, barHeight - 4);
+    
+    // Border
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.strokeRect(barX, barY, barWidth, barHeight);
     
+    // Text
     ctx.fillStyle = '#fff';
-    ctx.font = '14px Arial';
-    ctx.fillText(`HP: ${Math.ceil(player.hp)}/${player.maxHp}`, barX + 5, barY + 15);
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`HP: ${Math.ceil(player.hp)}/${player.maxHp}`, barX + 8, barY + 17);
     
-    // Level indicator
+    // Level indicator with background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(CANVAS_WIDTH / 2 - 60, 20, 120, 30);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Arial';
-    ctx.fillText(`Level ${currentLevel}`, CANVAS_WIDTH / 2 - 40, 35);
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Level ${currentLevel}`, CANVAS_WIDTH / 2, 42);
     
-    // Sword powers display
-    ctx.font = '14px Arial';
-    let powersY = 50;
+    // Sword powers display with backgrounds
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'left';
+    let powersY = 60;
     if (player.stones.includes(STONE_FIRE)) {
+        ctx.fillStyle = 'rgba(255, 69, 0, 0.3)';
+        ctx.fillRect(18, powersY - 16, 100, 20);
         ctx.fillStyle = '#ff4500';
-        ctx.fillText('🔥 Fire', 20, powersY);
-        powersY += 20;
+        ctx.fillText('🔥 Fire', 22, powersY);
+        powersY += 24;
     }
     if (player.stones.includes(STONE_WATER)) {
+        ctx.fillStyle = 'rgba(0, 191, 255, 0.3)';
+        ctx.fillRect(18, powersY - 16, 100, 20);
         ctx.fillStyle = '#00bfff';
-        ctx.fillText('💧 Water', 20, powersY);
-        powersY += 20;
+        ctx.fillText('💧 Water', 22, powersY);
+        powersY += 24;
     }
     if (player.stones.includes(STONE_LIGHTNING)) {
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+        ctx.fillRect(18, powersY - 16, 120, 20);
         ctx.fillStyle = '#ffd700';
-        ctx.fillText('⚡ Lightning', 20, powersY);
-        powersY += 20;
+        ctx.fillText('⚡ Lightning', 22, powersY);
+        powersY += 24;
     }
     
     // Boss health bar
     if (boss && boss.hp > 0) {
-        const bossBarWidth = 400;
-        const bossBarHeight = 25;
+        const bossBarWidth = 450;
+        const bossBarHeight = 30;
         const bossBarX = (CANVAS_WIDTH - bossBarWidth) / 2;
         const bossBarY = 20;
         
-        ctx.fillStyle = '#333';
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(bossBarX + 3, bossBarY + 3, bossBarWidth, bossBarHeight);
+        
+        // Background
+        ctx.fillStyle = '#222';
         ctx.fillRect(bossBarX, bossBarY, bossBarWidth, bossBarHeight);
         
         const bossHpPercent = boss.hp / boss.maxHp;
-        ctx.fillStyle = '#8b0000';
-        ctx.fillRect(bossBarX, bossBarY, bossBarWidth * bossHpPercent, bossBarHeight);
         
+        // Boss HP gradient
+        const bossGradient = ctx.createLinearGradient(bossBarX, bossBarY, bossBarX + bossBarWidth * bossHpPercent, bossBarY);
+        bossGradient.addColorStop(0, '#8b0000');
+        bossGradient.addColorStop(1, '#660000');
+        ctx.fillStyle = bossGradient;
+        ctx.fillRect(bossBarX + 3, bossBarY + 3, (bossBarWidth - 6) * bossHpPercent, bossBarHeight - 6);
+        
+        // Border
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.strokeRect(bossBarX, bossBarY, bossBarWidth, bossBarHeight);
         
+        // Text
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 16px Arial';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'left';
         const bossName = currentLevel === 3 ? 'Demon King' : `Boss Level ${currentLevel}`;
-        ctx.fillText(bossName, bossBarX + 10, bossBarY + 18);
-        ctx.fillText(`${Math.ceil(boss.hp)}/${boss.maxHp}`, bossBarX + bossBarWidth - 100, bossBarY + 18);
+        ctx.fillText(bossName, bossBarX + 12, bossBarY + 21);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.ceil(boss.hp)}/${boss.maxHp}`, bossBarX + bossBarWidth - 12, bossBarY + 21);
     }
+    
+    ctx.restore();
 }
 
 function renderTitleScreen() {
-    ctx.fillStyle = '#0a0e27';
+    // Background gradient
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    bgGradient.addColorStop(0, '#1a1a3e');
+    bgGradient.addColorStop(0.5, '#0f1a2e');
+    bgGradient.addColorStop(1, '#0a0e27');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    // Animated stars
+    const time = Date.now() * 0.001;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    for (let i = 0; i < 100; i++) {
+        const x = (i * 37) % CANVAS_WIDTH;
+        const y = (i * 23 + time * 20) % CANVAS_HEIGHT;
+        const size = Math.sin(time + i) * 0.5 + 1.5;
+        ctx.fillRect(x, y, size, size);
+    }
+    
+    // Title with shadow
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ffd700';
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 48px Arial';
+    ctx.font = 'bold 56px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('DRAGON STONES KNIGHT', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 100);
+    ctx.fillText('DRAGON STONES KNIGHT', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 120);
+    ctx.shadowBlur = 0;
     
-    ctx.font = '24px Arial';
-    ctx.fillText('Defeat enemies, collect dragon stones,', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.fillText('and forge the ultimate sword!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+    // Subtitle
+    ctx.font = '26px Arial';
+    ctx.fillText('Defeat enemies, collect dragon stones,', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30);
+    ctx.fillText('and forge the ultimate sword!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
     
-    ctx.font = '20px Arial';
-    ctx.fillText('Controls:', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
-    ctx.fillText('Arrow Keys: Move', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 130);
-    ctx.fillText('Space: Jump', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 155);
-    ctx.fillText('X: Attack', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 180);
+    // Controls box
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(CANVAS_WIDTH / 2 - 200, CANVAS_HEIGHT / 2 + 50, 400, 150);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(CANVAS_WIDTH / 2 - 200, CANVAS_HEIGHT / 2 + 50, 400, 150);
     
-    ctx.font = 'bold 28px Arial';
+    ctx.font = 'bold 22px Arial';
     ctx.fillStyle = '#ffd700';
-    ctx.fillText('Press ENTER to Start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 250);
+    ctx.fillText('Controls:', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 85);
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Arrow Keys / A/D: Move', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 115);
+    ctx.fillText('Space: Jump', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 140);
+    ctx.fillText('X: Attack', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 165);
+    
+    // Start prompt with animation
+    const blink = Math.sin(time * 3) > 0;
+    if (blink) {
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ffd700';
+        ctx.fillText('Press ENTER to Start', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 250);
+        ctx.shadowBlur = 0;
+    }
 }
 
 function renderLevelTransition() {
@@ -756,18 +982,58 @@ function renderVictory() {
 }
 
 function renderGame() {
-    // Clear canvas
-    ctx.fillStyle = '#0a0e27';
+    // Clear canvas with gradient background
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    bgGradient.addColorStop(0, '#1a1a3e');
+    bgGradient.addColorStop(0.5, '#0f1a2e');
+    bgGradient.addColorStop(1, '#0a0e27');
+    ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Draw ground
-    ctx.fillStyle = '#2d5016';
+    // Draw stars/background decoration
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    for (let i = 0; i < 50; i++) {
+        const x = (i * 37) % CANVAS_WIDTH;
+        const y = (i * 23) % GROUND_Y;
+        ctx.fillRect(x, y, 2, 2);
+    }
+    
+    // Draw ground with gradient
+    const groundGradient = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
+    groundGradient.addColorStop(0, '#3d6026');
+    groundGradient.addColorStop(0.5, '#2d5016');
+    groundGradient.addColorStop(1, '#1d3006');
+    ctx.fillStyle = groundGradient;
     ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
     
-    // Draw platforms
-    ctx.fillStyle = '#8b7355';
+    // Ground texture
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    for (let i = 0; i < CANVAS_WIDTH; i += 40) {
+        ctx.fillRect(i, GROUND_Y, 1, CANVAS_HEIGHT - GROUND_Y);
+    }
+    
+    // Draw platforms with better visuals
     for (let platform of platforms) {
+        // Platform shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(platform.x + 3, platform.y + platform.height + 2, platform.width, 8);
+        
+        // Platform gradient
+        const platformGradient = ctx.createLinearGradient(platform.x, platform.y, platform.x, platform.y + platform.height);
+        platformGradient.addColorStop(0, '#9b8365');
+        platformGradient.addColorStop(0.5, '#8b7355');
+        platformGradient.addColorStop(1, '#6b5335');
+        ctx.fillStyle = platformGradient;
         ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        
+        // Platform top highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(platform.x, platform.y, platform.width, 3);
+        
+        // Platform outline
+        ctx.strokeStyle = '#5b4335';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
     }
     
     // Draw enemies
