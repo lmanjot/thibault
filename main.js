@@ -1341,7 +1341,7 @@ function renderUI() {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText(`HP: ${Math.ceil(player.hp)} / ${player.maxHp}`, bx + 8, by + 16);
+    ctx.fillText(`PV : ${Math.ceil(player.hp)} / ${player.maxHp}`, bx + 8, by + 16);
 
     // Level label
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -1349,7 +1349,7 @@ function renderUI() {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 18px Arial';
     ctx.textAlign = 'right';
-    ctx.fillText(`Level ${currentLevel}`, CANVAS_WIDTH - 30, 38);
+    ctx.fillText(`Niveau ${currentLevel}`, CANVAS_WIDTH - 30, 38);
 
     // Sword powers
     ctx.textAlign = 'left';
@@ -1359,21 +1359,21 @@ function renderUI() {
         ctx.fillStyle = 'rgba(255,69,0,0.35)';
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#ff6633';
-        ctx.fillText('Fire', 28, py + 14);
+        ctx.fillText('Feu', 28, py + 14);
         py += 24;
     }
     if (player.stones.includes(STONE_WATER)) {
         ctx.fillStyle = 'rgba(0,191,255,0.35)';
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#33bbff';
-        ctx.fillText('Water', 28, py + 14);
+        ctx.fillText('Eau', 28, py + 14);
         py += 24;
     }
     if (player.stones.includes(STONE_LIGHTNING)) {
         ctx.fillStyle = 'rgba(255,215,0,0.35)';
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#ffcc00';
-        ctx.fillText('Lightning', 28, py + 14);
+        ctx.fillText('Foudre', 28, py + 14);
         py += 24;
     }
     
@@ -1383,7 +1383,7 @@ function renderUI() {
         ctx.fillStyle = 'rgba(255,170,0,0.35)';
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#ffaa00';
-        ctx.fillText(`Horns (${timeLeft}s)`, 28, py + 14);
+        ctx.fillText(`Cornes (${timeLeft}s)`, 28, py + 14);
         py += 24;
     }
     
@@ -1393,7 +1393,7 @@ function renderUI() {
         ctx.fillStyle = 'rgba(68,68,255,0.35)';
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#4444ff';
-        ctx.fillText(`Pistol (${timeLeft}s)`, 28, py + 14);
+        ctx.fillText(`Pistolet (${timeLeft}s)`, 28, py + 14);
     }
 
     // Boss health bar
@@ -1420,7 +1420,7 @@ function renderUI() {
 
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 16px Arial';
-        const bossName = boss.level === 3 ? 'DEMON KING' : `BOSS Lv.${boss.level}`;
+        const bossName = boss.level === 3 ? 'ROI DÉMON' : `BOSS Niv.${boss.level}`;
         ctx.textAlign = 'left';
         ctx.fillText(bossName, bbx + 10, bby + 20);
         ctx.textAlign = 'right';
@@ -1459,13 +1459,13 @@ function renderTitleScreen() {
     ctx.shadowColor = '#ffd700';
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 54px Arial';
-    ctx.fillText('DRAGON STONES KNIGHT', CANVAS_WIDTH / 2, 160);
+    ctx.fillText('CHEVALIER DES PIERRES DE DRAGON', CANVAS_WIDTH / 2, 160);
     ctx.restore();
 
     // Subtitle
     ctx.fillStyle = '#bbb';
     ctx.font = '22px Arial';
-    ctx.fillText('Defeat enemies, collect dragon stones, forge the ultimate sword!', CANVAS_WIDTH / 2, 210);
+    ctx.fillText('Vainquez les ennemis, collectez les pierres de dragon, forgez l\'épée ultime !', CANVAS_WIDTH / 2, 210);
 
     // Controls box
     const boxX = CANVAS_WIDTH / 2 - 220, boxY = 260, boxW = 440, boxH = 180;
@@ -1477,14 +1477,14 @@ function renderTitleScreen() {
 
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 22px Arial';
-    ctx.fillText('Controls', CANVAS_WIDTH / 2, boxY + 35);
+    ctx.fillText('Contrôles', CANVAS_WIDTH / 2, boxY + 35);
     ctx.fillStyle = '#fff';
     ctx.font = '20px Arial';
-    ctx.fillText('Arrow Keys / WASD : Move + Jump', CANVAS_WIDTH / 2, boxY + 70);
-    ctx.fillText('Space / W / Up Arrow : Jump', CANVAS_WIDTH / 2, boxY + 100);
-    ctx.fillText('X / Z / J : Attack', CANVAS_WIDTH / 2, boxY + 130);
-    ctx.fillText('C / K : Shoot (with pistol)', CANVAS_WIDTH / 2, boxY + 160);
-    ctx.fillText('Enter : Confirm', CANVAS_WIDTH / 2, boxY + 190);
+    ctx.fillText('Flèches / WASD : Se déplacer + Sauter', CANVAS_WIDTH / 2, boxY + 70);
+    ctx.fillText('Espace / W / Flèche Haut : Sauter', CANVAS_WIDTH / 2, boxY + 100);
+    ctx.fillText('X / Z / J : Attaquer', CANVAS_WIDTH / 2, boxY + 130);
+    ctx.fillText('C / K : Tirer (avec le pistolet)', CANVAS_WIDTH / 2, boxY + 160);
+    ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 190);
 
     // Blinking start prompt
     if (Math.sin(t * 3) > 0) {
@@ -1493,7 +1493,7 @@ function renderTitleScreen() {
         ctx.shadowColor = '#ffd700';
         ctx.fillStyle = '#ffd700';
         ctx.font = 'bold 30px Arial';
-        ctx.fillText('Press ENTER to Start', CANVAS_WIDTH / 2, 510);
+        ctx.fillText('Appuyez sur ENTRÉE pour commencer', CANVAS_WIDTH / 2, 510);
         ctx.restore();
     }
 }
@@ -1509,7 +1509,7 @@ function renderLevelTransition() {
 
     ctx.fillStyle = '#ccc';
     ctx.font = '22px Arial';
-    ctx.fillText('Your sword grows stronger...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    ctx.fillText('Votre épée devient plus forte...', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
 
     // Progress bar for transition timer
     const progress = 1 - (levelTransitionTimer / 180);
@@ -1526,12 +1526,12 @@ function renderGameOver() {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 52px Arial';
-    ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+    ctx.fillText('PARTIE TERMINÉE', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
 
     ctx.font = '24px Arial';
     ctx.fillStyle = '#ccc';
-    ctx.fillText(`You reached Level ${currentLevel}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
-    ctx.fillText('Press ENTER to Restart', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+    ctx.fillText(`Vous avez atteint le niveau ${currentLevel}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    ctx.fillText('Appuyez sur ENTRÉE pour recommencer', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
 }
 
 function renderVictory() {
@@ -1545,17 +1545,17 @@ function renderVictory() {
     ctx.shadowColor = '#ffd700';
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 56px Arial';
-    ctx.fillText('VICTORY!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
+    ctx.fillText('VICTOIRE !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 60);
     ctx.restore();
 
     ctx.fillStyle = '#fff';
     ctx.font = '26px Arial';
-    ctx.fillText('You have defeated the Demon King!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.fillText('The Ultimate Dragon Sword is yours!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+    ctx.fillText('Vous avez vaincu le Roi Démon !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.fillText('L\'épée ultime du dragon est à vous !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
 
     ctx.font = '22px Arial';
     ctx.fillStyle = '#ccc';
-    ctx.fillText('Press ENTER to Play Again', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
+    ctx.fillText('Appuyez sur ENTRÉE pour rejouer', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 100);
 }
 
 // ============================================
@@ -1840,12 +1840,12 @@ function update() {
         if (boss && boss.dead) {
             if (currentLevel === 1) {
                 player.addStone(STONE_FIRE);
-                levelTransitionMessage = 'Dragon Stone Acquired: FIRE';
+                levelTransitionMessage = 'Pierre de dragon acquise : FEU';
                 gameState = STATE_LEVEL_TRANSITION;
                 levelTransitionTimer = 180;
             } else if (currentLevel === 2) {
                 player.addStone(STONE_WATER);
-                levelTransitionMessage = 'Dragon Stone Acquired: WATER';
+                levelTransitionMessage = 'Pierre de dragon acquise : EAU';
                 gameState = STATE_LEVEL_TRANSITION;
                 levelTransitionTimer = 180;
             } else if (currentLevel === 3) {

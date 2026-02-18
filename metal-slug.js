@@ -20,6 +20,8 @@ const WEAPON_PISTOL = 'PISTOL';
 const WEAPON_HMG = 'HMG';
 const WEAPON_ROCKET = 'ROCKET';
 
+const WEAPON_NAMES_FR = { 'PISTOL': 'Pistolet', 'HMG': 'Mitrailleuse', 'ROCKET': 'Roquette' };
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = CW;
@@ -414,7 +416,7 @@ class POW {
         ctx.fillRect(this.x + this.w - 12, this.y + 6 + by, 6, 8);
         ctx.fillStyle = '#fff';
         ctx.font = '10px Arial';
-        ctx.fillText('POW', this.x + 2, this.y - 4 + by);
+        ctx.fillText('PG', this.x + 2, this.y - 4 + by);
         ctx.restore();
     }
 }
@@ -919,16 +921,16 @@ function render() {
         ctx.fillText('METAL SLUG', CW/2, 180);
         ctx.fillStyle = '#aaa';
         ctx.font = '20px Arial';
-        ctx.fillText('Run & Gun', CW/2, 230);
+        ctx.fillText('Course et Tir', CW/2, 230);
         ctx.fillStyle = '#fff';
         ctx.font = '16px Arial';
-        ctx.fillText('Arrow/WASD: Move, Jump, Crouch', CW/2, 320);
-        ctx.fillText('X/Z/J: Shoot  |  C/K: Grenade  |  V/L: Melee', CW/2, 350);
-        ctx.fillText('E/F: Enter/Exit Tank', CW/2, 380);
-        ctx.fillText('Rescue POWs for weapons! Destroy crates!', CW/2, 420);
+        ctx.fillText('Flèches/WASD : Déplacer, Sauter, S\'accroupir', CW/2, 320);
+        ctx.fillText('X/Z/J : Tirer  |  C/K : Grenade  |  V/L : Corps à corps', CW/2, 350);
+        ctx.fillText('E/F : Monter/Descendre du char', CW/2, 380);
+        ctx.fillText('Sauvez les prisonniers pour des armes ! Détruisez les caisses !', CW/2, 420);
         ctx.fillStyle = '#fa0';
         ctx.font = 'bold 24px Arial';
-        ctx.fillText('Press ENTER to Start', CW/2, 520);
+        ctx.fillText('Appuyez sur ENTRÉE pour commencer', CW/2, 520);
         return;
     }
 
@@ -938,9 +940,9 @@ function render() {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 52px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', CW/2, CH/2 - 30);
+        ctx.fillText('PARTIE TERMINÉE', CW/2, CH/2 - 30);
         ctx.font = '22px Arial';
-        ctx.fillText('Press ENTER to Restart', CW/2, CH/2 + 30);
+        ctx.fillText('Appuyez sur ENTRÉE pour recommencer', CW/2, CH/2 + 30);
         return;
     }
 
@@ -950,10 +952,10 @@ function render() {
         ctx.fillStyle = '#ff0';
         ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('MISSION COMPLETE!', CW/2, CH/2 - 40);
+        ctx.fillText('MISSION ACCOMPLIE !', CW/2, CH/2 - 40);
         ctx.fillStyle = '#fff';
         ctx.font = '22px Arial';
-        ctx.fillText('Press ENTER to Play Again', CW/2, CH/2 + 30);
+        ctx.fillText('Appuyez sur ENTRÉE pour rejouer', CW/2, CH/2 + 30);
         return;
     }
 
@@ -966,7 +968,7 @@ function render() {
         ctx.fillText('Mission ' + (currentLevel + 1), CW/2, CH/2 - 20);
         ctx.fillStyle = '#aaa';
         ctx.font = '20px Arial';
-        ctx.fillText('Get ready...', CW/2, CH/2 + 20);
+        ctx.fillText('Préparez-vous...', CW/2, CH/2 + 20);
         renderParticles();
         return;
     }
@@ -1010,7 +1012,7 @@ function render() {
         ctx.fillRect(pu.x, pu.y, 24, 24);
         ctx.fillStyle = '#fff';
         ctx.font = '12px Arial';
-        ctx.fillText(pu.type === WEAPON_HMG ? 'HMG' : 'RKT', pu.x + 4, pu.y + 16);
+        ctx.fillText(pu.type === WEAPON_HMG ? 'MIT' : 'RKT', pu.x + 4, pu.y + 16);
     });
 
     grenades.forEach(g => {
@@ -1041,13 +1043,13 @@ function render() {
     ctx.fillStyle = '#fff';
     ctx.font = '14px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('HP: ' + (player ? player.hp : 0) + ' / ' + (player ? player.maxHp : 100), 20, 32);
-    ctx.fillText('Grenades: ' + (player ? player.grenades : 0), 20, 50);
-    ctx.fillText('Weapon: ' + (player ? player.weapon : '-') + (player && player.ammo > 0 ? ' (' + player.ammo + ')' : ''), 20, 68);
+    ctx.fillText('PV : ' + (player ? player.hp : 0) + ' / ' + (player ? player.maxHp : 100), 20, 32);
+    ctx.fillText('Grenades : ' + (player ? player.grenades : 0), 20, 50);
+    ctx.fillText('Arme : ' + (player ? (WEAPON_NAMES_FR[player.weapon] || player.weapon) : '-') + (player && player.ammo > 0 ? ' (' + player.ammo + ')' : ''), 20, 68);
     ctx.fillText('Mission ' + currentLevel, CW - 120, 32);
     if (tank && tank.playerInside) {
         ctx.fillStyle = '#8f8';
-        ctx.fillText('TANK HP: ' + tank.hp, 20, 86);
+        ctx.fillText('PV du char : ' + tank.hp, 20, 86);
     }
 }
 
