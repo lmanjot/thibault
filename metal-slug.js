@@ -918,7 +918,7 @@ function render() {
         ctx.fillStyle = '#c44';
         ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('METAL SLUG', CW/2, 180);
+        ctx.fillText('COURSE ARMÉE', CW/2, 180);
         ctx.fillStyle = '#aaa';
         ctx.font = '20px Arial';
         ctx.fillText('Course et Tir', CW/2, 230);
