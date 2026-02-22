@@ -26,6 +26,9 @@ const STONE_LIGHTNING = 'LIGHTNING';
 
 const BONUS_HORNS = 'HORNS';
 const BONUS_PISTOL = 'PISTOL';
+const BONUS_FLAMETHROWER = 'FLAMETHROWER';
+
+const STATE_UNDERGROUND = 'UNDERGROUND';
 
 // ============================================
 // SECTION 2: GAME STATE
@@ -41,6 +44,20 @@ let bonuses = [];
 let bonusSpawnTimer = 0;
 let cameraX = 0;
 let playerBullets = [];
+
+let secretWells = [];
+let inUnderground = false;
+let undergroundPlatforms = [];
+let undergroundEnemies = [];
+let undergroundBonuses = [];
+let savedOverworldState = null;
+let undergroundExitX = 0;
+let undergroundTimer = 0;
+let kamehamehaBeam = null;
+let kamehamehaChargeTimer = 0;
+let keySequence = [];
+let lastKeyTime = 0;
+let flameProjectiles = [];
 
 // ============================================
 // SECTION 3: CANVAS SETUP
@@ -62,7 +79,6 @@ let attackPressed = false;
 window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
 
-    // Prevent scrolling for game keys
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
         e.preventDefault();
     }
@@ -72,6 +88,27 @@ window.addEventListener('keydown', (e) => {
             startGame();
         }
         e.preventDefault();
+    }
+
+    // Kamehameha combo detection: C, X, C pressed rapidly
+    if (gameState === STATE_PLAYING && player && player.isSuperSaiyan) {
+        const now = performance.now();
+        if (e.code === 'KeyC' || e.code === 'KeyX') {
+            if (now - lastKeyTime > 800) keySequence = [];
+            keySequence.push(e.code);
+            lastKeyTime = now;
+
+            if (keySequence.length >= 3) {
+                const last3 = keySequence.slice(-3);
+                if (last3[0] === 'KeyC' && last3[1] === 'KeyX' && last3[2] === 'KeyC') {
+                    if (!kamehamehaBeam && kamehamehaChargeTimer <= 0) {
+                        kamehamehaChargeTimer = 45;
+                        if (sounds.kamehameha) sounds.kamehameha();
+                    }
+                    keySequence = [];
+                }
+            }
+        }
     }
 });
 
@@ -85,6 +122,7 @@ function isRight()  { return keys['ArrowRight'] || keys['KeyD']; }
 function isJump()   { return keys['Space']      || keys['ArrowUp'] || keys['KeyW']; }
 function isAttack() { return keys['KeyX']       || keys['KeyZ'] || keys['KeyJ']; }
 function isShoot()  { return keys['KeyC']       || keys['KeyK']; }
+function isDown()   { return keys['ArrowDown']  || keys['KeyS']; }
 
 // ============================================
 // SECTION 5: PARTICLE SYSTEM
@@ -138,7 +176,9 @@ const sounds = {
     hit: null,
     enemyHit: null,
     bonusPickup: null,
-    bossHit: null
+    bossHit: null,
+    kamehameha: null,
+    enterPipe: null
 };
 
 function initSounds() {
@@ -221,6 +261,41 @@ function initSounds() {
         osc2.start(audioContext.currentTime);
         osc1.stop(audioContext.currentTime + 0.3);
         osc2.stop(audioContext.currentTime + 0.3);
+    };
+    
+    sounds.kamehameha = () => {
+        const osc = audioContext.createOscillator();
+        const osc2 = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(150, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(500, audioContext.currentTime + 0.3);
+        osc2.frequency.setValueAtTime(200, audioContext.currentTime);
+        osc2.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.3);
+        osc.type = 'sawtooth';
+        osc2.type = 'sine';
+        gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        osc.start(audioContext.currentTime);
+        osc2.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.5);
+        osc2.stop(audioContext.currentTime + 0.5);
+    };
+    
+    sounds.enterPipe = () => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.setValueAtTime(600, audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.25);
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.25);
     };
     
     // Generate boss hit sound
@@ -323,7 +398,6 @@ class Bonus {
             ctx.closePath();
             ctx.fill();
         } else if (this.type === BONUS_PISTOL) {
-            // Glow effect
             ctx.shadowBlur = 20;
             ctx.shadowColor = '#4444ff';
             ctx.globalAlpha = 0.6;
@@ -331,19 +405,29 @@ class Bonus {
             ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
             ctx.globalAlpha = 1;
             ctx.shadowBlur = 0;
-            
-            // Pistol icon
             ctx.fillStyle = '#333';
-            // Handle
             ctx.fillRect(this.x + this.width / 2 - 4, this.y + this.height / 2 + 2, 8, 6);
-            // Barrel
             ctx.fillRect(this.x + this.width / 2 + 4, this.y + this.height / 2, 6, 4);
-            // Trigger guard
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(this.x + this.width / 2, this.y + this.height / 2 + 4, 3, 0, Math.PI);
             ctx.stroke();
+        } else if (this.type === BONUS_FLAMETHROWER) {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff4400';
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#ff4400';
+            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            // Flamethrower icon
+            ctx.fillStyle = '#555';
+            ctx.fillRect(this.x + 4, this.y + this.height / 2, 16, 4);
+            ctx.fillStyle = '#ff6600';
+            ctx.fillRect(this.x + 18, this.y + this.height / 2 - 2, 5, 8);
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillRect(this.x + 20, this.y + this.height / 2 - 1, 3, 6);
         }
         
         ctx.restore();
@@ -384,6 +468,11 @@ class Player {
         this.pistolTimer = 0;
         this.shootCooldown = 0;
         this.shootPressed = false;
+        this.isSuperSaiyan = false;
+        this.ssAuraTimer = 0;
+        this.hasFlamethrower = false;
+        this.flamethrowerTimer = 0;
+        this.flameShootCooldown = 0;
     }
 
     update(platforms) {
@@ -527,6 +616,44 @@ class Player {
         }
         if (!isShoot()) {
             this.shootPressed = false;
+        }
+
+        // Flamethrower shooting
+        if (this.flameShootCooldown > 0) this.flameShootCooldown--;
+        if (this.hasFlamethrower && this.flamethrowerTimer > 0) {
+            this.flamethrowerTimer--;
+            if (this.flamethrowerTimer <= 0) {
+                this.hasFlamethrower = false;
+            }
+            if (isShoot() && this.flameShootCooldown <= 0) {
+                for (let i = 0; i < 3; i++) {
+                    const bulletX = this.facing === 1 ? this.x + this.width : this.x;
+                    const bulletY = this.y + this.height / 2 + (Math.random() - 0.5) * 16;
+                    flameProjectiles.push({
+                        x: bulletX,
+                        y: bulletY,
+                        vx: this.facing * (8 + Math.random() * 4),
+                        vy: (Math.random() - 0.5) * 2,
+                        life: 25 + Math.random() * 15,
+                        size: 6 + Math.random() * 6,
+                        damage: 8
+                    });
+                }
+                this.flameShootCooldown = 4;
+            }
+        }
+
+        // Super Saiyan aura
+        if (this.isSuperSaiyan) {
+            this.ssAuraTimer++;
+            if (this.ssAuraTimer % 3 === 0) {
+                spawnParticles(
+                    this.x + this.width / 2 + (Math.random() - 0.5) * 20,
+                    this.y + this.height + 5,
+                    Math.random() < 0.5 ? '#ffd700' : '#ffaa00',
+                    1, 3
+                );
+            }
         }
 
         // Invincibility countdown
@@ -745,6 +872,62 @@ class Player {
             ctx.restore();
         }
         
+        // Super Saiyan hair (yellow spiky hair above helmet)
+        if (this.isSuperSaiyan) {
+            ctx.save();
+            const hairColor = '#ffd700';
+            const hairGlow = '#ffee44';
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = hairGlow;
+            ctx.fillStyle = hairColor;
+
+            // Main hair spikes
+            ctx.beginPath();
+            ctx.moveTo(bx + 4, by + 2);
+            ctx.lineTo(bx - 2, by - 18);
+            ctx.lineTo(bx + 12, by - 4);
+            ctx.lineTo(bx + 10, by - 22);
+            ctx.lineTo(bx + 20, by - 6);
+            ctx.lineTo(bx + bw / 2, by - 26);
+            ctx.lineTo(bx + bw - 16, by - 6);
+            ctx.lineTo(bx + bw - 8, by - 20);
+            ctx.lineTo(bx + bw - 8, by - 2);
+            ctx.lineTo(bx + bw + 2, by - 16);
+            ctx.lineTo(bx + bw - 2, by + 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Saiyan aura glow around body
+            ctx.globalAlpha = 0.12 + Math.sin(Date.now() * 0.01) * 0.06;
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#ffd700';
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(bx - 8, by - 8, bw + 16, bh + 16);
+            ctx.globalAlpha = 1;
+
+            ctx.restore();
+        }
+
+        // Flamethrower visual (when equipped)
+        if (this.hasFlamethrower) {
+            ctx.save();
+            const ftX = this.facing === 1 ? bx + bw - 4 : bx - 20;
+            const ftY = by + 16;
+            ctx.fillStyle = '#555';
+            ctx.fillRect(ftX, ftY, 24, 6);
+            ctx.fillStyle = '#777';
+            ctx.fillRect(ftX, ftY, 24, 3);
+            ctx.fillStyle = '#333';
+            ctx.fillRect(this.facing === 1 ? ftX + 20 : ftX, ftY - 2, 6, 10);
+            // Pilot flame
+            if (Math.random() > 0.3) {
+                ctx.fillStyle = '#ff6600';
+                const tip = this.facing === 1 ? ftX + 26 : ftX - 6;
+                ctx.fillRect(tip, ftY, 4 + Math.random() * 4, 4);
+            }
+            ctx.restore();
+        }
+
         // Pistol visual (when equipped)
         if (this.hasPistol) {
             ctx.save();
@@ -1188,6 +1371,7 @@ const levels = [
             { x: 2900, y: 100, type: 'medium' },
             { x: 3300, y: 100, type: 'hard' }
         ],
+        wells: [{ x: 1850, y: GROUND_Y - 40, width: 48, height: 40 }],
         bossX: 3800
     },
     {
@@ -1222,6 +1406,7 @@ const levels = [
             { x: 3100, y: 100, type: 'medium' },
             { x: 3400, y: 100, type: 'hard' }
         ],
+        wells: [{ x: 2600, y: GROUND_Y - 40, width: 48, height: 40 }],
         bossX: 4200
     },
     {
@@ -1272,6 +1457,7 @@ const levels = [
             { x: 3300, y: 100, type: 'hard' },
             { x: 3500, y: 100, type: 'hard' }
         ],
+        wells: [{ x: 2000, y: GROUND_Y - 40, width: 48, height: 40 }],
         bossX: 4700
     }
 ];
@@ -1291,6 +1477,9 @@ function loadLevel(levelNum) {
     const hornsTimer = player ? player.hornsTimer : 0;
     const hadPistol = player ? player.hasPistol : false;
     const pistolTimer = player ? player.pistolTimer : 0;
+    const wasSS = player ? player.isSuperSaiyan : false;
+    const hadFlame = player ? player.hasFlamethrower : false;
+    const flameTimer = player ? player.flamethrowerTimer : 0;
     player = new Player(60, GROUND_Y - 60);
     player.stones = oldStones;
     player.hp = levelNum > 1 ? Math.min(oldHp + 30, player.maxHp) : player.maxHp;
@@ -1299,18 +1488,364 @@ function loadLevel(levelNum) {
     player.hornsTimer = hornsTimer;
     player.hasPistol = hadPistol;
     player.pistolTimer = pistolTimer;
+    player.isSuperSaiyan = wasSS;
+    player.hasFlamethrower = hadFlame;
+    player.flamethrowerTimer = flameTimer;
 
     worldWidth = level.worldWidth || 1200;
     platforms = level.platforms.map(p => ({ ...p }));
     enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.type));
     boss = new Boss(level.bossX, 100, levelNum);
+    secretWells = (level.wells || []).map(w => ({ ...w }));
     particles = [];
     bonuses = [];
     playerBullets = [];
+    flameProjectiles = [];
     bonusSpawnTimer = 0;
     cameraX = 0;
     screenShake = 0;
     entityIdCounter = 100;
+    inUnderground = false;
+    savedOverworldState = null;
+    kamehamehaBeam = null;
+    kamehamehaChargeTimer = 0;
+    keySequence = [];
+}
+
+// ============================================
+// SECTION 10.5: SECRET WELL & UNDERGROUND WORLD
+// ============================================
+
+function renderSecretWell(well) {
+    ctx.save();
+    
+    // Pipe/well base (like a Mario pipe)
+    const wx = well.x, wy = well.y, ww = well.width, wh = well.height;
+    
+    // Pipe body
+    const pipeGrad = ctx.createLinearGradient(wx, wy, wx + ww, wy);
+    pipeGrad.addColorStop(0, '#1a6b1a');
+    pipeGrad.addColorStop(0.3, '#2a9b2a');
+    pipeGrad.addColorStop(0.7, '#2a9b2a');
+    pipeGrad.addColorStop(1, '#1a6b1a');
+    ctx.fillStyle = pipeGrad;
+    ctx.fillRect(wx + 4, wy + 12, ww - 8, wh - 12);
+    
+    // Pipe rim (wider top)
+    const rimGrad = ctx.createLinearGradient(wx, wy, wx + ww, wy);
+    rimGrad.addColorStop(0, '#1a7b1a');
+    rimGrad.addColorStop(0.3, '#33bb33');
+    rimGrad.addColorStop(0.7, '#33bb33');
+    rimGrad.addColorStop(1, '#1a7b1a');
+    ctx.fillStyle = rimGrad;
+    ctx.fillRect(wx, wy, ww, 14);
+    
+    // Dark interior
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(wx + 8, wy + 3, ww - 16, 9);
+    
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(wx + 6, wy + 14, 6, wh - 16);
+    
+    // Outline
+    ctx.strokeStyle = '#0a4a0a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(wx, wy, ww, 14);
+    ctx.strokeRect(wx + 4, wy + 12, ww - 8, wh - 12);
+    
+    // Mysterious glow/sparkle
+    const sparkle = Math.sin(Date.now() * 0.005) * 0.4 + 0.6;
+    ctx.globalAlpha = sparkle * 0.5;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffdd00';
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillRect(wx + ww / 2 - 3, wy - 8, 6, 6);
+    ctx.globalAlpha = 1;
+    
+    // Down arrow hint when player is nearby
+    if (player && Math.abs(player.x + player.width / 2 - (wx + ww / 2)) < 60 &&
+        Math.abs(player.y + player.height - wy) < 20) {
+        const bob = Math.sin(Date.now() * 0.008) * 4;
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ffd700';
+        ctx.fillText('\u2193', wx + ww / 2, wy - 14 + bob);
+    }
+    
+    ctx.restore();
+}
+
+function generateUndergroundWorld() {
+    const ugWidth = 2400;
+    undergroundPlatforms = [
+        { x: 100, y: 440, width: 120, height: 18 },
+        { x: 300, y: 380, width: 120, height: 18 },
+        { x: 550, y: 340, width: 120, height: 18 },
+        { x: 800, y: 400, width: 150, height: 18 },
+        { x: 1050, y: 350, width: 120, height: 18 },
+        { x: 1300, y: 420, width: 140, height: 18 },
+        { x: 1550, y: 360, width: 120, height: 18 },
+        { x: 1800, y: 400, width: 150, height: 18 },
+        { x: 2050, y: 350, width: 120, height: 18 }
+    ];
+    
+    undergroundEnemies = [
+        new Enemy(400, 100, 'medium'),
+        new Enemy(700, 100, 'hard'),
+        new Enemy(1100, 100, 'medium'),
+        new Enemy(1500, 100, 'hard'),
+        new Enemy(1900, 100, 'hard')
+    ];
+    
+    undergroundBonuses = [
+        new Bonus(1800, 300, BONUS_FLAMETHROWER)
+    ];
+    
+    undergroundExitX = 2200;
+    undergroundTimer = 0;
+    
+    return ugWidth;
+}
+
+function enterUnderground(wellX) {
+    savedOverworldState = {
+        platforms: platforms,
+        enemies: enemies,
+        boss: boss,
+        bonuses: bonuses,
+        worldWidth: worldWidth,
+        playerX: player.x,
+        playerY: player.y,
+        playerBullets: playerBullets,
+        flameProjectiles: flameProjectiles,
+        cameraX: cameraX
+    };
+    
+    const ugWidth = generateUndergroundWorld();
+    worldWidth = ugWidth;
+    platforms = undergroundPlatforms;
+    enemies = undergroundEnemies;
+    bonuses = undergroundBonuses;
+    boss = null;
+    playerBullets = [];
+    flameProjectiles = [];
+    player.x = 60;
+    player.y = GROUND_Y - 80;
+    player.vy = 0;
+    player.vx = 0;
+    cameraX = 0;
+    particles = [];
+    inUnderground = true;
+    
+    // Super Saiyan transformation
+    player.isSuperSaiyan = true;
+    player.ssAuraTimer = 0;
+    screenShake = 12;
+    spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#ffd700', 30, 8);
+    spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#ffee44', 20, 6);
+    if (sounds.enterPipe) sounds.enterPipe();
+}
+
+function exitUnderground() {
+    if (!savedOverworldState) return;
+    
+    platforms = savedOverworldState.platforms;
+    enemies = savedOverworldState.enemies;
+    boss = savedOverworldState.boss;
+    bonuses = savedOverworldState.bonuses;
+    worldWidth = savedOverworldState.worldWidth;
+    playerBullets = savedOverworldState.playerBullets;
+    flameProjectiles = [];
+    player.x = savedOverworldState.playerX;
+    player.y = savedOverworldState.playerY - 10;
+    player.vy = -5;
+    cameraX = savedOverworldState.cameraX;
+    particles = [];
+    inUnderground = false;
+    savedOverworldState = null;
+    
+    screenShake = 6;
+    spawnParticles(player.x + player.width / 2, player.y + player.height, '#ffd700', 15, 5);
+}
+
+function renderUndergroundBackground() {
+    // Dark cave background
+    const caveGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+    caveGrad.addColorStop(0, '#0a0a12');
+    caveGrad.addColorStop(0.5, '#12101a');
+    caveGrad.addColorStop(1, '#1a1520');
+    ctx.fillStyle = caveGrad;
+    ctx.fillRect(0, 0, worldWidth, GROUND_Y);
+    
+    // Cave ceiling stalactites
+    for (let i = 0; i < worldWidth; i += 60) {
+        const h = 20 + Math.sin(i * 0.1) * 15;
+        ctx.fillStyle = '#1a1825';
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 15, h);
+        ctx.lineTo(i + 30, 0);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // Glowing crystals on walls
+    for (let i = 0; i < worldWidth; i += 180) {
+        const cy = 80 + Math.sin(i * 0.05) * 40;
+        ctx.save();
+        ctx.shadowBlur = 12;
+        const colors = ['#ff44ff', '#44ffff', '#ffff44'];
+        const c = colors[Math.floor(i / 180) % 3];
+        ctx.shadowColor = c;
+        ctx.fillStyle = c;
+        ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.003 + i) * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(i + 10, cy);
+        ctx.lineTo(i + 15, cy - 12);
+        ctx.lineTo(i + 20, cy);
+        ctx.lineTo(i + 15, cy + 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+    
+    // Rocky ground
+    const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
+    groundGrad.addColorStop(0, '#2a2235');
+    groundGrad.addColorStop(1, '#15101a');
+    ctx.fillStyle = groundGrad;
+    ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
+    
+    ctx.strokeStyle = '#3a3045';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, GROUND_Y);
+    ctx.lineTo(worldWidth, GROUND_Y);
+    ctx.stroke();
+    
+    // Lava pools decorative
+    for (let i = 200; i < worldWidth; i += 500) {
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ff4400';
+        ctx.fillStyle = '#ff4400';
+        ctx.globalAlpha = 0.3 + Math.sin(Date.now() * 0.004 + i) * 0.1;
+        ctx.fillRect(i, GROUND_Y + 8, 80, 6);
+        ctx.fillStyle = '#ffaa00';
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(i + 10, GROUND_Y + 10, 60, 3);
+        ctx.restore();
+    }
+    
+    // Exit portal
+    ctx.save();
+    const portalX = undergroundExitX;
+    const portalY = GROUND_Y - 60;
+    const portalPulse = Math.sin(Date.now() * 0.005) * 5;
+    ctx.shadowBlur = 30 + portalPulse;
+    ctx.shadowColor = '#00ff88';
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(portalX + 25, portalY + 25, 22 + portalPulse, 28 + portalPulse, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(0,255,136,0.15)';
+    ctx.fill();
+    
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXIT', portalX + 25, portalY - 10);
+    ctx.restore();
+}
+
+function renderKamehameha() {
+    if (kamehamehaChargeTimer > 0) {
+        // Charging effect - energy ball in hands
+        ctx.save();
+        const cx = player.x + player.width / 2;
+        const cy = player.y + player.height / 2;
+        const chargeProgress = 1 - (kamehamehaChargeTimer / 45);
+        const radius = 5 + chargeProgress * 15;
+        
+        ctx.shadowBlur = 30 + chargeProgress * 30;
+        ctx.shadowColor = '#00bbff';
+        const ballGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        ballGrad.addColorStop(0, '#ffffff');
+        ballGrad.addColorStop(0.4, '#88ddff');
+        ballGrad.addColorStop(1, 'rgba(0,100,255,0)');
+        ctx.fillStyle = ballGrad;
+        ctx.beginPath();
+        ctx.arc(cx + player.facing * 20, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Charge sparks
+        for (let i = 0; i < 4; i++) {
+            const angle = (Date.now() * 0.01 + i * Math.PI / 2) % (Math.PI * 2);
+            const sr = radius + 10;
+            ctx.fillStyle = '#aaeeff';
+            ctx.fillRect(
+                cx + player.facing * 20 + Math.cos(angle) * sr - 2,
+                cy + Math.sin(angle) * sr - 2, 4, 4
+            );
+        }
+        ctx.restore();
+    }
+    
+    if (kamehamehaBeam) {
+        ctx.save();
+        const b = kamehamehaBeam;
+        const beamWidth = 24 + Math.sin(Date.now() * 0.02) * 4;
+        
+        // Outer glow
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = '#0088ff';
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#0066cc';
+        ctx.fillRect(b.x, b.y - beamWidth / 2 - 6, b.length * b.dir, beamWidth + 12);
+        
+        // Main beam
+        ctx.globalAlpha = 0.9;
+        const beamGrad = ctx.createLinearGradient(b.x, b.y - beamWidth / 2, b.x, b.y + beamWidth / 2);
+        beamGrad.addColorStop(0, '#00aaff');
+        beamGrad.addColorStop(0.3, '#aaeeff');
+        beamGrad.addColorStop(0.5, '#ffffff');
+        beamGrad.addColorStop(0.7, '#aaeeff');
+        beamGrad.addColorStop(1, '#00aaff');
+        ctx.fillStyle = beamGrad;
+        ctx.fillRect(
+            b.dir === 1 ? b.x : b.x - b.length,
+            b.y - beamWidth / 2,
+            b.length,
+            beamWidth
+        );
+        
+        // Core white line
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(
+            b.dir === 1 ? b.x : b.x - b.length,
+            b.y - 3,
+            b.length,
+            6
+        );
+        
+        // Impact flash at tip
+        const tipX = b.dir === 1 ? b.x + b.length : b.x - b.length;
+        const flashGrad = ctx.createRadialGradient(tipX, b.y, 0, tipX, b.y, 30);
+        flashGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
+        flashGrad.addColorStop(0.5, 'rgba(100,200,255,0.4)');
+        flashGrad.addColorStop(1, 'rgba(0,100,255,0)');
+        ctx.fillStyle = flashGrad;
+        ctx.beginPath();
+        ctx.arc(tipX, b.y, 30, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+    }
 }
 
 // ============================================
@@ -1394,6 +1929,36 @@ function renderUI() {
         ctx.fillRect(18, py - 2, 95, 20);
         ctx.fillStyle = '#4444ff';
         ctx.fillText(`Pistolet (${timeLeft}s)`, 28, py + 14);
+        py += 24;
+    }
+    
+    // Flamethrower indicator
+    if (player.hasFlamethrower) {
+        const timeLeft = Math.ceil(player.flamethrowerTimer / 60);
+        ctx.fillStyle = 'rgba(255,68,0,0.35)';
+        ctx.fillRect(18, py - 2, 120, 20);
+        ctx.fillStyle = '#ff4400';
+        ctx.fillText(`Lance-flammes (${timeLeft}s)`, 28, py + 14);
+        py += 24;
+    }
+    
+    // Super Saiyan indicator
+    if (player.isSuperSaiyan) {
+        ctx.fillStyle = 'rgba(255,215,0,0.35)';
+        ctx.fillRect(18, py - 2, 120, 20);
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText('SUPER SAIYAN', 28, py + 14);
+        py += 24;
+    }
+    
+    // Underground indicator
+    if (inUnderground) {
+        ctx.fillStyle = 'rgba(0,255,136,0.3)';
+        ctx.fillRect(CANVAS_WIDTH - 180, 52, 160, 24);
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText('SOUTERRAIN', CANVAS_WIDTH - 30, 70);
     }
 
     // Boss health bar
@@ -1477,14 +2042,16 @@ function renderTitleScreen() {
 
     ctx.fillStyle = '#ffd700';
     ctx.font = 'bold 22px Arial';
-    ctx.fillText('Contrôles', CANVAS_WIDTH / 2, boxY + 35);
+    ctx.fillText('Contrôles', CANVAS_WIDTH / 2, boxY + 30);
     ctx.fillStyle = '#fff';
-    ctx.font = '20px Arial';
-    ctx.fillText('Flèches / WASD : Se déplacer + Sauter', CANVAS_WIDTH / 2, boxY + 70);
-    ctx.fillText('Espace / W / Flèche Haut : Sauter', CANVAS_WIDTH / 2, boxY + 100);
-    ctx.fillText('X / Z / J : Attaquer', CANVAS_WIDTH / 2, boxY + 130);
-    ctx.fillText('C / K : Tirer (avec le pistolet)', CANVAS_WIDTH / 2, boxY + 160);
-    ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 190);
+    ctx.font = '17px Arial';
+    ctx.fillText('Flèches / WASD : Se déplacer + Sauter', CANVAS_WIDTH / 2, boxY + 58);
+    ctx.fillText('X / Z / J : Attaquer  |  C / K : Tirer', CANVAS_WIDTH / 2, boxY + 82);
+    ctx.fillText('\u2193 sur tuyau vert : Monde souterrain secret !', CANVAS_WIDTH / 2, boxY + 106);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('C \u2192 X \u2192 C (rapide) : KAMEHAMEHA !', CANVAS_WIDTH / 2, boxY + 134);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 162);
 
     // Blinking start prompt
     if (Math.sin(t * 3) > 0) {
@@ -1587,39 +2154,43 @@ function renderGame() {
     }
     ctx.translate(-cameraX + shakeX, shakeY);
 
-    // Sky gradient (full world width)
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-    skyGrad.addColorStop(0, '#1a1a3e');
-    skyGrad.addColorStop(0.6, '#0f1a2e');
-    skyGrad.addColorStop(1, '#0a0e27');
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(0, 0, worldWidth, GROUND_Y);
+    if (inUnderground) {
+        renderUndergroundBackground();
+    } else {
+        // Sky gradient (full world width)
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+        skyGrad.addColorStop(0, '#1a1a3e');
+        skyGrad.addColorStop(0.6, '#0f1a2e');
+        skyGrad.addColorStop(1, '#0a0e27');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, worldWidth, GROUND_Y);
 
-    // Stars
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    for (let i = 0; i < Math.ceil(worldWidth / 20); i++) {
-        ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % GROUND_Y, 2, 2);
-    }
+        // Stars
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        for (let i = 0; i < Math.ceil(worldWidth / 20); i++) {
+            ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % GROUND_Y, 2, 2);
+        }
 
-    // Ground
-    const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
-    groundGrad.addColorStop(0, '#3d6026');
-    groundGrad.addColorStop(1, '#1d3006');
-    ctx.fillStyle = groundGrad;
-    ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
+        // Ground
+        const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
+        groundGrad.addColorStop(0, '#3d6026');
+        groundGrad.addColorStop(1, '#1d3006');
+        ctx.fillStyle = groundGrad;
+        ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
 
-    // Ground line
-    ctx.strokeStyle = '#4d7036';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, GROUND_Y);
-    ctx.lineTo(worldWidth, GROUND_Y);
-    ctx.stroke();
+        // Ground line
+        ctx.strokeStyle = '#4d7036';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, GROUND_Y);
+        ctx.lineTo(worldWidth, GROUND_Y);
+        ctx.stroke();
 
-    // Grass tufts
-    ctx.fillStyle = '#4d7036';
-    for (let i = 0; i < worldWidth; i += 30) {
-        ctx.fillRect(i, GROUND_Y - 4, 8, 6);
+        // Grass tufts
+        ctx.fillStyle = '#4d7036';
+        for (let i = 0; i < worldWidth; i += 30) {
+            ctx.fillRect(i, GROUND_Y - 4, 8, 6);
+        }
     }
 
     // Platforms
@@ -1644,6 +2215,13 @@ function renderGame() {
         ctx.strokeStyle = '#5b4335';
         ctx.lineWidth = 1;
         ctx.strokeRect(p.x, p.y, p.width, p.height);
+    }
+
+    // Secret wells (only in overworld)
+    if (!inUnderground) {
+        for (const well of secretWells) {
+            renderSecretWell(well);
+        }
     }
 
     // Enemies
@@ -1671,8 +2249,29 @@ function renderGame() {
         ctx.restore();
     }
 
+    // Flame projectiles
+    for (const f of flameProjectiles) {
+        ctx.save();
+        const alpha = f.life / 40;
+        ctx.globalAlpha = Math.min(1, alpha);
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ff4400';
+        const fGrad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+        fGrad.addColorStop(0, '#ffee44');
+        fGrad.addColorStop(0.4, '#ff6600');
+        fGrad.addColorStop(1, 'rgba(255,40,0,0)');
+        ctx.fillStyle = fGrad;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     // Player
     player.render(ctx);
+    
+    // Kamehameha (rendered above player)
+    renderKamehameha();
 
     // Particles
     renderParticles();
@@ -1732,8 +2331,14 @@ function update() {
                     if (sounds.bonusPickup) sounds.bonusPickup();
                 } else if (bonus.type === BONUS_PISTOL) {
                     player.hasPistol = true;
-                    player.pistolTimer = 900; // 15 seconds at 60fps
+                    player.pistolTimer = 900;
                     spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#4444ff', 15, 6);
+                    if (sounds.bonusPickup) sounds.bonusPickup();
+                } else if (bonus.type === BONUS_FLAMETHROWER) {
+                    player.hasFlamethrower = true;
+                    player.flamethrowerTimer = 1200; // 20 seconds at 60fps
+                    spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ff4400', 20, 8);
+                    spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ffcc00', 15, 6);
                     if (sounds.bonusPickup) sounds.bonusPickup();
                 }
                 bonus.collected = true;
@@ -1854,6 +2459,131 @@ function update() {
             }
         }
 
+        // Secret well interaction: stand on well + press Down
+        if (!inUnderground) {
+            for (const well of secretWells) {
+                const playerCX = player.x + player.width / 2;
+                const wellCX = well.x + well.width / 2;
+                if (Math.abs(playerCX - wellCX) < 30 &&
+                    player.onGround &&
+                    Math.abs(player.y + player.height - (well.y + well.height)) < 12 &&
+                    isDown()) {
+                    enterUnderground(well.x);
+                    break;
+                }
+            }
+        }
+        
+        // Underground exit check
+        if (inUnderground) {
+            undergroundTimer++;
+            const playerCX = player.x + player.width / 2;
+            if (Math.abs(playerCX - (undergroundExitX + 25)) < 35 &&
+                player.y + player.height > GROUND_Y - 80) {
+                exitUnderground();
+            }
+        }
+        
+        // Flame projectiles update
+        for (let i = flameProjectiles.length - 1; i >= 0; i--) {
+            const f = flameProjectiles[i];
+            f.x += f.vx;
+            f.y += f.vy;
+            f.life--;
+            f.size *= 0.97;
+            
+            if (f.life <= 0 || f.x < -50 || f.x > worldWidth + 50) {
+                flameProjectiles.splice(i, 1);
+                continue;
+            }
+            
+            // Spawn fire particles
+            if (Math.random() < 0.4) {
+                spawnParticles(f.x, f.y, Math.random() < 0.5 ? '#ff6600' : '#ffcc00', 1, 2);
+            }
+            
+            // Hit enemies
+            let hit = false;
+            for (const e of enemies) {
+                if (rectsOverlap({ x: f.x - f.size / 2, y: f.y - f.size / 2, width: f.size, height: f.size }, e)) {
+                    e.takeDamage(f.damage);
+                    spawnParticles(f.x, f.y, '#ff4400', 3, 3);
+                    flameProjectiles.splice(i, 1);
+                    hit = true;
+                    break;
+                }
+            }
+            if (hit) continue;
+            
+            // Hit boss
+            if (boss && !boss.dead) {
+                if (rectsOverlap({ x: f.x - f.size / 2, y: f.y - f.size / 2, width: f.size, height: f.size }, boss)) {
+                    boss.takeDamage(f.damage);
+                    spawnParticles(f.x, f.y, '#ff4400', 4, 4);
+                    flameProjectiles.splice(i, 1);
+                }
+            }
+        }
+        
+        // Kamehameha charge and beam
+        if (kamehamehaChargeTimer > 0) {
+            kamehamehaChargeTimer--;
+            if (kamehamehaChargeTimer <= 0) {
+                kamehamehaBeam = {
+                    x: player.x + (player.facing === 1 ? player.width : 0),
+                    y: player.y + player.height / 2,
+                    dir: player.facing,
+                    length: 0,
+                    maxLength: 600,
+                    life: 50,
+                    damage: 60
+                };
+                screenShake = 15;
+                spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#00bbff', 20, 8);
+            }
+        }
+        
+        if (kamehamehaBeam) {
+            kamehamehaBeam.life--;
+            if (kamehamehaBeam.length < kamehamehaBeam.maxLength) {
+                kamehamehaBeam.length += 40;
+            }
+            kamehamehaBeam.x = player.x + (player.facing === 1 ? player.width : 0);
+            kamehamehaBeam.y = player.y + player.height / 2;
+            kamehamehaBeam.dir = player.facing;
+            
+            // Beam hitbox
+            const beamRect = {
+                x: kamehamehaBeam.dir === 1 ? kamehamehaBeam.x : kamehamehaBeam.x - kamehamehaBeam.length,
+                y: kamehamehaBeam.y - 18,
+                width: kamehamehaBeam.length,
+                height: 36
+            };
+            
+            // Hit all enemies in path
+            for (const e of enemies) {
+                if (rectsOverlap(beamRect, e)) {
+                    e.takeDamage(3);
+                    if (Math.random() < 0.3) {
+                        spawnParticles(e.x + e.width / 2, e.y + e.height / 2, '#00bbff', 2, 4);
+                    }
+                }
+            }
+            enemies = enemies.filter(e => !e.dead);
+            
+            // Hit boss
+            if (boss && !boss.dead && rectsOverlap(beamRect, boss)) {
+                boss.takeDamage(2);
+                if (Math.random() < 0.2) {
+                    spawnParticles(boss.x + boss.width / 2, boss.y + boss.height / 2, '#00bbff', 3, 5);
+                }
+            }
+            
+            if (kamehamehaBeam.life <= 0) {
+                kamehamehaBeam = null;
+            }
+        }
+
         // Player dead
         if (player.hp <= 0) {
             gameState = STATE_GAME_OVER;
@@ -1916,6 +2646,12 @@ function startGame() {
     screenShake = 0;
     jumpPressed = false;
     attackPressed = false;
+    kamehamehaBeam = null;
+    kamehamehaChargeTimer = 0;
+    keySequence = [];
+    flameProjectiles = [];
+    inUnderground = false;
+    savedOverworldState = null;
     loadLevel(1);
     gameState = STATE_PLAYING;
 }
