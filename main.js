@@ -85,27 +85,58 @@ canvas.height = CANVAS_HEIGHT;
 const sprites = {};
 let spritesLoaded = false;
 
-function loadSprite(name, src, frameW, frameH) {
+function loadSprite(name, src, frameW, frameH, srcRow) {
     const img = new Image();
     img.src = src;
-    sprites[name] = { img, frameW, frameH, loaded: false, frameCount: 1 };
+    const rowY = (srcRow || 0) * frameH;
+    sprites[name] = { img, frameW, frameH, rowY, loaded: false, frameCount: 1 };
     img.onload = () => {
         sprites[name].loaded = true;
         sprites[name].frameCount = Math.max(1, Math.floor(img.width / frameW));
     };
 }
 
+function loadSingleFrames(baseName, srcs) {
+    const imgs = srcs.map((src, i) => {
+        const img = new Image();
+        img.src = src;
+        return img;
+    });
+    sprites[baseName] = { frames: imgs, loaded: false, frameCount: srcs.length, isSingleFrames: true };
+    let loaded = 0;
+    imgs.forEach(img => {
+        img.onload = () => { if (++loaded === imgs.length) sprites[baseName].loaded = true; };
+    });
+}
+
 function drawSprite(ctx, name, frame, x, y, w, h, flipX) {
     const s = sprites[name];
     if (!s || !s.loaded) return false;
+
+    if (s.isSingleFrames) {
+        const f = Math.floor(frame) % s.frameCount;
+        const img = s.frames[f];
+        if (!img || !img.complete) return false;
+        ctx.save();
+        if (flipX) {
+            ctx.translate(x + w, y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, 0, 0, w, h);
+        } else {
+            ctx.drawImage(img, x, y, w, h);
+        }
+        ctx.restore();
+        return true;
+    }
+
     const f = Math.floor(frame) % s.frameCount;
     ctx.save();
     if (flipX) {
         ctx.translate(x + w, y);
         ctx.scale(-1, 1);
-        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, 0, 0, w, h);
+        ctx.drawImage(s.img, f * s.frameW, s.rowY, s.frameW, s.frameH, 0, 0, w, h);
     } else {
-        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, x, y, w, h);
+        ctx.drawImage(s.img, f * s.frameW, s.rowY, s.frameW, s.frameH, x, y, w, h);
     }
     ctx.restore();
     return true;
@@ -126,25 +157,49 @@ function drawTiled(ctx, name, x, y, w, h, tileScale) {
 }
 
 function loadAllSprites() {
-    loadSprite('player_idle', 'assets/characters/1/Idle.png', 32, 32);
-    loadSprite('player_run', 'assets/characters/1/Run.png', 32, 32);
-    loadSprite('player_jump', 'assets/characters/1/Jump.png', 32, 32);
-    loadSprite('player_fall', 'assets/characters/1/Fall.png', 32, 32);
-    loadSprite('player_hit', 'assets/characters/1/Hit.png', 32, 32);
+    const SIDE_RIGHT = 3;
 
-    loadSprite('enemy1_idle', 'assets/enemies/1/Idle.png', 48, 48);
-    loadSprite('enemy1_run', 'assets/enemies/1/Run.png', 48, 48);
-    loadSprite('enemy1_hit', 'assets/enemies/1/Hit.png', 48, 48);
-    loadSprite('enemy2_idle', 'assets/enemies/2/Idle.png', 48, 48);
-    loadSprite('enemy2_run', 'assets/enemies/2/Run.png', 48, 48);
-    loadSprite('enemy2_hit', 'assets/enemies/2/Hit.png', 48, 48);
-    loadSprite('enemy3_idle', 'assets/enemies/3/Idle.png', 48, 48);
-    loadSprite('enemy3_run', 'assets/enemies/3/Walk.png', 48, 48);
-    loadSprite('enemy3_hit', 'assets/enemies/3/Hit.png', 48, 48);
+    for (let lvl = 1; lvl <= 3; lvl++) {
+        const base = `assets/characters/swordsman_lvl${lvl}`;
+        loadSprite(`sw${lvl}_idle`, `${base}/Idle.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_run`, `${base}/Run.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_attack`, `${base}/attack.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_hurt`, `${base}/Hurt.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_death`, `${base}/Death.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_walk`, `${base}/Walk.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`sw${lvl}_run_attack`, `${base}/Run_Attack.png`, 64, 64, SIDE_RIGHT);
+    }
 
-    loadSprite('boss_idle', 'assets/enemies/4/Idle.png', 48, 48);
-    loadSprite('boss_walk', 'assets/enemies/4/Walk.png', 48, 48);
-    loadSprite('boss_attack', 'assets/enemies/4/Attack.png', 48, 48);
+    for (let o = 1; o <= 3; o++) {
+        const base = `assets/enemies/orc${o}`;
+        loadSprite(`orc${o}_idle`, `${base}/idle.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`orc${o}_run`, `${base}/run.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`orc${o}_attack`, `${base}/attack.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`orc${o}_hurt`, `${base}/hurt.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`orc${o}_death`, `${base}/death.png`, 64, 64, SIDE_RIGHT);
+        loadSprite(`orc${o}_walk`, `${base}/walk.png`, 64, 64, SIDE_RIGHT);
+    }
+
+    loadSingleFrames('fireball', Array.from({length: 8}, (_, i) =>
+        `assets/magic/fireball/frame_${String(i + 1).padStart(2, '0')}.png`));
+    loadSingleFrames('firespell', Array.from({length: 8}, (_, i) =>
+        `assets/magic/firespell/frame_${String(i + 1).padStart(2, '0')}.png`));
+    loadSingleFrames('firearrow', Array.from({length: 8}, (_, i) =>
+        `assets/magic/firearrow/frame_${String(i + 1).padStart(2, '0')}.png`));
+
+    const treeFiles = [
+        'Curved_tree1.png', 'Curved_tree2.png', 'Curved_tree3.png',
+        'Mega_tree1.png', 'Mega_tree2.png',
+        'Luminous_tree1.png', 'Luminous_tree2.png',
+        'White_tree1.png', 'White_tree2.png',
+        'Willow1.png', 'Willow2.png'
+    ];
+    treeFiles.forEach((f, i) => {
+        const img = new Image();
+        img.src = `assets/trees/${f}`;
+        sprites[`tree_${i}`] = { img, loaded: false, isSingleImage: true };
+        img.onload = () => { sprites[`tree_${i}`].loaded = true; };
+    });
 
     loadSprite('dragon_fly', 'assets/enemies/5/Fly.png', 48, 48);
     loadSprite('dragon_attack', 'assets/enemies/5/Attack.png', 48, 48);
@@ -814,19 +869,22 @@ class Player {
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
-        let spriteName = 'player_idle';
+        const swLvl = currentLevel >= 3 ? 3 : currentLevel >= 2 ? 2 : 1;
+        const swPfx = `sw${swLvl}`;
+        let spriteName = `${swPfx}_idle`;
         if (flash) {
-            spriteName = 'player_hit';
-        } else if (!this.onGround && this.vy < 0) {
-            spriteName = 'player_jump';
-        } else if (!this.onGround && this.vy > 0) {
-            spriteName = 'player_fall';
+            spriteName = `${swPfx}_hurt`;
+        } else if (this.attackDuration > 0 && Math.abs(this.vx) > 0.5) {
+            spriteName = `${swPfx}_run_attack`;
+        } else if (this.attackDuration > 0) {
+            spriteName = `${swPfx}_attack`;
         } else if (Math.abs(this.vx) > 0.5) {
-            spriteName = 'player_run';
+            spriteName = `${swPfx}_run`;
         }
 
         const flipX = this.facing === -1;
-        if (!drawSprite(ctx, spriteName, this._animFrame, bx - 4, by - 4, bw + 8, bh + 8, flipX)) {
+        const pad = 12;
+        if (!drawSprite(ctx, spriteName, this._animFrame, bx - pad, by - pad, bw + pad * 2, bh + pad * 2, flipX)) {
             ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
             ctx.fillRect(bx, by, bw, bh);
         }
@@ -1112,16 +1170,16 @@ class Enemy {
         this._animTimer++;
         if (this._animTimer % 7 === 0) this._animFrame++;
 
-        const prefix = this.type === 'hard' ? 'enemy3' : this.type === 'medium' ? 'enemy2' : 'enemy1';
+        const prefix = this.type === 'hard' ? 'orc3' : this.type === 'medium' ? 'orc2' : 'orc1';
         let spriteName = prefix + '_idle';
         if (flash) {
-            spriteName = prefix + '_hit';
+            spriteName = prefix + '_hurt';
         } else if (Math.abs(this.vx) > 0.3) {
             spriteName = prefix + '_run';
         }
 
         const flipX = this.vx < 0;
-        const pad = 8;
+        const pad = 10;
         if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
             ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1382,15 +1440,15 @@ class Boss {
         this._animTimer++;
         if (this._animTimer % 7 === 0) this._animFrame++;
 
-        let spriteName = 'boss_idle';
+        let spriteName = 'orc3_idle';
         if (this.attackTimer > 0) {
-            spriteName = 'boss_attack';
+            spriteName = 'orc3_attack';
         } else if (Math.abs(this.vx) > 0.3) {
-            spriteName = 'boss_walk';
+            spriteName = 'orc3_run';
         }
 
         const flipX = this.vx < 0;
-        const pad = 10;
+        const pad = 14;
         if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
             ctx.fillStyle = flash ? '#cc9999' : '#5a4a4a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1418,19 +1476,23 @@ class Boss {
         // Projectiles
         for (const p of this.projectiles) {
             ctx.save();
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = this.level === 3 ? '#ff00ff' : '#ff4400';
-            const pGrad = ctx.createRadialGradient(
-                p.x + p.size / 2, p.y + p.size / 2, 0,
-                p.x + p.size / 2, p.y + p.size / 2, p.size
-            );
-            pGrad.addColorStop(0, '#fff');
-            pGrad.addColorStop(0.4, this.level === 3 ? '#ff44ff' : '#ff6347');
-            pGrad.addColorStop(1, this.level === 3 ? '#880088' : '#aa2200');
-            ctx.fillStyle = pGrad;
-            ctx.beginPath();
-            ctx.arc(p.x + p.size / 2, p.y + p.size / 2, p.size / 2, 0, Math.PI * 2);
-            ctx.fill();
+            const pFrame = Math.floor(Date.now() / 80) % 8;
+            const pSize = p.size * 2.5;
+            if (!drawSprite(ctx, 'fireball', pFrame, p.x - pSize / 4, p.y - pSize / 4, pSize, pSize, false)) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.level === 3 ? '#ff00ff' : '#ff4400';
+                const pGrad = ctx.createRadialGradient(
+                    p.x + p.size / 2, p.y + p.size / 2, 0,
+                    p.x + p.size / 2, p.y + p.size / 2, p.size
+                );
+                pGrad.addColorStop(0, '#fff');
+                pGrad.addColorStop(0.4, this.level === 3 ? '#ff44ff' : '#ff6347');
+                pGrad.addColorStop(1, this.level === 3 ? '#880088' : '#aa2200');
+                ctx.fillStyle = pGrad;
+                ctx.beginPath();
+                ctx.arc(p.x + p.size / 2, p.y + p.size / 2, p.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
             ctx.restore();
         }
     }
@@ -2161,86 +2223,65 @@ function renderUndergroundBackground() {
 
 function renderKamehameha() {
     if (kamehamehaChargeTimer > 0) {
-        // Charging effect - energy ball in hands
         ctx.save();
-        const cx = player.x + player.width / 2;
+        const cx = player.x + player.width / 2 + player.facing * 20;
         const cy = player.y + player.height / 2;
         const chargeProgress = 1 - (kamehamehaChargeTimer / 45);
-        const radius = 5 + chargeProgress * 15;
-        
-        ctx.shadowBlur = 30 + chargeProgress * 30;
-        ctx.shadowColor = '#00bbff';
-        const ballGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-        ballGrad.addColorStop(0, '#ffffff');
-        ballGrad.addColorStop(0.4, '#88ddff');
-        ballGrad.addColorStop(1, 'rgba(0,100,255,0)');
-        ctx.fillStyle = ballGrad;
-        ctx.beginPath();
-        ctx.arc(cx + player.facing * 20, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Charge sparks
-        for (let i = 0; i < 4; i++) {
-            const angle = (Date.now() * 0.01 + i * Math.PI / 2) % (Math.PI * 2);
-            const sr = radius + 10;
-            ctx.fillStyle = '#aaeeff';
-            ctx.fillRect(
-                cx + player.facing * 20 + Math.cos(angle) * sr - 2,
-                cy + Math.sin(angle) * sr - 2, 4, 4
-            );
+        const size = 30 + chargeProgress * 40;
+        const frame = Math.floor(Date.now() / 80) % 8;
+        if (!drawSprite(ctx, 'fireball', frame, cx - size / 2, cy - size / 2, size, size, false)) {
+            ctx.shadowBlur = 30 + chargeProgress * 30;
+            ctx.shadowColor = '#ff6600';
+            const ballGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, size / 2);
+            ballGrad.addColorStop(0, '#ffffff');
+            ballGrad.addColorStop(0.4, '#ffaa44');
+            ballGrad.addColorStop(1, 'rgba(255,69,0,0)');
+            ctx.fillStyle = ballGrad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+            ctx.fill();
         }
         ctx.restore();
     }
-    
+
     if (kamehamehaBeam) {
         ctx.save();
         const b = kamehamehaBeam;
-        const beamWidth = 24 + Math.sin(Date.now() * 0.02) * 4;
-        
-        // Outer glow
-        ctx.shadowBlur = 40;
-        ctx.shadowColor = '#0088ff';
-        ctx.globalAlpha = 0.6;
-        ctx.fillStyle = '#0066cc';
-        ctx.fillRect(b.x, b.y - beamWidth / 2 - 6, b.length * b.dir, beamWidth + 12);
-        
-        // Main beam
-        ctx.globalAlpha = 0.9;
-        const beamGrad = ctx.createLinearGradient(b.x, b.y - beamWidth / 2, b.x, b.y + beamWidth / 2);
-        beamGrad.addColorStop(0, '#00aaff');
-        beamGrad.addColorStop(0.3, '#aaeeff');
-        beamGrad.addColorStop(0.5, '#ffffff');
-        beamGrad.addColorStop(0.7, '#aaeeff');
-        beamGrad.addColorStop(1, '#00aaff');
-        ctx.fillStyle = beamGrad;
-        ctx.fillRect(
-            b.dir === 1 ? b.x : b.x - b.length,
-            b.y - beamWidth / 2,
-            b.length,
-            beamWidth
-        );
-        
-        // Core white line
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(
-            b.dir === 1 ? b.x : b.x - b.length,
-            b.y - 3,
-            b.length,
-            6
-        );
-        
-        // Impact flash at tip
+        const frame = Math.floor(Date.now() / 60) % 8;
+        const beamH = 50;
+        const spellW = 90;
+        const startX = b.dir === 1 ? b.x : b.x - b.length;
+
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#ff4400';
+
+        const steps = Math.max(1, Math.ceil(b.length / spellW));
+        for (let i = 0; i < steps; i++) {
+            const sx = startX + i * spellW;
+            const sw = Math.min(spellW, b.length - i * spellW);
+            const animF = (frame + i) % 8;
+            const flipX = b.dir === -1;
+            if (!drawSprite(ctx, 'firespell', animF, sx, b.y - beamH / 2, sw, beamH, flipX)) {
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = '#ff6600';
+                ctx.fillRect(sx, b.y - beamH / 4, sw, beamH / 2);
+            }
+        }
+
         const tipX = b.dir === 1 ? b.x + b.length : b.x - b.length;
-        const flashGrad = ctx.createRadialGradient(tipX, b.y, 0, tipX, b.y, 30);
-        flashGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
-        flashGrad.addColorStop(0.5, 'rgba(100,200,255,0.4)');
-        flashGrad.addColorStop(1, 'rgba(0,100,255,0)');
-        ctx.fillStyle = flashGrad;
-        ctx.beginPath();
-        ctx.arc(tipX, b.y, 30, 0, Math.PI * 2);
-        ctx.fill();
-        
+        const tipSize = 60;
+        const tipF = Math.floor(Date.now() / 70) % 8;
+        if (!drawSprite(ctx, 'fireball', tipF, tipX - tipSize / 2, b.y - tipSize / 2, tipSize, tipSize, false)) {
+            const flashGrad = ctx.createRadialGradient(tipX, b.y, 0, tipX, b.y, 30);
+            flashGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
+            flashGrad.addColorStop(0.5, 'rgba(255,140,0,0.4)');
+            flashGrad.addColorStop(1, 'rgba(255,69,0,0)');
+            ctx.fillStyle = flashGrad;
+            ctx.beginPath();
+            ctx.arc(tipX, b.y, 30, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         ctx.restore();
     }
 }
@@ -2619,6 +2660,21 @@ function renderGame() {
                 }
             }
         }
+
+        const TREE_COUNT = 11;
+        for (let i = 0; i < Math.floor(worldWidth / 350); i++) {
+            const treeIdx = ((i * 7 + 3) % TREE_COUNT);
+            const t = sprites[`tree_${treeIdx}`];
+            if (t && t.loaded) {
+                const treeX = 120 + i * 350 + ((i * 137) % 80);
+                const treeH = (treeIdx >= 3 && treeIdx <= 4) ? 120 : 80;
+                const treeW = treeH;
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.drawImage(t.img, treeX, GROUND_Y - treeH + 8, treeW, treeH);
+                ctx.restore();
+            }
+        }
     }
 
     for (const p of platforms) {
@@ -2712,16 +2768,21 @@ function renderGame() {
         ctx.save();
         const alpha = f.life / 40;
         ctx.globalAlpha = Math.min(1, alpha);
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ff4400';
-        const fGrad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
-        fGrad.addColorStop(0, '#ffee44');
-        fGrad.addColorStop(0.4, '#ff6600');
-        fGrad.addColorStop(1, 'rgba(255,40,0,0)');
-        ctx.fillStyle = fGrad;
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
-        ctx.fill();
+        const fireFrame = Math.floor(Date.now() / 60) % 8;
+        const fSize = f.size * 3;
+        const flipF = f.vx < 0;
+        if (!drawSprite(ctx, 'firearrow', fireFrame, f.x - fSize / 2, f.y - fSize / 2, fSize, fSize, flipF)) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff4400';
+            const fGrad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size);
+            fGrad.addColorStop(0, '#ffee44');
+            fGrad.addColorStop(0.4, '#ff6600');
+            fGrad.addColorStop(1, 'rgba(255,40,0,0)');
+            ctx.fillStyle = fGrad;
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.restore();
     }
 
