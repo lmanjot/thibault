@@ -1422,7 +1422,7 @@ class Boss {
         const spriteW = Math.round((this.width + 40) * 1.7);
         const spriteH = Math.round((this.height + 40) * 1.7);
         const sx = this.x + this.width / 2 - spriteW / 2;
-        const sy = this.y + this.height - spriteH + 16;
+        const sy = this.y + this.height - spriteH + 45;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#cc9999' : '#5a4a4a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
