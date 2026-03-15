@@ -638,14 +638,14 @@ const levels = [
             { x: 3200, y: 450, width: 120, height: 18 }
         ],
         enemies: [
-            { x: 400, y: 100, type: 'soldier' },
-            { x: 700, y: 100, type: 'soldier' },
-            { x: 1100, y: 100, type: 'soldier' },
-            { x: 1500, y: 100, type: 'heavy' },
-            { x: 2100, y: 100, type: 'soldier' },
-            { x: 2400, y: 100, type: 'soldier' },
-            { x: 2700, y: 100, type: 'heavy' },
-            { x: 3300, y: 100, type: 'soldier' }
+            { x: 400, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 700, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 1100, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 1500, y: GROUND_Y - 38, type: 'heavy' },
+            { x: 2100, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 2400, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 2700, y: GROUND_Y - 38, type: 'heavy' },
+            { x: 3300, y: GROUND_Y - 38, type: 'soldier' }
         ],
         pows: [
             { x: 500, y: GROUND_Y - 60 },
@@ -674,15 +674,15 @@ const levels = [
             { x: 3600, y: 460, width: 100, height: 18 }
         ],
         enemies: [
-            { x: 350, y: 100, type: 'soldier' },
-            { x: 600, y: 100, type: 'heavy' },
-            { x: 1000, y: 100, type: 'soldier' },
-            { x: 1400, y: 100, type: 'soldier' },
-            { x: 1900, y: 100, type: 'heavy' },
-            { x: 2300, y: 100, type: 'soldier' },
-            { x: 2800, y: 100, type: 'heavy' },
-            { x: 3200, y: 100, type: 'soldier' },
-            { x: 3500, y: 100, type: 'heavy' }
+            { x: 350, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 600, y: GROUND_Y - 38, type: 'heavy' },
+            { x: 1000, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 1400, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 1900, y: GROUND_Y - 38, type: 'heavy' },
+            { x: 2300, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 2800, y: GROUND_Y - 38, type: 'heavy' },
+            { x: 3200, y: GROUND_Y - 38, type: 'soldier' },
+            { x: 3500, y: GROUND_Y - 38, type: 'heavy' }
         ],
         pows: [
             { x: 700, y: GROUND_Y - 60 },

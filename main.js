@@ -344,31 +344,27 @@ class Bonus {
         this.collected = false;
     }
     
-    update(platforms) {
+    update() {
         this.pulseTimer++;
         
-        // Gravity
+        if (typeof inSky !== 'undefined' && inSky) {
+            this.vy *= 0.95;
+            this.y += this.vy;
+            if (this.y < 60) { this.y = 60; this.vy = 0; }
+            if (this.y + this.height > GROUND_Y - 60) { this.y = GROUND_Y - 60 - this.height; this.vy = 0; }
+            this.onGround = true;
+            return;
+        }
+        
         this.vy += GRAVITY;
         if (this.vy > 15) this.vy = 15;
         this.y += this.vy;
         
-        // Ground collision
         this.onGround = false;
         if (this.y + this.height >= GROUND_Y) {
             this.y = GROUND_Y - this.height;
             this.vy = 0;
             this.onGround = true;
-        }
-        
-        // Platform collision
-        for (const plat of platforms) {
-            if (this.vy >= 0 &&
-                this.x + this.width > plat.x && this.x < plat.x + plat.width &&
-                this.y + this.height >= plat.y && this.y + this.height <= plat.y + plat.height + 8) {
-                this.y = plat.y - this.height;
-                this.vy = 0;
-                this.onGround = true;
-            }
         }
     }
     
@@ -1403,7 +1399,7 @@ class Boss {
                 continue;
             }
 
-            if (p.x < -20 || p.x > CANVAS_WIDTH + 20) {
+            if (p.x < -20 || p.x > worldWidth + 20) {
                 this.projectiles.splice(i, 1);
             }
         }
@@ -1589,24 +1585,24 @@ const levels = [
             { x: 5900, y: 370, width: 150, height: 18 }
         ],
         enemies: [
-            { x: 350, y: 100, type: 'basic' },
-            { x: 650, y: 100, type: 'basic' },
-            { x: 950, y: 100, type: 'basic' },
-            { x: 1250, y: 100, type: 'medium' },
-            { x: 1550, y: 100, type: 'basic' },
-            { x: 1850, y: 100, type: 'medium' },
-            { x: 2150, y: 100, type: 'basic' },
-            { x: 2450, y: 100, type: 'hard' },
-            { x: 2750, y: 100, type: 'medium' },
-            { x: 3050, y: 100, type: 'basic' },
-            { x: 3350, y: 100, type: 'hard' },
-            { x: 3650, y: 100, type: 'medium' },
-            { x: 3950, y: 100, type: 'basic' },
-            { x: 4250, y: 100, type: 'hard' },
-            { x: 4550, y: 100, type: 'medium' },
-            { x: 4850, y: 100, type: 'hard' },
-            { x: 5150, y: 100, type: 'medium' },
-            { x: 5450, y: 100, type: 'hard' }
+            { x: 350, y: GROUND_Y - 38, type: 'basic' },
+            { x: 650, y: GROUND_Y - 38, type: 'basic' },
+            { x: 950, y: GROUND_Y - 38, type: 'basic' },
+            { x: 1250, y: GROUND_Y - 38, type: 'medium' },
+            { x: 1550, y: GROUND_Y - 38, type: 'basic' },
+            { x: 1850, y: GROUND_Y - 38, type: 'medium' },
+            { x: 2150, y: GROUND_Y - 38, type: 'basic' },
+            { x: 2450, y: GROUND_Y - 38, type: 'hard' },
+            { x: 2750, y: GROUND_Y - 38, type: 'medium' },
+            { x: 3050, y: GROUND_Y - 38, type: 'basic' },
+            { x: 3350, y: GROUND_Y - 38, type: 'hard' },
+            { x: 3650, y: GROUND_Y - 38, type: 'medium' },
+            { x: 3950, y: GROUND_Y - 38, type: 'basic' },
+            { x: 4250, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4550, y: GROUND_Y - 38, type: 'medium' },
+            { x: 4850, y: GROUND_Y - 38, type: 'hard' },
+            { x: 5150, y: GROUND_Y - 38, type: 'medium' },
+            { x: 5450, y: GROUND_Y - 38, type: 'hard' }
         ],
         wells: [{ x: 3000, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 2000, y: 280, width: 60, height: 50 }],
@@ -1640,24 +1636,24 @@ const levels = [
             { x: 6300, y: 390, width: 130, height: 18 }
         ],
         enemies: [
-            { x: 250, y: 100, type: 'basic' },
-            { x: 450, y: 100, type: 'medium' },
-            { x: 700, y: 100, type: 'basic' },
-            { x: 1000, y: 100, type: 'medium' },
-            { x: 1400, y: 100, type: 'hard' },
-            { x: 1750, y: 100, type: 'medium' },
-            { x: 2100, y: 100, type: 'basic' },
-            { x: 2450, y: 100, type: 'hard' },
-            { x: 2800, y: 100, type: 'medium' },
-            { x: 3150, y: 100, type: 'hard' },
-            { x: 3500, y: 100, type: 'medium' },
-            { x: 3850, y: 100, type: 'hard' },
-            { x: 4200, y: 100, type: 'basic' },
-            { x: 4550, y: 100, type: 'hard' },
-            { x: 4900, y: 100, type: 'medium' },
-            { x: 5250, y: 100, type: 'hard' },
-            { x: 5600, y: 100, type: 'medium' },
-            { x: 5950, y: 100, type: 'hard' }
+            { x: 250, y: GROUND_Y - 38, type: 'basic' },
+            { x: 450, y: GROUND_Y - 38, type: 'medium' },
+            { x: 700, y: GROUND_Y - 38, type: 'basic' },
+            { x: 1000, y: GROUND_Y - 38, type: 'medium' },
+            { x: 1400, y: GROUND_Y - 38, type: 'hard' },
+            { x: 1750, y: GROUND_Y - 38, type: 'medium' },
+            { x: 2100, y: GROUND_Y - 38, type: 'basic' },
+            { x: 2450, y: GROUND_Y - 38, type: 'hard' },
+            { x: 2800, y: GROUND_Y - 38, type: 'medium' },
+            { x: 3150, y: GROUND_Y - 38, type: 'hard' },
+            { x: 3500, y: GROUND_Y - 38, type: 'medium' },
+            { x: 3850, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4200, y: GROUND_Y - 38, type: 'basic' },
+            { x: 4550, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4900, y: GROUND_Y - 38, type: 'medium' },
+            { x: 5250, y: GROUND_Y - 38, type: 'hard' },
+            { x: 5600, y: GROUND_Y - 38, type: 'medium' },
+            { x: 5950, y: GROUND_Y - 38, type: 'hard' }
         ],
         wells: [{ x: 4000, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 2800, y: 260, width: 60, height: 50 }],
@@ -1716,36 +1712,36 @@ const levels = [
             { x: 7720, y: 310, width: 110, height: 18 }
         ],
         enemies: [
-            { x: 200, y: 100, type: 'basic' },
-            { x: 370, y: 100, type: 'medium' },
-            { x: 520, y: 100, type: 'hard' },
-            { x: 700, y: 100, type: 'basic' },
-            { x: 900, y: 100, type: 'medium' },
-            { x: 1100, y: 100, type: 'hard' },
-            { x: 1400, y: 100, type: 'hard' },
-            { x: 1650, y: 100, type: 'medium' },
-            { x: 1900, y: 100, type: 'hard' },
-            { x: 2150, y: 100, type: 'basic' },
-            { x: 2400, y: 100, type: 'hard' },
-            { x: 2650, y: 100, type: 'medium' },
-            { x: 2900, y: 100, type: 'hard' },
-            { x: 3150, y: 100, type: 'hard' },
-            { x: 3400, y: 100, type: 'medium' },
-            { x: 3650, y: 100, type: 'hard' },
-            { x: 3900, y: 100, type: 'hard' },
-            { x: 4150, y: 100, type: 'medium' },
-            { x: 4400, y: 100, type: 'hard' },
-            { x: 4650, y: 100, type: 'hard' },
-            { x: 4900, y: 100, type: 'medium' },
-            { x: 5150, y: 100, type: 'hard' },
-            { x: 5400, y: 100, type: 'hard' },
-            { x: 5650, y: 100, type: 'medium' },
-            { x: 5900, y: 100, type: 'hard' },
-            { x: 6150, y: 100, type: 'hard' },
-            { x: 6400, y: 100, type: 'medium' },
-            { x: 6650, y: 100, type: 'hard' },
-            { x: 6900, y: 100, type: 'hard' },
-            { x: 7150, y: 100, type: 'hard' }
+            { x: 200, y: GROUND_Y - 38, type: 'basic' },
+            { x: 370, y: GROUND_Y - 38, type: 'medium' },
+            { x: 520, y: GROUND_Y - 38, type: 'hard' },
+            { x: 700, y: GROUND_Y - 38, type: 'basic' },
+            { x: 900, y: GROUND_Y - 38, type: 'medium' },
+            { x: 1100, y: GROUND_Y - 38, type: 'hard' },
+            { x: 1400, y: GROUND_Y - 38, type: 'hard' },
+            { x: 1650, y: GROUND_Y - 38, type: 'medium' },
+            { x: 1900, y: GROUND_Y - 38, type: 'hard' },
+            { x: 2150, y: GROUND_Y - 38, type: 'basic' },
+            { x: 2400, y: GROUND_Y - 38, type: 'hard' },
+            { x: 2650, y: GROUND_Y - 38, type: 'medium' },
+            { x: 2900, y: GROUND_Y - 38, type: 'hard' },
+            { x: 3150, y: GROUND_Y - 38, type: 'hard' },
+            { x: 3400, y: GROUND_Y - 38, type: 'medium' },
+            { x: 3650, y: GROUND_Y - 38, type: 'hard' },
+            { x: 3900, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4150, y: GROUND_Y - 38, type: 'medium' },
+            { x: 4400, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4650, y: GROUND_Y - 38, type: 'hard' },
+            { x: 4900, y: GROUND_Y - 38, type: 'medium' },
+            { x: 5150, y: GROUND_Y - 38, type: 'hard' },
+            { x: 5400, y: GROUND_Y - 38, type: 'hard' },
+            { x: 5650, y: GROUND_Y - 38, type: 'medium' },
+            { x: 5900, y: GROUND_Y - 38, type: 'hard' },
+            { x: 6150, y: GROUND_Y - 38, type: 'hard' },
+            { x: 6400, y: GROUND_Y - 38, type: 'medium' },
+            { x: 6650, y: GROUND_Y - 38, type: 'hard' },
+            { x: 6900, y: GROUND_Y - 38, type: 'hard' },
+            { x: 7150, y: GROUND_Y - 38, type: 'hard' }
         ],
         wells: [{ x: 4500, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 3500, y: 240, width: 60, height: 50 }],
@@ -1769,6 +1765,8 @@ let spaceInvaders = [];
 let spaceInvaderBullets = [];
 let spaceWaves = 0;
 let spaceWaveTimer = 0;
+let meteorites = [];
+let meteoriteTimer = 0;
 let enemies = [];
 let boss = null;
 let platforms = [];
@@ -1781,11 +1779,12 @@ function loadLevel(levelNum) {
     if (inSpaceLevel) {
         const oldHp = player ? player.hp : 100;
         spaceship = {
-            x: 100,
-            y: GROUND_Y - 80,
+            x: CANVAS_WIDTH / 2 - 30,
+            y: CANVAS_HEIGHT - 100,
             width: 60,
             height: 40,
             vx: 0,
+            vy: 0,
             hp: oldHp,
             maxHp: 100,
             shootCooldown: 0,
@@ -1793,6 +1792,8 @@ function loadLevel(levelNum) {
         };
         spaceInvaders = [];
         spaceInvaderBullets = [];
+        meteorites = [];
+        meteoriteTimer = 0;
         spaceWaves = 0;
         spaceWaveTimer = 180;
         worldWidth = level.worldWidth || 4000;
@@ -1837,7 +1838,7 @@ function loadLevel(levelNum) {
     worldWidth = level.worldWidth || 1200;
     platforms = level.platforms.map(p => ({ ...p }));
     enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.type));
-    boss = new Boss(level.bossX, 100, levelNum);
+    boss = new Boss(level.bossX, GROUND_Y - (levelNum === 3 ? 90 : 70), levelNum);
     secretWells = (level.wells || []).map(w => ({ ...w }));
     skyPortals = (level.skyPortals || []).map(p => ({ ...p }));
     inSky = false;
@@ -1940,11 +1941,11 @@ function generateUndergroundWorld() {
     ];
     
     undergroundEnemies = [
-        new Enemy(400, 100, 'medium'),
-        new Enemy(700, 100, 'hard'),
-        new Enemy(1100, 100, 'medium'),
-        new Enemy(1500, 100, 'hard'),
-        new Enemy(1900, 100, 'hard')
+        new Enemy(400, GROUND_Y - 38, 'medium'),
+        new Enemy(700, GROUND_Y - 38, 'hard'),
+        new Enemy(1100, GROUND_Y - 38, 'medium'),
+        new Enemy(1500, GROUND_Y - 38, 'hard'),
+        new Enemy(1900, GROUND_Y - 38, 'hard')
     ];
     
     undergroundBonuses = [
@@ -2824,7 +2825,7 @@ function spawnSpaceInvaderWave() {
     spaceWaves++;
     const cols = 8 + Math.min(spaceWaves, 4);
     const rows = 3 + Math.min(Math.floor(spaceWaves / 2), 2);
-    const startX = cameraX + 150;
+    const startX = 150;
     const startY = 80;
     const spacingX = 50;
     const spacingY = 35;
@@ -2848,11 +2849,17 @@ function updateSpaceLevel() {
     if (!sp) return;
 
     sp.vx = 0;
+    sp.vy = 0;
     if (isLeft()) sp.vx = -8;
     if (isRight()) sp.vx = 8;
+    if (keys['ArrowUp'] || keys['KeyW'] || keys['Space']) sp.vy = -8;
+    if (keys['ArrowDown'] || keys['KeyS']) sp.vy = 8;
     sp.x += sp.vx;
+    sp.y += sp.vy;
     if (sp.x < 20) sp.x = 20;
-    if (sp.x + sp.width > worldWidth - 20) sp.x = worldWidth - 20;
+    if (sp.x + sp.width > CANVAS_WIDTH - 20) sp.x = CANVAS_WIDTH - 20 - sp.width;
+    if (sp.y < 60) sp.y = 60;
+    if (sp.y + sp.height > CANVAS_HEIGHT - 20) sp.y = CANVAS_HEIGHT - 20 - sp.height;
 
     if (sp.invincible > 0) sp.invincible--;
 
@@ -2891,16 +2898,30 @@ function updateSpaceLevel() {
             }
         }
         if (hit) continue;
+        for (let j = meteorites.length - 1; j >= 0; j--) {
+            const m = meteorites[j];
+            if (b.x < m.x + m.size && b.x + b.width > m.x &&
+                b.y < m.y + m.size && b.y + b.height > m.y) {
+                m.hp--;
+                playerBullets.splice(i, 1);
+                if (m.hp <= 0) {
+                    meteorites.splice(j, 1);
+                    spawnParticles(m.x + m.size / 2, m.y + m.size / 2, '#aa8866', 8, 5);
+                }
+                hit = true;
+                break;
+            }
+        }
+        if (hit) continue;
     }
 
-    let rightmost = 0, leftmost = worldWidth, bottommost = 0;
+    let rightmost = 0, leftmost = CANVAS_WIDTH;
     for (const inv of spaceInvaders) {
         rightmost = Math.max(rightmost, inv.x + inv.width);
         leftmost = Math.min(leftmost, inv.x);
-        bottommost = Math.max(bottommost, inv.y + inv.height);
         inv.x += inv.vx;
     }
-    if (rightmost > cameraX + CANVAS_WIDTH - 40 || leftmost < cameraX + 40) {
+    if (rightmost > CANVAS_WIDTH - 40 || leftmost < 40) {
         for (const inv of spaceInvaders) {
             inv.vx *= -1;
             inv.y += 20;
@@ -2937,6 +2958,43 @@ function updateSpaceLevel() {
         }
     }
 
+    meteoriteTimer++;
+    if (meteoriteTimer >= 20 + Math.random() * 40) {
+        meteoriteTimer = 0;
+        const mSize = 15 + Math.random() * 25;
+        meteorites.push({
+            x: Math.random() * (CANVAS_WIDTH - mSize),
+            y: -mSize,
+            size: mSize,
+            vy: 2 + Math.random() * 3,
+            vx: (Math.random() - 0.5) * 1.5,
+            rotation: 0,
+            rotSpeed: (Math.random() - 0.5) * 0.08,
+            hp: Math.ceil(mSize / 15)
+        });
+    }
+
+    for (let i = meteorites.length - 1; i >= 0; i--) {
+        const m = meteorites[i];
+        m.y += m.vy;
+        m.x += m.vx;
+        m.rotation += m.rotSpeed;
+        if (m.y > CANVAS_HEIGHT + 50) {
+            meteorites.splice(i, 1);
+            continue;
+        }
+        if (sp.invincible <= 0 &&
+            sp.x < m.x + m.size && sp.x + sp.width > m.x &&
+            sp.y < m.y + m.size && sp.y + sp.height > m.y) {
+            sp.hp -= 20;
+            sp.invincible = 90;
+            meteorites.splice(i, 1);
+            screenShake = 10;
+            spawnParticles(sp.x + sp.width / 2, sp.y + sp.height / 2, '#aa8866', 12, 6);
+            if (sounds.hit) sounds.hit();
+        }
+    }
+
     if (spaceInvaders.length === 0) {
         spaceWaveTimer--;
         if (spaceWaveTimer <= 0) {
@@ -2945,14 +3003,13 @@ function updateSpaceLevel() {
         }
     }
 
-    const targetX = spaceship.x - CANVAS_WIDTH / 2 + spaceship.width / 2;
-    cameraX = Math.max(0, Math.min(worldWidth - CANVAS_WIDTH, targetX));
+    cameraX = 0;
 
     if (sp.hp <= 0) {
         gameState = STATE_GAME_OVER;
     }
 
-    if (sp.x + sp.width >= worldWidth - 100) {
+    if (spaceWaves >= 5) {
         gameState = STATE_VICTORY;
     }
 
@@ -2964,7 +3021,7 @@ function renderSpaceLevel() {
 
     const shakeX = screenShake > 0 ? (Math.random() - 0.5) * 4 : 0;
     const shakeY = screenShake > 0 ? (Math.random() - 0.5) * 4 : 0;
-    ctx.translate(-cameraX + shakeX, shakeY);
+    ctx.translate(shakeX, shakeY);
     if (screenShake > 0) screenShake--;
 
     const spaceGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -2972,13 +3029,40 @@ function renderSpaceLevel() {
     spaceGrad.addColorStop(0.5, '#000022');
     spaceGrad.addColorStop(1, '#0a0015');
     ctx.fillStyle = spaceGrad;
-    ctx.fillRect(0, 0, worldWidth, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    const t = Date.now() * 0.001;
     for (let i = 0; i < 150; i++) {
-        const sx = (i * 31 + 7) % worldWidth;
-        const sy = (i * 19 + 11) % CANVAS_HEIGHT;
-        ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(i + Date.now() * 0.002) * 0.2})`;
+        const sx = (i * 31 + 7) % CANVAS_WIDTH;
+        const sy = ((i * 19 + 11) + t * (10 + i % 5 * 8)) % CANVAS_HEIGHT;
+        ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(i + t) * 0.2})`;
         ctx.fillRect(sx, sy, 2, 2);
+    }
+
+    for (const m of meteorites) {
+        ctx.save();
+        ctx.translate(m.x + m.size / 2, m.y + m.size / 2);
+        ctx.rotate(m.rotation);
+        const s = m.size / 2;
+        ctx.fillStyle = '#8b7355';
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(s * 0.7, -s * 0.4);
+        ctx.lineTo(s, s * 0.3);
+        ctx.lineTo(s * 0.3, s);
+        ctx.lineTo(-s * 0.5, s * 0.8);
+        ctx.lineTo(-s, 0);
+        ctx.lineTo(-s * 0.6, -s * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#6b5344';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#7a6344';
+        ctx.beginPath();
+        ctx.arc(s * 0.2, -s * 0.1, s * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
     }
 
     for (const inv of spaceInvaders) {
@@ -2998,11 +3082,12 @@ function renderSpaceLevel() {
     }
 
     for (const b of playerBullets) {
+        ctx.save();
         ctx.fillStyle = '#00ff88';
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#00ff88';
         ctx.fillRect(b.x, b.y, b.width, b.height);
-        ctx.shadowBlur = 0;
+        ctx.restore();
     }
 
     if (spaceship) {
@@ -3027,7 +3112,13 @@ function renderSpaceLevel() {
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.fillStyle = '#ff6600';
-        ctx.fillRect(sx + sw / 2 - 4, sy + sh - 6, 8, 6);
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff6600';
+        const flicker = 2 + Math.random() * 4;
+        ctx.fillRect(sx + sw / 2 - 4, sy + sh - 2, 8, flicker);
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(sx + sw / 2 - 2, sy + sh - 2, 4, flicker - 2);
+        ctx.shadowBlur = 0;
         ctx.restore();
     }
 
@@ -3049,8 +3140,8 @@ function renderSpaceLevel() {
     ctx.fillStyle = '#00ccff';
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'right';
-    ctx.fillText('NIVEAU 4 - FUITE', CANVAS_WIDTH - 30, 38);
-    ctx.fillText('Atteignez la fin pour vous échapper !', CANVAS_WIDTH - 30, 58);
+    ctx.fillText('NIVEAU 4 - SPACE INVADERS', CANVAS_WIDTH - 30, 38);
+    ctx.fillText(`Vague ${spaceWaves} - Esquivez les météorites !`, CANVAS_WIDTH - 30, 58);
     ctx.restore();
 }
 
@@ -3097,10 +3188,11 @@ function update() {
                 bonuses.splice(i, 1);
                 continue;
             }
-            bonus.update(platforms);
+            bonus.update();
             
-            // Check collision with player
-            if (rectsOverlap(bonus, player)) {
+            // Check collision with player (generous hitbox for easier pickup)
+            const pickupBox = { x: bonus.x - 6, y: bonus.y - 6, width: bonus.width + 12, height: bonus.height + 12 };
+            if (rectsOverlap(pickupBox, player)) {
                 if (bonus.type === BONUS_HORNS) {
                     player.hasHorns = true;
                     player.hornsTimer = 600; // 10 seconds at 60fps
