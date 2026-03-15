@@ -985,13 +985,10 @@ class Player {
 
         if (this.isSuperSaiyan) {
             ctx.save();
-            ctx.globalAlpha = 0.3;
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = '#ffd700';
-            ctx.beginPath();
-            ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2 + 2, bh / 2 + 2, 0, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,215,0,0.15)';
-            ctx.fill();
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.globalAlpha = 0.25 + Math.sin(Date.now() * 0.006) * 0.08;
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(sx, sy, spriteW, spriteH);
             ctx.restore();
         }
 
