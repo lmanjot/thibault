@@ -558,8 +558,8 @@ class Player {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.width = 36;
-        this.height = 48;
+        this.width = 50;
+        this.height = 60;
         this.vx = 0;
         this.vy = 0;
         this.maxHp = 100;
@@ -852,24 +852,27 @@ class Player {
     }
 
     render(ctx) {
-        if (this.invincible > 0 && Math.floor(this.invincible / 3) % 2 === 0) return;
-
         ctx.save();
+
+        if (this.invincible > 0 && Math.floor(this.invincible / 3) % 2 === 0) {
+            ctx.globalAlpha = 0.3;
+        }
 
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.beginPath();
-        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 3, this.width / 2.5, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 3, this.width / 2.5, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
         const flash = this.flashTimer > 0;
         const bx = this.x, by = this.y, bw = this.width, bh = this.height;
 
-        if (!this._animFrame) this._animFrame = 0;
-        if (!this._animTimer) this._animTimer = 0;
+        if (this._animFrame === undefined) this._animFrame = 0;
+        if (this._animTimer === undefined) this._animTimer = 0;
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
-        const swLvl = currentLevel >= 3 ? 3 : currentLevel >= 2 ? 2 : 1;
+        const stoneCount = this.stones.length;
+        const swLvl = stoneCount >= 2 ? 3 : stoneCount >= 1 ? 2 : 1;
         const swPfx = `sw${swLvl}`;
         let spriteName = `${swPfx}_idle`;
         if (flash) {
@@ -883,68 +886,54 @@ class Player {
         }
 
         const flipX = this.facing === -1;
-        const pad = 12;
-        if (!drawSprite(ctx, spriteName, this._animFrame, bx - pad, by - pad, bw + pad * 2, bh + pad * 2, flipX)) {
+        const spriteSize = bh + 30;
+        const sx = bx + bw / 2 - spriteSize / 2;
+        const sy = by + bh - spriteSize;
+        if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteSize, spriteSize, flipX)) {
             ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
             ctx.fillRect(bx, by, bw, bh);
         }
 
         if (flash) {
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.25;
             ctx.fillStyle = '#ff4444';
-            ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+            ctx.fillRect(sx, sy, spriteSize, spriteSize);
             ctx.globalAlpha = 1;
         }
 
-        // Sword with animation
-        const sLen = 38;
-        const handleX = this.facing === 1 ? bx + bw - 2 : bx - 6;
-        const handleY = by + 20;
-        const handleCenterX = handleX + 4;
-        const handleCenterY = handleY + 3;
-        
-        ctx.save();
-        ctx.translate(handleCenterX, handleCenterY);
-        ctx.rotate(this.swordAngle);
-        
-        // Sword handle
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(-4, -3, 8, 12);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(-6, -1, 12, 3);
-        
-        // Blade (positioned relative to handle)
-        const bladeX = this.facing === 1 ? 0 : -sLen;
-        const bladeY = -3;
-        ctx.fillStyle = '#ddd';
-        ctx.fillRect(bladeX, bladeY, sLen, 5);
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillRect(bladeX, bladeY, sLen, 2);
-        
-        // Sword glow
-        if (this.stones.length > 0) {
-            ctx.shadowBlur = 25;
+        // Stone power aura
+        if (stoneCount > 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.12 + Math.sin(Date.now() * 0.008) * 0.06;
+            ctx.shadowBlur = 30 + stoneCount * 10;
             if (this.hasAllStones()) {
                 const t = Date.now() * 0.005;
                 const r = Math.sin(t) * 127 + 128;
                 const g = Math.sin(t + 2.1) * 127 + 128;
-                const b = Math.sin(t + 4.2) * 127 + 128;
-                ctx.shadowColor = `rgb(${r|0},${g|0},${b|0})`;
-                ctx.fillStyle = `rgba(${r|0},${g|0},${b|0},0.6)`;
-            } else if (this.stones.includes(STONE_LIGHTNING)) {
-                ctx.shadowColor = '#ffd700';
-                ctx.fillStyle = 'rgba(255,215,0,0.5)';
-            } else if (this.stones.includes(STONE_WATER)) {
+                const bv = Math.sin(t + 4.2) * 127 + 128;
+                ctx.shadowColor = `rgb(${r|0},${g|0},${bv|0})`;
+                ctx.fillStyle = `rgba(${r|0},${g|0},${bv|0},0.3)`;
+            } else if (stoneCount >= 2) {
                 ctx.shadowColor = '#00bfff';
-                ctx.fillStyle = 'rgba(0,191,255,0.5)';
+                ctx.fillStyle = 'rgba(0,191,255,0.2)';
             } else {
                 ctx.shadowColor = '#ff4500';
-                ctx.fillStyle = 'rgba(255,69,0,0.5)';
+                ctx.fillStyle = 'rgba(255,69,0,0.2)';
             }
-            ctx.fillRect(bladeX, bladeY - 1, sLen, 7);
+            ctx.fillRect(bx - 6, by - 6, bw + 12, bh + 12);
+            ctx.restore();
         }
-        
-        ctx.restore();
+
+        // Super Saiyan aura
+        if (this.isSuperSaiyan) {
+            ctx.save();
+            ctx.globalAlpha = 0.15 + Math.sin(Date.now() * 0.01) * 0.08;
+            ctx.shadowBlur = 50;
+            ctx.shadowColor = '#ffd700';
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(bx - 10, by - 10, bw + 20, bh + 20);
+            ctx.restore();
+        }
 
         // Attack slash arc
         if (this.attackDuration > 0) {
@@ -956,116 +945,12 @@ class Player {
             ctx.shadowBlur = 12;
             ctx.shadowColor = this.getSwordColor();
             ctx.beginPath();
-            const cx = bx + bw / 2 + this.facing * 20;
+            const cx = bx + bw / 2 + this.facing * 25;
             const cy = by + bh / 2;
             const startAngle = this.facing === 1 ? -Math.PI * 0.6 : Math.PI * 0.4;
             const sweep = this.facing * Math.PI * 0.8 * progress;
-            ctx.arc(cx, cy, 45, startAngle, startAngle + sweep);
+            ctx.arc(cx, cy, 50, startAngle, startAngle + sweep);
             ctx.stroke();
-            ctx.restore();
-        }
-        
-        // Horns power-up visual
-        if (this.hasHorns) {
-            ctx.save();
-            const hornColor = '#ffaa00';
-            ctx.fillStyle = hornColor;
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = hornColor;
-            
-            // Left horn
-            ctx.beginPath();
-            ctx.moveTo(bx + 8, by + 4);
-            ctx.lineTo(bx + 4, by - 8);
-            ctx.lineTo(bx + 14, by + 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            // Right horn
-            ctx.beginPath();
-            ctx.moveTo(bx + bw - 8, by + 4);
-            ctx.lineTo(bx + bw - 4, by - 8);
-            ctx.lineTo(bx + bw - 14, by + 2);
-            ctx.closePath();
-            ctx.fill();
-            
-            ctx.restore();
-        }
-        
-        // Super Saiyan hair (yellow spiky hair above helmet)
-        if (this.isSuperSaiyan) {
-            ctx.save();
-            const hairColor = '#ffd700';
-            const hairGlow = '#ffee44';
-            ctx.shadowBlur = 25;
-            ctx.shadowColor = hairGlow;
-            ctx.fillStyle = hairColor;
-
-            // Main hair spikes
-            ctx.beginPath();
-            ctx.moveTo(bx + 4, by + 2);
-            ctx.lineTo(bx - 2, by - 18);
-            ctx.lineTo(bx + 12, by - 4);
-            ctx.lineTo(bx + 10, by - 22);
-            ctx.lineTo(bx + 20, by - 6);
-            ctx.lineTo(bx + bw / 2, by - 26);
-            ctx.lineTo(bx + bw - 16, by - 6);
-            ctx.lineTo(bx + bw - 8, by - 20);
-            ctx.lineTo(bx + bw - 8, by - 2);
-            ctx.lineTo(bx + bw + 2, by - 16);
-            ctx.lineTo(bx + bw - 2, by + 2);
-            ctx.closePath();
-            ctx.fill();
-
-            // Saiyan aura glow around body
-            ctx.globalAlpha = 0.12 + Math.sin(Date.now() * 0.01) * 0.06;
-            ctx.shadowBlur = 50;
-            ctx.shadowColor = '#ffd700';
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(bx - 8, by - 8, bw + 16, bh + 16);
-            ctx.globalAlpha = 1;
-
-            ctx.restore();
-        }
-
-        // Flamethrower visual (when equipped)
-        if (this.hasFlamethrower) {
-            ctx.save();
-            const ftX = this.facing === 1 ? bx + bw - 4 : bx - 20;
-            const ftY = by + 16;
-            ctx.fillStyle = '#555';
-            ctx.fillRect(ftX, ftY, 24, 6);
-            ctx.fillStyle = '#777';
-            ctx.fillRect(ftX, ftY, 24, 3);
-            ctx.fillStyle = '#333';
-            ctx.fillRect(this.facing === 1 ? ftX + 20 : ftX, ftY - 2, 6, 10);
-            // Pilot flame
-            if (Math.random() > 0.3) {
-                ctx.fillStyle = '#ff6600';
-                const tip = this.facing === 1 ? ftX + 26 : ftX - 6;
-                ctx.fillRect(tip, ftY, 4 + Math.random() * 4, 4);
-            }
-            ctx.restore();
-        }
-
-        // Pistol visual (when equipped)
-        if (this.hasPistol) {
-            ctx.save();
-            const pistolX = this.facing === 1 ? bx + bw - 8 : bx - 12;
-            const pistolY = by + 20;
-            
-            // Pistol handle
-            ctx.fillStyle = '#8b4513';
-            ctx.fillRect(pistolX, pistolY, 6, 8);
-            // Barrel
-            ctx.fillStyle = '#333';
-            ctx.fillRect(this.facing === 1 ? pistolX + 6 : pistolX - 10, pistolY + 2, 10, 4);
-            // Muzzle flash (when shooting)
-            if (this.shootCooldown > 7) {
-                ctx.fillStyle = '#ffff00';
-                ctx.fillRect(this.facing === 1 ? pistolX + 16 : pistolX - 16, pistolY + 1, 4, 6);
-            }
-            
             ctx.restore();
         }
 
@@ -1084,8 +969,8 @@ class Enemy {
         this.id = entityIdCounter++;
         this.x = x;
         this.y = y;
-        this.width = 32;
-        this.height = 38;
+        this.width = 44;
+        this.height = 52;
         this.vx = 0;
         this.vy = 0;
         this.type = type || 'basic';
@@ -1162,11 +1047,11 @@ class Enemy {
 
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
-        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        if (!this._animFrame) this._animFrame = 0;
-        if (!this._animTimer) this._animTimer = 0;
+        if (this._animFrame === undefined) this._animFrame = 0;
+        if (this._animTimer === undefined) this._animTimer = 0;
         this._animTimer++;
         if (this._animTimer % 7 === 0) this._animFrame++;
 
@@ -1179,8 +1064,10 @@ class Enemy {
         }
 
         const flipX = this.vx < 0;
-        const pad = 10;
-        if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
+        const spriteSize = this.height + 24;
+        const sx = this.x + this.width / 2 - spriteSize / 2;
+        const sy = this.y + this.height - spriteSize;
+        if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteSize, spriteSize, flipX)) {
             ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
         }
@@ -1188,15 +1075,15 @@ class Enemy {
         if (flash) {
             ctx.globalAlpha = 0.3;
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2);
+            ctx.fillRect(sx, sy, spriteSize, spriteSize);
             ctx.globalAlpha = 1;
         }
 
         if (this.hp < this.maxHp) {
             ctx.fillStyle = '#333';
-            ctx.fillRect(this.x, this.y - 8, this.width, 4);
+            ctx.fillRect(this.x, this.y - 10, this.width, 5);
             ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(this.x, this.y - 8, this.width * (this.hp / this.maxHp), 4);
+            ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 5);
         }
 
         ctx.restore();
@@ -1272,14 +1159,14 @@ class SkyDragon {
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        if (!this._animFrame) this._animFrame = 0;
-        if (!this._animTimer) this._animTimer = 0;
+        if (this._animFrame === undefined) this._animFrame = 0;
+        if (this._animTimer === undefined) this._animTimer = 0;
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
         const spriteName = this.attackCooldown > 80 ? 'dragon_attack' : 'dragon_fly';
         const flipX = this.vx < 0;
-        const pad = 6;
+        const pad = 10;
         if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
             ctx.fillStyle = flash ? '#ffaa88' : '#c0392b';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1312,8 +1199,8 @@ class Boss {
         this.x = x;
         this.y = y;
         this.level = level;
-        this.width = level === 3 ? 80 : 60;
-        this.height = level === 3 ? 90 : 70;
+        this.width = level === 3 ? 90 : 70;
+        this.height = level === 3 ? 100 : 80;
         this.vx = 0;
         this.vy = 0;
         this.hp = level === 1 ? 80 : level === 2 ? 150 : 250;
@@ -1432,11 +1319,11 @@ class Boss {
 
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
-        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 4, this.width / 2.2, 8, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 4, this.width / 2.2, 9, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        if (!this._animFrame) this._animFrame = 0;
-        if (!this._animTimer) this._animTimer = 0;
+        if (this._animFrame === undefined) this._animFrame = 0;
+        if (this._animTimer === undefined) this._animTimer = 0;
         this._animTimer++;
         if (this._animTimer % 7 === 0) this._animFrame++;
 
@@ -1448,8 +1335,10 @@ class Boss {
         }
 
         const flipX = this.vx < 0;
-        const pad = 14;
-        if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
+        const spriteSize = this.height + 30;
+        const sx = this.x + this.width / 2 - spriteSize / 2;
+        const sy = this.y + this.height - spriteSize;
+        if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteSize, spriteSize, flipX)) {
             ctx.fillStyle = flash ? '#cc9999' : '#5a4a4a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
         }
@@ -1467,7 +1356,7 @@ class Boss {
         if (flash) {
             ctx.globalAlpha = 0.3;
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2);
+            ctx.fillRect(sx, sy, spriteSize, spriteSize);
             ctx.globalAlpha = 1;
         }
 
@@ -1537,24 +1426,24 @@ const levels = [
             { x: 5900, y: 370, width: 150, height: 18 }
         ],
         enemies: [
-            { x: 350, y: GROUND_Y - 38, type: 'basic' },
-            { x: 650, y: GROUND_Y - 38, type: 'basic' },
-            { x: 950, y: GROUND_Y - 38, type: 'basic' },
-            { x: 1250, y: GROUND_Y - 38, type: 'medium' },
-            { x: 1550, y: GROUND_Y - 38, type: 'basic' },
-            { x: 1850, y: GROUND_Y - 38, type: 'medium' },
-            { x: 2150, y: GROUND_Y - 38, type: 'basic' },
-            { x: 2450, y: GROUND_Y - 38, type: 'hard' },
-            { x: 2750, y: GROUND_Y - 38, type: 'medium' },
-            { x: 3050, y: GROUND_Y - 38, type: 'basic' },
-            { x: 3350, y: GROUND_Y - 38, type: 'hard' },
-            { x: 3650, y: GROUND_Y - 38, type: 'medium' },
-            { x: 3950, y: GROUND_Y - 38, type: 'basic' },
-            { x: 4250, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4550, y: GROUND_Y - 38, type: 'medium' },
-            { x: 4850, y: GROUND_Y - 38, type: 'hard' },
-            { x: 5150, y: GROUND_Y - 38, type: 'medium' },
-            { x: 5450, y: GROUND_Y - 38, type: 'hard' }
+            { x: 350, y: GROUND_Y - 52, type: 'basic' },
+            { x: 650, y: GROUND_Y - 52, type: 'basic' },
+            { x: 950, y: GROUND_Y - 52, type: 'basic' },
+            { x: 1250, y: GROUND_Y - 52, type: 'medium' },
+            { x: 1550, y: GROUND_Y - 52, type: 'basic' },
+            { x: 1850, y: GROUND_Y - 52, type: 'medium' },
+            { x: 2150, y: GROUND_Y - 52, type: 'basic' },
+            { x: 2450, y: GROUND_Y - 52, type: 'hard' },
+            { x: 2750, y: GROUND_Y - 52, type: 'medium' },
+            { x: 3050, y: GROUND_Y - 52, type: 'basic' },
+            { x: 3350, y: GROUND_Y - 52, type: 'hard' },
+            { x: 3650, y: GROUND_Y - 52, type: 'medium' },
+            { x: 3950, y: GROUND_Y - 52, type: 'basic' },
+            { x: 4250, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4550, y: GROUND_Y - 52, type: 'medium' },
+            { x: 4850, y: GROUND_Y - 52, type: 'hard' },
+            { x: 5150, y: GROUND_Y - 52, type: 'medium' },
+            { x: 5450, y: GROUND_Y - 52, type: 'hard' }
         ],
         wells: [{ x: 3000, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 2000, y: 280, width: 60, height: 50 }],
@@ -1588,24 +1477,24 @@ const levels = [
             { x: 6300, y: 390, width: 130, height: 18 }
         ],
         enemies: [
-            { x: 250, y: GROUND_Y - 38, type: 'basic' },
-            { x: 450, y: GROUND_Y - 38, type: 'medium' },
-            { x: 700, y: GROUND_Y - 38, type: 'basic' },
-            { x: 1000, y: GROUND_Y - 38, type: 'medium' },
-            { x: 1400, y: GROUND_Y - 38, type: 'hard' },
-            { x: 1750, y: GROUND_Y - 38, type: 'medium' },
-            { x: 2100, y: GROUND_Y - 38, type: 'basic' },
-            { x: 2450, y: GROUND_Y - 38, type: 'hard' },
-            { x: 2800, y: GROUND_Y - 38, type: 'medium' },
-            { x: 3150, y: GROUND_Y - 38, type: 'hard' },
-            { x: 3500, y: GROUND_Y - 38, type: 'medium' },
-            { x: 3850, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4200, y: GROUND_Y - 38, type: 'basic' },
-            { x: 4550, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4900, y: GROUND_Y - 38, type: 'medium' },
-            { x: 5250, y: GROUND_Y - 38, type: 'hard' },
-            { x: 5600, y: GROUND_Y - 38, type: 'medium' },
-            { x: 5950, y: GROUND_Y - 38, type: 'hard' }
+            { x: 250, y: GROUND_Y - 52, type: 'basic' },
+            { x: 450, y: GROUND_Y - 52, type: 'medium' },
+            { x: 700, y: GROUND_Y - 52, type: 'basic' },
+            { x: 1000, y: GROUND_Y - 52, type: 'medium' },
+            { x: 1400, y: GROUND_Y - 52, type: 'hard' },
+            { x: 1750, y: GROUND_Y - 52, type: 'medium' },
+            { x: 2100, y: GROUND_Y - 52, type: 'basic' },
+            { x: 2450, y: GROUND_Y - 52, type: 'hard' },
+            { x: 2800, y: GROUND_Y - 52, type: 'medium' },
+            { x: 3150, y: GROUND_Y - 52, type: 'hard' },
+            { x: 3500, y: GROUND_Y - 52, type: 'medium' },
+            { x: 3850, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4200, y: GROUND_Y - 52, type: 'basic' },
+            { x: 4550, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4900, y: GROUND_Y - 52, type: 'medium' },
+            { x: 5250, y: GROUND_Y - 52, type: 'hard' },
+            { x: 5600, y: GROUND_Y - 52, type: 'medium' },
+            { x: 5950, y: GROUND_Y - 52, type: 'hard' }
         ],
         wells: [{ x: 4000, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 2800, y: 260, width: 60, height: 50 }],
@@ -1664,36 +1553,36 @@ const levels = [
             { x: 7720, y: 310, width: 110, height: 18 }
         ],
         enemies: [
-            { x: 200, y: GROUND_Y - 38, type: 'basic' },
-            { x: 370, y: GROUND_Y - 38, type: 'medium' },
-            { x: 520, y: GROUND_Y - 38, type: 'hard' },
-            { x: 700, y: GROUND_Y - 38, type: 'basic' },
-            { x: 900, y: GROUND_Y - 38, type: 'medium' },
-            { x: 1100, y: GROUND_Y - 38, type: 'hard' },
-            { x: 1400, y: GROUND_Y - 38, type: 'hard' },
-            { x: 1650, y: GROUND_Y - 38, type: 'medium' },
-            { x: 1900, y: GROUND_Y - 38, type: 'hard' },
-            { x: 2150, y: GROUND_Y - 38, type: 'basic' },
-            { x: 2400, y: GROUND_Y - 38, type: 'hard' },
-            { x: 2650, y: GROUND_Y - 38, type: 'medium' },
-            { x: 2900, y: GROUND_Y - 38, type: 'hard' },
-            { x: 3150, y: GROUND_Y - 38, type: 'hard' },
-            { x: 3400, y: GROUND_Y - 38, type: 'medium' },
-            { x: 3650, y: GROUND_Y - 38, type: 'hard' },
-            { x: 3900, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4150, y: GROUND_Y - 38, type: 'medium' },
-            { x: 4400, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4650, y: GROUND_Y - 38, type: 'hard' },
-            { x: 4900, y: GROUND_Y - 38, type: 'medium' },
-            { x: 5150, y: GROUND_Y - 38, type: 'hard' },
-            { x: 5400, y: GROUND_Y - 38, type: 'hard' },
-            { x: 5650, y: GROUND_Y - 38, type: 'medium' },
-            { x: 5900, y: GROUND_Y - 38, type: 'hard' },
-            { x: 6150, y: GROUND_Y - 38, type: 'hard' },
-            { x: 6400, y: GROUND_Y - 38, type: 'medium' },
-            { x: 6650, y: GROUND_Y - 38, type: 'hard' },
-            { x: 6900, y: GROUND_Y - 38, type: 'hard' },
-            { x: 7150, y: GROUND_Y - 38, type: 'hard' }
+            { x: 200, y: GROUND_Y - 52, type: 'basic' },
+            { x: 370, y: GROUND_Y - 52, type: 'medium' },
+            { x: 520, y: GROUND_Y - 52, type: 'hard' },
+            { x: 700, y: GROUND_Y - 52, type: 'basic' },
+            { x: 900, y: GROUND_Y - 52, type: 'medium' },
+            { x: 1100, y: GROUND_Y - 52, type: 'hard' },
+            { x: 1400, y: GROUND_Y - 52, type: 'hard' },
+            { x: 1650, y: GROUND_Y - 52, type: 'medium' },
+            { x: 1900, y: GROUND_Y - 52, type: 'hard' },
+            { x: 2150, y: GROUND_Y - 52, type: 'basic' },
+            { x: 2400, y: GROUND_Y - 52, type: 'hard' },
+            { x: 2650, y: GROUND_Y - 52, type: 'medium' },
+            { x: 2900, y: GROUND_Y - 52, type: 'hard' },
+            { x: 3150, y: GROUND_Y - 52, type: 'hard' },
+            { x: 3400, y: GROUND_Y - 52, type: 'medium' },
+            { x: 3650, y: GROUND_Y - 52, type: 'hard' },
+            { x: 3900, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4150, y: GROUND_Y - 52, type: 'medium' },
+            { x: 4400, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4650, y: GROUND_Y - 52, type: 'hard' },
+            { x: 4900, y: GROUND_Y - 52, type: 'medium' },
+            { x: 5150, y: GROUND_Y - 52, type: 'hard' },
+            { x: 5400, y: GROUND_Y - 52, type: 'hard' },
+            { x: 5650, y: GROUND_Y - 52, type: 'medium' },
+            { x: 5900, y: GROUND_Y - 52, type: 'hard' },
+            { x: 6150, y: GROUND_Y - 52, type: 'hard' },
+            { x: 6400, y: GROUND_Y - 52, type: 'medium' },
+            { x: 6650, y: GROUND_Y - 52, type: 'hard' },
+            { x: 6900, y: GROUND_Y - 52, type: 'hard' },
+            { x: 7150, y: GROUND_Y - 52, type: 'hard' }
         ],
         wells: [{ x: 4500, y: GROUND_Y - 40, width: 48, height: 40 }],
         skyPortals: [{ x: 3500, y: 240, width: 60, height: 50 }],
@@ -2350,13 +2239,13 @@ function renderUI() {
         py += 24;
     }
     
-    // Horns power-up indicator
+    // Shield power-up indicator
     if (player.hasHorns) {
         const timeLeft = Math.ceil(player.hornsTimer / 60);
         ctx.fillStyle = 'rgba(255,170,0,0.35)';
-        ctx.fillRect(18, py - 2, 95, 20);
+        ctx.fillRect(18, py - 2, 110, 20);
         ctx.fillStyle = '#ffaa00';
-        ctx.fillText(`Cornes (${timeLeft}s)`, 28, py + 14);
+        ctx.fillText(`Bouclier (${timeLeft}s)`, 28, py + 14);
         py += 24;
     }
     
