@@ -2850,6 +2850,11 @@ function updateSpaceLevel() {
             inv.y += 20;
         }
     }
+    for (let i = spaceInvaders.length - 1; i >= 0; i--) {
+        if (spaceInvaders[i].y > CANVAS_HEIGHT) {
+            spaceInvaders.splice(i, 1);
+        }
+    }
 
     if (Math.random() < 0.008 && spaceInvaders.length > 0) {
         const inv = spaceInvaders[Math.floor(Math.random() * spaceInvaders.length)];
