@@ -891,12 +891,20 @@ class Player {
 
         if (this._animFrame === undefined) this._animFrame = 0;
         if (this._animTimer === undefined) this._animTimer = 0;
+        if (this._idleTime === undefined) this._idleTime = 0;
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
         const stoneCount = this.stones.length;
+        const isIdle = !flash && this.attackDuration <= 0 && Math.abs(this.vy) < 1 && Math.abs(this.vx) < 0.1;
+        if (isIdle) {
+            this._idleTime++;
+        } else {
+            this._idleTime = 0;
+        }
 
-        let spriteName = 'knight_idle';
+        let spriteName;
+        let useStaticFrame = false;
         if (flash) {
             spriteName = 'knight_hurt';
         } else if (this.attackDuration > 0 && Math.abs(this.vx) > 0.5) {
@@ -909,6 +917,11 @@ class Player {
             spriteName = 'knight_run';
         } else if (Math.abs(this.vx) > 0.1) {
             spriteName = 'knight_walk';
+        } else if (this._idleTime > 180) {
+            spriteName = 'knight_idle';
+        } else {
+            spriteName = 'knight_idle';
+            useStaticFrame = true;
         }
 
         const flipX = this.facing === -1;
@@ -916,58 +929,72 @@ class Player {
         const spriteH = 108;
         const sx = bx + bw / 2 - spriteW / 2;
         const sy = by + bh - spriteH + 14;
-        if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
+        const drawFrame = useStaticFrame ? 0 : this._animFrame;
+        if (!drawSprite(ctx, spriteName, drawFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
             ctx.fillRect(bx, by, bw, bh);
         }
 
         if (invincibleBlink) {
             ctx.save();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.shadowBlur = 12;
+            ctx.globalAlpha = 0.35;
+            ctx.shadowBlur = 18;
             ctx.shadowColor = '#ffffff';
-            ctx.strokeRect(sx + 10, sy + 10, spriteW - 20, spriteH - 20);
+            ctx.beginPath();
+            ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2 + 4, bh / 2 + 4, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.fill();
             ctx.restore();
         }
 
         if (flash) {
             ctx.save();
-            ctx.globalAlpha = 0.2;
-            ctx.fillStyle = '#ff4444';
-            ctx.fillRect(sx, sy, spriteW, spriteH);
+            ctx.globalAlpha = 0.3;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff4444';
+            ctx.beginPath();
+            ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2 + 2, bh / 2 + 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,50,50,0.2)';
+            ctx.fill();
             ctx.restore();
         }
 
         if (stoneCount > 0) {
             ctx.save();
-            ctx.globalAlpha = 0.1 + Math.sin(Date.now() * 0.008) * 0.05;
-            ctx.shadowBlur = 20 + stoneCount * 8;
+            let glowColor;
             if (this.hasAllStones()) {
                 const t = Date.now() * 0.005;
                 const r = Math.sin(t) * 127 + 128;
                 const g = Math.sin(t + 2.1) * 127 + 128;
                 const bv = Math.sin(t + 4.2) * 127 + 128;
-                ctx.shadowColor = `rgb(${r|0},${g|0},${bv|0})`;
-                ctx.fillStyle = `rgba(${r|0},${g|0},${bv|0},0.2)`;
+                glowColor = `rgb(${r|0},${g|0},${bv|0})`;
             } else if (stoneCount >= 2) {
-                ctx.shadowColor = '#00bfff';
-                ctx.fillStyle = 'rgba(0,191,255,0.15)';
+                glowColor = '#00bfff';
             } else {
-                ctx.shadowColor = '#ff4500';
-                ctx.fillStyle = 'rgba(255,69,0,0.15)';
+                glowColor = '#ff4500';
             }
-            ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+            ctx.shadowBlur = 15 + stoneCount * 5;
+            ctx.shadowColor = glowColor;
+            ctx.globalAlpha = 0.4;
+            ctx.strokeStyle = glowColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(bx + bw / 2, by + bh * 0.6, bw / 2 + 6, bh / 2 + 6, 0, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.restore();
         }
 
         if (this.isSuperSaiyan) {
             ctx.save();
-            ctx.globalAlpha = 0.12 + Math.sin(Date.now() * 0.01) * 0.06;
-            ctx.shadowBlur = 40;
+            const pulse = Math.sin(Date.now() * 0.008) * 0.15 + 0.35;
+            ctx.globalAlpha = pulse * 0.3;
+            ctx.shadowBlur = 25;
             ctx.shadowColor = '#ffd700';
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(bx - 8, by - 8, bw + 16, bh + 16);
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(bx + bw / 2, by + bh * 0.6, bw / 2 + 8, bh / 2 + 8, 0, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.restore();
         }
 
@@ -1102,7 +1129,7 @@ class Enemy {
         const spriteW = 94;
         const spriteH = 94;
         const sx = this.x + this.width / 2 - spriteW / 2;
-        const sy = this.y + this.height - spriteH + 12;
+        const sy = this.y + this.height - spriteH + 28;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1110,9 +1137,13 @@ class Enemy {
 
         if (flash) {
             ctx.save();
-            ctx.globalAlpha = 0.25;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(sx, sy, spriteW, spriteH);
+            ctx.globalAlpha = 0.3;
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 2, this.height / 2 + 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.fill();
             ctx.restore();
         }
 
