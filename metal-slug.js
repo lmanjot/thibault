@@ -27,6 +27,56 @@ const ctx = canvas.getContext('2d');
 canvas.width = CW;
 canvas.height = CH;
 
+const msSprites = {};
+
+function msLoadSprite(name, src, frameW, frameH) {
+    const img = new Image();
+    img.src = src;
+    msSprites[name] = { img, frameW, frameH, loaded: false, frameCount: 1 };
+    img.onload = () => {
+        msSprites[name].loaded = true;
+        msSprites[name].frameCount = Math.max(1, Math.floor(img.width / frameW));
+    };
+}
+
+function msDrawSprite(ctx, name, frame, x, y, w, h, flipX) {
+    const s = msSprites[name];
+    if (!s || !s.loaded) return false;
+    const f = Math.floor(frame) % s.frameCount;
+    ctx.save();
+    if (flipX) {
+        ctx.translate(x + w, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, 0, 0, w, h);
+    } else {
+        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, x, y, w, h);
+    }
+    ctx.restore();
+    return true;
+}
+
+(function loadMSSprites() {
+    msLoadSprite('player_idle', 'assets/characters/2/Idle.png', 32, 32);
+    msLoadSprite('player_run', 'assets/characters/2/Run.png', 32, 32);
+    msLoadSprite('player_jump', 'assets/characters/2/Jump.png', 32, 32);
+    msLoadSprite('player_fall', 'assets/characters/2/Fall.png', 32, 32);
+    msLoadSprite('player_hit', 'assets/characters/2/Hit.png', 32, 32);
+    msLoadSprite('enemy1_idle', 'assets/enemies/1/Idle.png', 48, 48);
+    msLoadSprite('enemy1_run', 'assets/enemies/1/Run.png', 48, 48);
+    msLoadSprite('enemy1_hit', 'assets/enemies/1/Hit.png', 48, 48);
+    msLoadSprite('enemy2_idle', 'assets/enemies/2/Idle.png', 48, 48);
+    msLoadSprite('enemy2_run', 'assets/enemies/2/Run.png', 48, 48);
+    msLoadSprite('boss_idle', 'assets/enemies/4/Idle.png', 48, 48);
+    msLoadSprite('boss_walk', 'assets/enemies/4/Walk.png', 48, 48);
+    msLoadSprite('boss_attack', 'assets/enemies/4/Attack.png', 48, 48);
+    msLoadSprite('box', 'assets/objects/boxes/1_Idle.png', 32, 32);
+    msLoadSprite('gem1', 'assets/objects/gems/1.png', 16, 16);
+    msLoadSprite('tile_grass', 'assets/tiles/Tile_01.png', 16, 16);
+    msLoadSprite('tile_dirt', 'assets/tiles/Tile_02.png', 16, 16);
+    msLoadSprite('tile_brick', 'assets/tiles/Tile_05.png', 16, 16);
+    msLoadSprite('bg2', 'assets/backgrounds/2.png', 64, 64);
+})();
+
 let gameState = STATE_TITLE;
 let currentLevel = 1;
 let cameraX = 0;
@@ -270,15 +320,30 @@ class Player {
         ctx.ellipse(this.x + this.w/2, this.y + h + 4, this.w/2.5, 4, 0, 0, Math.PI*2);
         ctx.fill();
 
-        ctx.fillStyle = flash ? '#f88' : '#8b7355';
-        ctx.fillRect(this.x + 4, this.y + offsetY, this.w - 8, 8);
-        ctx.fillStyle = flash ? '#c66' : '#4a3728';
-        ctx.fillRect(this.x + 2, this.y + 8 + offsetY, this.w - 4, 6);
-        ctx.fillStyle = flash ? '#faa' : '#c4a574';
-        ctx.fillRect(this.x + 4, this.y + 14 + offsetY, this.w - 8, h - 18);
-        ctx.fillStyle = flash ? '#800' : '#2a2a2a';
-        ctx.fillRect(this.x + 6, this.y + 12 + offsetY, 6, 8);
-        ctx.fillRect(this.x + this.w - 12, this.y + 12 + offsetY, 6, 8);
+        if (!this._af) this._af = 0;
+        if (!this._at) this._at = 0;
+        this._at++;
+        if (this._at % 6 === 0) this._af++;
+
+        let spriteName = 'player_idle';
+        if (flash) spriteName = 'player_hit';
+        else if (this.vy < -1) spriteName = 'player_jump';
+        else if (this.vy > 1) spriteName = 'player_fall';
+        else if (Math.abs(this.vx) > 0.5) spriteName = 'player_run';
+
+        const flipX = this.facing === -1;
+        const pad = 6;
+        if (!msDrawSprite(ctx, spriteName, this._af, this.x - pad, this.y + offsetY - pad, this.w + pad * 2, h + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#f88' : '#8b7355';
+            ctx.fillRect(this.x, this.y + offsetY, this.w, h);
+        }
+
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(this.x - pad, this.y + offsetY - pad, this.w + pad * 2, h + pad * 2);
+            ctx.globalAlpha = 1;
+        }
 
         if (!this.crouching) {
             const gunX = this.facing === 1 ? this.x + this.w - 4 : this.x + 4;
@@ -376,14 +441,31 @@ class Enemy {
         if (this.dead) return;
         ctx.save();
         const flash = this.flashTimer > 0;
-        ctx.fillStyle = flash ? '#fff' : '#6b5344';
-        ctx.fillRect(this.x, this.y, this.w, this.h);
-        ctx.fillStyle = flash ? '#c00' : '#4a3020';
-        ctx.fillRect(this.x + 4, this.y + 8, 6, 6);
-        ctx.fillRect(this.x + this.w - 10, this.y + 8, 6, 6);
-        const gx = this.facing === 1 ? this.x + this.w - 4 : this.x;
-        ctx.fillStyle = '#333';
-        ctx.fillRect(gx, this.y + this.h/2 - 3, this.facing * 12, 4);
+
+        if (!this._af) this._af = 0;
+        if (!this._at) this._at = 0;
+        this._at++;
+        if (this._at % 7 === 0) this._af++;
+
+        const prefix = this.type === 'heavy' ? 'enemy2' : 'enemy1';
+        let spriteName = prefix + '_idle';
+        if (flash) spriteName = prefix + '_hit';
+        else if (Math.abs(this.vx) > 0.3) spriteName = prefix + '_run';
+
+        const flipX = this.facing === -1;
+        const pad = 8;
+        if (!msDrawSprite(ctx, spriteName, this._af, this.x - pad, this.y - pad, this.w + pad * 2, this.h + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#fff' : '#6b5344';
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+        }
+
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(this.x - pad, this.y - pad, this.w + pad * 2, this.h + pad * 2);
+            ctx.globalAlpha = 1;
+        }
+
         ctx.restore();
     }
 }
@@ -580,12 +662,30 @@ class Boss {
         if (this.dead) return;
         ctx.save();
         const flash = this.flashTimer > 0;
-        ctx.fillStyle = flash ? '#faa' : '#8b2020';
-        ctx.fillRect(this.x, this.y, this.w, this.h);
-        ctx.fillStyle = flash ? '#800' : '#4a0000';
-        ctx.fillRect(this.x + 10, this.y + 10, this.w - 20, 15);
-        ctx.fillRect(this.x + 20, this.y + 40, 15, 15);
-        ctx.fillRect(this.x + this.w - 35, this.y + 40, 15, 15);
+
+        if (!this._af) this._af = 0;
+        if (!this._at) this._at = 0;
+        this._at++;
+        if (this._at % 7 === 0) this._af++;
+
+        let spriteName = 'boss_idle';
+        if (this.attackCooldown > 60) spriteName = 'boss_attack';
+        else if (Math.abs(this.vx) > 0.3) spriteName = 'boss_walk';
+
+        const flipX = this.vx < 0;
+        const pad = 12;
+        if (!msDrawSprite(ctx, spriteName, this._af, this.x - pad, this.y - pad, this.w + pad * 2, this.h + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#faa' : '#8b2020';
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+        }
+
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(this.x - pad, this.y - pad, this.w + pad * 2, this.h + pad * 2);
+            ctx.globalAlpha = 1;
+        }
+
         ctx.restore();
     }
 }
@@ -606,11 +706,13 @@ class Crate {
     render() {
         if (this.broken) return;
         ctx.save();
-        ctx.fillStyle = '#8b6914';
-        ctx.fillRect(this.x, this.y, this.w, this.h);
-        ctx.strokeStyle = '#5a4010';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(this.x, this.y, this.w, this.h);
+        if (!msDrawSprite(ctx, 'box', 0, this.x, this.y, this.w, this.h, false)) {
+            ctx.fillStyle = '#8b6914';
+            ctx.fillRect(this.x, this.y, this.w, this.h);
+            ctx.strokeStyle = '#5a4010';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(this.x, this.y, this.w, this.h);
+        }
         ctx.restore();
     }
 }
@@ -985,20 +1087,55 @@ function render() {
 
     ctx.fillStyle = '#1a2a1a';
     ctx.fillRect(0, 0, worldWidth, GROUND_Y);
+
+    if (msSprites.bg2 && msSprites.bg2.loaded) {
+        ctx.globalAlpha = 0.12;
+        const ts = 64;
+        for (let tx = 0; tx < worldWidth; tx += ts) {
+            for (let ty = 0; ty < GROUND_Y; ty += ts) {
+                ctx.drawImage(msSprites.bg2.img, tx, ty, ts, ts);
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
     ctx.fillStyle = '#2d4a2d';
     ctx.fillRect(0, GROUND_Y, worldWidth, CH - GROUND_Y);
-    ctx.strokeStyle = '#3a5a3a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, GROUND_Y);
-    ctx.lineTo(worldWidth, GROUND_Y);
-    ctx.stroke();
+
+    if (msSprites.tile_grass && msSprites.tile_grass.loaded) {
+        const ts = 32;
+        for (let tx = 0; tx < worldWidth; tx += ts) {
+            ctx.drawImage(msSprites.tile_grass.img, 0, 0, 16, 16, tx, GROUND_Y, ts, ts);
+        }
+    }
+    if (msSprites.tile_dirt && msSprites.tile_dirt.loaded) {
+        const ts = 32;
+        for (let tx = 0; tx < worldWidth; tx += ts) {
+            for (let ty = GROUND_Y + 32; ty < CH; ty += ts) {
+                ctx.drawImage(msSprites.tile_dirt.img, 0, 0, 16, 16, tx, ty, ts, ts);
+            }
+        }
+    }
 
     for (const p of platforms) {
-        ctx.fillStyle = '#6b5344';
-        ctx.fillRect(p.x, p.y, p.width, p.height);
-        ctx.strokeStyle = '#4a3020';
-        ctx.strokeRect(p.x, p.y, p.width, p.height);
+        if (msSprites.tile_brick && msSprites.tile_brick.loaded) {
+            const ts = 16;
+            for (let tx = 0; tx < p.width; tx += ts) {
+                for (let ty = 0; ty < p.height; ty += ts) {
+                    const dw = Math.min(ts, p.width - tx);
+                    const dh = Math.min(ts, p.height - ty);
+                    ctx.drawImage(msSprites.tile_brick.img, 0, 0, dw, dh, p.x + tx, p.y + ty, dw, dh);
+                }
+            }
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(p.x, p.y, p.width, p.height);
+        } else {
+            ctx.fillStyle = '#6b5344';
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.strokeStyle = '#4a3020';
+            ctx.strokeRect(p.x, p.y, p.width, p.height);
+        }
     }
 
     crates.forEach(c => c.render());

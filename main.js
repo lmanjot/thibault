@@ -79,6 +79,101 @@ canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
 
 // ============================================
+// SECTION 3.5: SPRITE SYSTEM
+// ============================================
+
+const sprites = {};
+let spritesLoaded = false;
+
+function loadSprite(name, src, frameW, frameH) {
+    const img = new Image();
+    img.src = src;
+    sprites[name] = { img, frameW, frameH, loaded: false, frameCount: 1 };
+    img.onload = () => {
+        sprites[name].loaded = true;
+        sprites[name].frameCount = Math.max(1, Math.floor(img.width / frameW));
+    };
+}
+
+function drawSprite(ctx, name, frame, x, y, w, h, flipX) {
+    const s = sprites[name];
+    if (!s || !s.loaded) return false;
+    const f = Math.floor(frame) % s.frameCount;
+    ctx.save();
+    if (flipX) {
+        ctx.translate(x + w, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, 0, 0, w, h);
+    } else {
+        ctx.drawImage(s.img, f * s.frameW, 0, s.frameW, s.frameH, x, y, w, h);
+    }
+    ctx.restore();
+    return true;
+}
+
+function drawTiled(ctx, name, x, y, w, h, tileScale) {
+    const s = sprites[name];
+    if (!s || !s.loaded) return false;
+    const ts = (tileScale || 1) * s.frameW;
+    for (let tx = 0; tx < w; tx += ts) {
+        for (let ty = 0; ty < h; ty += ts) {
+            const dw = Math.min(ts, w - tx);
+            const dh = Math.min(ts, h - ty);
+            ctx.drawImage(s.img, 0, 0, dw / (ts / s.frameW), dh / (ts / s.frameH), x + tx, y + ty, dw, dh);
+        }
+    }
+    return true;
+}
+
+function loadAllSprites() {
+    loadSprite('player_idle', 'assets/characters/1/Idle.png', 32, 32);
+    loadSprite('player_run', 'assets/characters/1/Run.png', 32, 32);
+    loadSprite('player_jump', 'assets/characters/1/Jump.png', 32, 32);
+    loadSprite('player_fall', 'assets/characters/1/Fall.png', 32, 32);
+    loadSprite('player_hit', 'assets/characters/1/Hit.png', 32, 32);
+
+    loadSprite('enemy1_idle', 'assets/enemies/1/Idle.png', 48, 48);
+    loadSprite('enemy1_run', 'assets/enemies/1/Run.png', 48, 48);
+    loadSprite('enemy1_hit', 'assets/enemies/1/Hit.png', 48, 48);
+    loadSprite('enemy2_idle', 'assets/enemies/2/Idle.png', 48, 48);
+    loadSprite('enemy2_run', 'assets/enemies/2/Run.png', 48, 48);
+    loadSprite('enemy2_hit', 'assets/enemies/2/Hit.png', 48, 48);
+    loadSprite('enemy3_idle', 'assets/enemies/3/Idle.png', 48, 48);
+    loadSprite('enemy3_run', 'assets/enemies/3/Walk.png', 48, 48);
+    loadSprite('enemy3_hit', 'assets/enemies/3/Hit.png', 48, 48);
+
+    loadSprite('boss_idle', 'assets/enemies/4/Idle.png', 48, 48);
+    loadSprite('boss_walk', 'assets/enemies/4/Walk.png', 48, 48);
+    loadSprite('boss_attack', 'assets/enemies/4/Attack.png', 48, 48);
+
+    loadSprite('dragon_fly', 'assets/enemies/5/Fly.png', 48, 48);
+    loadSprite('dragon_attack', 'assets/enemies/5/Attack.png', 48, 48);
+
+    loadSprite('gem1', 'assets/objects/gems/1.png', 16, 16);
+    loadSprite('gem2', 'assets/objects/gems/2.png', 16, 16);
+    loadSprite('gem3', 'assets/objects/gems/3.png', 16, 16);
+    loadSprite('gem4', 'assets/objects/gems/4.png', 16, 16);
+
+    loadSprite('bg1', 'assets/backgrounds/1.png', 64, 64);
+    loadSprite('bg2', 'assets/backgrounds/2.png', 64, 64);
+    loadSprite('bg3', 'assets/backgrounds/3.png', 64, 64);
+    loadSprite('bg5', 'assets/backgrounds/5.png', 64, 64);
+    loadSprite('bg6', 'assets/backgrounds/6.png', 64, 64);
+
+    loadSprite('tile_grass', 'assets/tiles/Tile_01.png', 16, 16);
+    loadSprite('tile_dirt', 'assets/tiles/Tile_02.png', 16, 16);
+    loadSprite('tile_brick', 'assets/tiles/Tile_05.png', 16, 16);
+    loadSprite('tile_stone', 'assets/tiles/Tile_14.png', 16, 16);
+
+    loadSprite('box', 'assets/objects/boxes/1_Idle.png', 32, 32);
+    loadSprite('trap', 'assets/traps/1.png', 48, 48);
+
+    spritesLoaded = true;
+}
+
+loadAllSprites();
+
+// ============================================
 // SECTION 4: INPUT HANDLING
 // ============================================
 
@@ -370,87 +465,32 @@ class Bonus {
     
     render(ctx) {
         ctx.save();
-        
-        // Pulse effect
+
         const pulse = Math.sin(this.pulseTimer * 0.15) * 0.15 + 1;
         const size = this.width * pulse;
         const offsetX = (this.width - size) / 2;
         const offsetY = (this.height - size) / 2;
-        
-        if (this.type === BONUS_HORNS) {
-            // Glow effect
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#ffaa00';
+
+        if (!this._animFrame) this._animFrame = 0;
+        if (!this._animTimer) this._animTimer = 0;
+        this._animTimer++;
+        if (this._animTimer % 5 === 0) this._animFrame++;
+
+        const gemMap = { [BONUS_HORNS]: 'gem1', [BONUS_PISTOL]: 'gem2', [BONUS_FLAMETHROWER]: 'gem3', [BONUS_FLYING]: 'gem4' };
+        const glowMap = { [BONUS_HORNS]: '#ffaa00', [BONUS_PISTOL]: '#4444ff', [BONUS_FLAMETHROWER]: '#ff4400', [BONUS_FLYING]: '#00ccff' };
+        const gemName = gemMap[this.type] || 'gem1';
+        const glowColor = glowMap[this.type] || '#ffaa00';
+
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = glowColor;
+
+        if (!drawSprite(ctx, gemName, this._animFrame, this.x + offsetX, this.y + offsetY, size, size, false)) {
             ctx.globalAlpha = 0.6;
-            ctx.fillStyle = '#ffaa00';
+            ctx.fillStyle = glowColor;
             ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
             ctx.globalAlpha = 1;
-            ctx.shadowBlur = 0;
-            
-            // Horns icon
-            ctx.fillStyle = '#ff8800';
-            // Left horn
-            ctx.beginPath();
-            ctx.moveTo(this.x + this.width / 2 - 6, this.y + this.height / 2 + 4);
-            ctx.lineTo(this.x + this.width / 2 - 8, this.y + this.height / 2 - 4);
-            ctx.lineTo(this.x + this.width / 2 - 2, this.y + this.height / 2);
-            ctx.closePath();
-            ctx.fill();
-            // Right horn
-            ctx.beginPath();
-            ctx.moveTo(this.x + this.width / 2 + 6, this.y + this.height / 2 + 4);
-            ctx.lineTo(this.x + this.width / 2 + 8, this.y + this.height / 2 - 4);
-            ctx.lineTo(this.x + this.width / 2 + 2, this.y + this.height / 2);
-            ctx.closePath();
-            ctx.fill();
-        } else if (this.type === BONUS_PISTOL) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#4444ff';
-            ctx.globalAlpha = 0.6;
-            ctx.fillStyle = '#4444ff';
-            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
-            ctx.globalAlpha = 1;
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#333';
-            ctx.fillRect(this.x + this.width / 2 - 4, this.y + this.height / 2 + 2, 8, 6);
-            ctx.fillRect(this.x + this.width / 2 + 4, this.y + this.height / 2, 6, 4);
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x + this.width / 2, this.y + this.height / 2 + 4, 3, 0, Math.PI);
-            ctx.stroke();
-        } else if (this.type === BONUS_FLAMETHROWER) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#ff4400';
-            ctx.globalAlpha = 0.6;
-            ctx.fillStyle = '#ff4400';
-            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
-            ctx.globalAlpha = 1;
-            ctx.shadowBlur = 0;
-            // Flamethrower icon
-            ctx.fillStyle = '#555';
-            ctx.fillRect(this.x + 4, this.y + this.height / 2, 16, 4);
-            ctx.fillStyle = '#ff6600';
-            ctx.fillRect(this.x + 18, this.y + this.height / 2 - 2, 5, 8);
-            ctx.fillStyle = '#ffcc00';
-            ctx.fillRect(this.x + 20, this.y + this.height / 2 - 1, 3, 6);
-        } else if (this.type === BONUS_FLYING) {
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#00ccff';
-            ctx.globalAlpha = 0.6;
-            ctx.fillStyle = '#00ccff';
-            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
-            ctx.globalAlpha = 1;
-            ctx.shadowBlur = 0;
-            // Wing/feather icon
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(this.x + this.width / 2 - 8, this.y + this.height / 2 + 4);
-            ctx.quadraticCurveTo(this.x + this.width / 2, this.y + 2, this.x + this.width / 2 + 8, this.y + this.height / 2 + 4);
-            ctx.quadraticCurveTo(this.x + this.width / 2, this.y + this.height / 2 + 8, this.x + this.width / 2 - 8, this.y + this.height / 2 + 4);
-            ctx.fill();
         }
-        
+
         ctx.restore();
     }
 }
@@ -757,12 +797,10 @@ class Player {
     }
 
     render(ctx) {
-        // Blink when invincible
         if (this.invincible > 0 && Math.floor(this.invincible / 3) % 2 === 0) return;
 
         ctx.save();
 
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.beginPath();
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 3, this.width / 2.5, 5, 0, 0, Math.PI * 2);
@@ -771,79 +809,33 @@ class Player {
         const flash = this.flashTimer > 0;
         const bx = this.x, by = this.y, bw = this.width, bh = this.height;
 
-        // Legs (realistic proportions - lower third)
-        const legY = by + bh * 0.62;
-        const legH = bh * 0.38;
-        const skinColor = flash ? '#e8a090' : '#d4a574';
-        const skinDark = flash ? '#c08070' : '#b8956a';
-        ctx.fillStyle = skinDark;
-        ctx.fillRect(bx + 6, legY, 10, legH);
-        ctx.fillRect(bx + bw - 16, legY, 10, legH);
-        ctx.fillStyle = skinColor;
-        ctx.fillRect(bx + 7, legY, 8, legH - 2);
-        ctx.fillRect(bx + bw - 15, legY, 8, legH - 2);
+        if (!this._animFrame) this._animFrame = 0;
+        if (!this._animTimer) this._animTimer = 0;
+        this._animTimer++;
+        if (this._animTimer % 6 === 0) this._animFrame++;
 
-        // Torso - armored chest plate (realistic knight armor)
-        const torsoY = by + bh * 0.22;
-        const torsoH = bh * 0.42;
-        const armorGrad = ctx.createLinearGradient(bx, torsoY, bx + bw, torsoY + torsoH);
-        armorGrad.addColorStop(0, flash ? '#cc8888' : '#5a6a7a');
-        armorGrad.addColorStop(0.2, flash ? '#dd9999' : '#6a7a8a');
-        armorGrad.addColorStop(0.5, flash ? '#eebbbb' : '#8a9aaa');
-        armorGrad.addColorStop(0.8, flash ? '#dd9999' : '#6a7a8a');
-        armorGrad.addColorStop(1, flash ? '#cc8888' : '#5a6a7a');
-        ctx.fillStyle = armorGrad;
-        ctx.fillRect(bx + 4, torsoY, bw - 8, torsoH);
-        ctx.strokeStyle = flash ? '#ff4444' : '#3a4a5a';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Shoulder pauldrons
-        ctx.fillStyle = flash ? '#dd9999' : '#4a5a6a';
-        ctx.beginPath();
-        ctx.ellipse(bx + 2, torsoY + 8, 10, 12, 0, 0, Math.PI * 2);
-        ctx.ellipse(bx + bw - 2, torsoY + 8, 10, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Belt
-        ctx.fillStyle = '#6b5344';
-        ctx.fillRect(bx + 2, legY - 6, bw - 4, 6);
-        ctx.fillStyle = '#8b6914';
-        ctx.fillRect(bx + 4, legY - 5, 8, 4);
-        ctx.fillRect(bx + bw - 12, legY - 5, 8, 4);
-
-        // Head - helmet with face visible
-        const headSize = 18;
-        const headX = bx + (bw - headSize) / 2;
-        const headY = by + 2;
-        ctx.fillStyle = flash ? '#dd9999' : '#4a5a6a';
-        ctx.beginPath();
-        ctx.ellipse(bx + bw / 2, headY + headSize / 2, headSize / 2 + 2, headSize / 2 + 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#3a4a5a';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Visor slit
-        ctx.fillStyle = '#1a2535';
-        ctx.fillRect(headX + 2, headY + headSize / 2 - 2, headSize - 4, 4);
-
-        // Eyes
-        ctx.fillStyle = '#f5f5dc';
-        if (this.facing === 1) {
-            ctx.fillRect(headX + 8, headY + 6, 3, 4);
-            ctx.fillRect(headX + 14, headY + 6, 3, 4);
-        } else {
-            ctx.fillRect(headX + 4, headY + 6, 3, 4);
-            ctx.fillRect(headX + 10, headY + 6, 3, 4);
+        let spriteName = 'player_idle';
+        if (flash) {
+            spriteName = 'player_hit';
+        } else if (!this.onGround && this.vy < 0) {
+            spriteName = 'player_jump';
+        } else if (!this.onGround && this.vy > 0) {
+            spriteName = 'player_fall';
+        } else if (Math.abs(this.vx) > 0.5) {
+            spriteName = 'player_run';
         }
-        ctx.fillStyle = '#2c1810';
-        if (this.facing === 1) {
-            ctx.fillRect(headX + 9, headY + 7, 2, 2);
-            ctx.fillRect(headX + 15, headY + 7, 2, 2);
-        } else {
-            ctx.fillRect(headX + 5, headY + 7, 2, 2);
-            ctx.fillRect(headX + 11, headY + 7, 2, 2);
+
+        const flipX = this.facing === -1;
+        if (!drawSprite(ctx, spriteName, this._animFrame, bx - 4, by - 4, bw + 8, bh + 8, flipX)) {
+            ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
+            ctx.fillRect(bx, by, bw, bh);
+        }
+
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ff4444';
+            ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+            ctx.globalAlpha = 1;
         }
 
         // Sword with animation
@@ -1109,54 +1101,39 @@ class Enemy {
     render(ctx) {
         ctx.save();
         const flash = this.flashTimer > 0;
-        const colors = {
-            basic:  { armor: '#7a6a5a', cloth: '#8b4513', skin: '#c9a86c' },
-            medium: { armor: '#5a5a6a', cloth: '#4a4a5a', skin: '#b89868' },
-            hard:   { armor: '#4a3a3a', cloth: '#2a2a3a', skin: '#a88858' }
-        };
-        const c = colors[this.type] || colors.basic;
 
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Head
-        const headW = 18, headH = 16;
-        ctx.fillStyle = c.skin;
-        ctx.fillRect(this.x + (this.width - headW) / 2, this.y + 2, headW, headH);
+        if (!this._animFrame) this._animFrame = 0;
+        if (!this._animTimer) this._animTimer = 0;
+        this._animTimer++;
+        if (this._animTimer % 7 === 0) this._animFrame++;
 
-        // Torso - armored
-        const torsoY = this.y + headH + 2;
-        const torsoH = 14;
-        const grad = ctx.createLinearGradient(this.x, torsoY, this.x, torsoY + torsoH);
-        grad.addColorStop(0, flash ? '#aaa' : c.armor);
-        grad.addColorStop(0.5, flash ? '#ddd' : c.armor);
-        grad.addColorStop(1, flash ? '#888' : c.armor);
-        ctx.fillStyle = grad;
-        ctx.fillRect(this.x + 2, torsoY, this.width - 4, torsoH);
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(this.x + 2, torsoY, this.width - 4, torsoH);
+        const prefix = this.type === 'hard' ? 'enemy3' : this.type === 'medium' ? 'enemy2' : 'enemy1';
+        let spriteName = prefix + '_idle';
+        if (flash) {
+            spriteName = prefix + '_hit';
+        } else if (Math.abs(this.vx) > 0.3) {
+            spriteName = prefix + '_run';
+        }
 
-        // Legs
-        const legY = this.y + headH + torsoH + 4;
-        ctx.fillStyle = c.cloth;
-        ctx.fillRect(this.x + 4, legY, 10, this.height - legY - 2);
-        ctx.fillRect(this.x + this.width - 14, legY, 10, this.height - legY - 2);
-        ctx.fillStyle = c.skin;
-        ctx.fillRect(this.x + 6, legY + 2, 6, 6);
-        ctx.fillRect(this.x + this.width - 12, legY + 2, 6, 6);
+        const flipX = this.vx < 0;
+        const pad = 8;
+        if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
 
-        // Eyes
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(this.x + 6, this.y + 6, 3, 4);
-        ctx.fillRect(this.x + this.width - 9, this.y + 6, 3, 4);
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(this.x + 7, this.y + 7, 1, 2);
-        ctx.fillRect(this.x + this.width - 8, this.y + 7, 1, 2);
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2);
+            ctx.globalAlpha = 1;
+        }
 
-        // HP bar
         if (this.hp < this.maxHp) {
             ctx.fillStyle = '#333';
             ctx.fillRect(this.x, this.y - 8, this.width, 4);
@@ -1231,58 +1208,31 @@ class SkyDragon {
     render(ctx) {
         ctx.save();
         const flash = this.flashTimer > 0;
-        const wingFlap = Math.sin(this.wingPhase) * 8;
 
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        const grad = ctx.createLinearGradient(this.x, this.y, this.x + this.width, this.y + this.height);
-        grad.addColorStop(0, flash ? '#ffaa88' : '#c0392b');
-        grad.addColorStop(0.5, flash ? '#ff8866' : '#922b21');
-        grad.addColorStop(1, flash ? '#ff6644' : '#641e16');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.moveTo(this.x + 8, this.y + this.height / 2);
-        ctx.lineTo(this.x + this.width - 8, this.y + this.height / 2 - 5);
-        ctx.lineTo(this.x + this.width, this.y + this.height / 2 + 5);
-        ctx.lineTo(this.x + this.width - 8, this.y + this.height / 2 + 10);
-        ctx.closePath();
-        ctx.fill();
+        if (!this._animFrame) this._animFrame = 0;
+        if (!this._animTimer) this._animTimer = 0;
+        this._animTimer++;
+        if (this._animTimer % 6 === 0) this._animFrame++;
 
-        ctx.fillStyle = flash ? '#ffccaa' : '#e74c3c';
-        ctx.beginPath();
-        ctx.ellipse(this.x + this.width - 4, this.y + this.height / 2 + 2, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const spriteName = this.attackCooldown > 80 ? 'dragon_attack' : 'dragon_fly';
+        const flipX = this.vx < 0;
+        const pad = 6;
+        if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#ffaa88' : '#c0392b';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
 
-        ctx.strokeStyle = '#641e16';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = '#f39c12';
-        ctx.beginPath();
-        ctx.arc(this.x + this.width - 2, this.y + this.height / 2, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = flash ? '#ffddbb' : '#ecf0f1';
-        ctx.fillRect(this.x + 12, this.y + 8, 10, 8);
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(this.x + 15, this.y + 10, 4, 4);
-
-        ctx.fillStyle = flash ? '#ff8866' : '#e67e22';
-        ctx.beginPath();
-        ctx.moveTo(this.x + 4, this.y + this.height / 2 - wingFlap);
-        ctx.lineTo(this.x - 10, this.y + this.height / 2 - 5);
-        ctx.lineTo(this.x + 4, this.y + this.height / 2 + wingFlap);
-        ctx.closePath();
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.width - 4, this.y + this.height / 2 - wingFlap);
-        ctx.lineTo(this.x + this.width + 10, this.y + this.height / 2 - 5);
-        ctx.lineTo(this.x + this.width - 4, this.y + this.height / 2 + wingFlap);
-        ctx.closePath();
-        ctx.fill();
+        if (flash) {
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2);
+            ctx.globalAlpha = 1;
+        }
 
         if (this.hp < this.maxHp) {
             ctx.fillStyle = '#333';
@@ -1422,61 +1372,31 @@ class Boss {
         ctx.save();
         const flash = this.flashTimer > 0;
 
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 4, this.width / 2.2, 8, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        if (this.level === 3) {
-            // DEMON KING
-            const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
-            grad.addColorStop(0, flash ? '#ff88ff' : '#5a1a8a');
-            grad.addColorStop(0.5, flash ? '#ff44ff' : '#3d1260');
-            grad.addColorStop(1, flash ? '#cc00cc' : '#200a35');
-            ctx.fillStyle = grad;
+        if (!this._animFrame) this._animFrame = 0;
+        if (!this._animTimer) this._animTimer = 0;
+        this._animTimer++;
+        if (this._animTimer % 7 === 0) this._animFrame++;
+
+        let spriteName = 'boss_idle';
+        if (this.attackTimer > 0) {
+            spriteName = 'boss_attack';
+        } else if (Math.abs(this.vx) > 0.3) {
+            spriteName = 'boss_walk';
+        }
+
+        const flipX = this.vx < 0;
+        const pad = 10;
+        if (!drawSprite(ctx, spriteName, this._animFrame, this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2, flipX)) {
+            ctx.fillStyle = flash ? '#cc9999' : '#5a4a4a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
 
-            // Inner detail
-            ctx.fillStyle = flash ? '#ffaaff' : '#6a1b9a';
-            ctx.fillRect(this.x + 6, this.y + 6, this.width - 12, this.height - 12);
-
-            // Horns
-            ctx.fillStyle = '#2a0a3e';
-            ctx.beginPath();
-            ctx.moveTo(this.x + 10, this.y);
-            ctx.lineTo(this.x + 5, this.y - 20);
-            ctx.lineTo(this.x + 22, this.y);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.moveTo(this.x + this.width - 10, this.y);
-            ctx.lineTo(this.x + this.width - 5, this.y - 20);
-            ctx.lineTo(this.x + this.width - 22, this.y);
-            ctx.fill();
-
-            // Glowing eyes
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#ff0000';
-            ctx.fillStyle = '#ff0000';
-            ctx.fillRect(this.x + 18, this.y + 25, 14, 10);
-            ctx.fillRect(this.x + this.width - 32, this.y + 25, 14, 10);
-            ctx.shadowBlur = 0;
-
-            // Pupils
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(this.x + 22, this.y + 28, 5, 5);
-            ctx.fillRect(this.x + this.width - 28, this.y + 28, 5, 5);
-
-            // Mouth
-            ctx.fillStyle = '#1a002a';
-            ctx.fillRect(this.x + 20, this.y + 50, this.width - 40, 10);
-            ctx.fillStyle = '#fff';
-            // Teeth
-            for (let t = 0; t < 4; t++) {
-                ctx.fillRect(this.x + 24 + t * 10, this.y + 50, 4, 5);
-            }
-
-            // Aura glow
+        if (this.level === 3) {
             ctx.save();
             ctx.globalAlpha = 0.15 + Math.sin(Date.now() * 0.005) * 0.1;
             ctx.shadowBlur = 40;
@@ -1484,44 +1404,14 @@ class Boss {
             ctx.fillStyle = '#9900ff';
             ctx.fillRect(this.x - 5, this.y - 5, this.width + 10, this.height + 10);
             ctx.restore();
-
-        } else {
-            // REGULAR BOSS - imposing armored knight
-            const grad = ctx.createLinearGradient(this.x, this.y, this.x + this.width, this.y + this.height);
-            grad.addColorStop(0, flash ? '#cc9999' : '#5a4a4a');
-            grad.addColorStop(0.3, flash ? '#ddaaaa' : '#6a5a5a');
-            grad.addColorStop(0.5, flash ? '#eebbbb' : '#7a6a6a');
-            grad.addColorStop(0.7, flash ? '#ddaaaa' : '#6a5a5a');
-            grad.addColorStop(1, flash ? '#cc9999' : '#4a3a3a');
-            ctx.fillStyle = grad;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-
-            // Armor plates - chest
-            ctx.fillStyle = flash ? '#aa8888' : '#3a3232';
-            ctx.fillRect(this.x + 10, this.y + 12, this.width - 20, 18);
-            ctx.fillRect(this.x + 10, this.y + this.height - 28, this.width - 20, 18);
-
-            // Shoulder pauldrons
-            ctx.fillStyle = flash ? '#bb9999' : '#4a4040';
-            ctx.beginPath();
-            ctx.ellipse(this.x + 5, this.y + 20, 14, 18, 0, 0, Math.PI * 2);
-            ctx.ellipse(this.x + this.width - 5, this.y + 20, 14, 18, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Helmet visor
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(this.x + 18, this.y + 22, this.width - 36, 12);
-
-            // Eyes
-            ctx.fillStyle = '#ffdd44';
-            ctx.fillRect(this.x + 22, this.y + 24, 6, 8);
-            ctx.fillRect(this.x + this.width - 28, this.y + 24, 6, 8);
         }
 
-        // Outline
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(this.x, this.y, this.width, this.height);
+        if (flash) {
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(this.x - pad, this.y - pad, this.width + pad * 2, this.height + pad * 2);
+            ctx.globalAlpha = 1;
+        }
 
         ctx.restore();
 
@@ -2135,6 +2025,17 @@ function renderSkyBackground() {
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, worldWidth, CANVAS_HEIGHT);
 
+    if (sprites.bg3 && sprites.bg3.loaded) {
+        ctx.globalAlpha = 0.08;
+        const ts = 64;
+        for (let tx = 0; tx < worldWidth; tx += ts) {
+            for (let ty = 0; ty < CANVAS_HEIGHT; ty += ts) {
+                ctx.drawImage(sprites.bg3.img, tx, ty, ts, ts);
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
     for (let i = 0; i < Math.ceil(worldWidth / 30); i++) {
         const cx = (i * 47 + 13) % worldWidth;
         const cy = (i * 31 + 7) % (GROUND_Y - 100);
@@ -2161,15 +2062,24 @@ function renderSkyBackground() {
 }
 
 function renderUndergroundBackground() {
-    // Dark cave background
     const caveGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
     caveGrad.addColorStop(0, '#0a0a12');
     caveGrad.addColorStop(0.5, '#12101a');
     caveGrad.addColorStop(1, '#1a1520');
     ctx.fillStyle = caveGrad;
     ctx.fillRect(0, 0, worldWidth, GROUND_Y);
-    
-    // Cave ceiling stalactites
+
+    if (sprites.bg5 && sprites.bg5.loaded) {
+        ctx.globalAlpha = 0.1;
+        const ts = 64;
+        for (let tx = 0; tx < worldWidth; tx += ts) {
+            for (let ty = 0; ty < GROUND_Y; ty += ts) {
+                ctx.drawImage(sprites.bg5.img, tx, ty, ts, ts);
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
     for (let i = 0; i < worldWidth; i += 60) {
         const h = 20 + Math.sin(i * 0.1) * 15;
         ctx.fillStyle = '#1a1825';
@@ -2180,8 +2090,7 @@ function renderUndergroundBackground() {
         ctx.closePath();
         ctx.fill();
     }
-    
-    // Glowing crystals on walls
+
     for (let i = 0; i < worldWidth; i += 180) {
         const cy = 80 + Math.sin(i * 0.05) * 40;
         ctx.save();
@@ -2200,8 +2109,7 @@ function renderUndergroundBackground() {
         ctx.fill();
         ctx.restore();
     }
-    
-    // Rocky ground
+
     const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
     groundGrad.addColorStop(0, '#2a2235');
     groundGrad.addColorStop(1, '#15101a');
@@ -2667,7 +2575,6 @@ function renderGame() {
     } else if (inUnderground) {
         renderUndergroundBackground();
     } else {
-        // Sky gradient (full world width)
         const skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
         skyGrad.addColorStop(0, '#1a1a3e');
         skyGrad.addColorStop(0.6, '#0f1a2e');
@@ -2675,56 +2582,72 @@ function renderGame() {
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, worldWidth, GROUND_Y);
 
-        // Stars
+        if (sprites.bg1 && sprites.bg1.loaded) {
+            ctx.globalAlpha = 0.15;
+            const ts = 64;
+            for (let tx = 0; tx < worldWidth; tx += ts) {
+                for (let ty = 0; ty < GROUND_Y; ty += ts) {
+                    ctx.drawImage(sprites.bg1.img, tx, ty, ts, ts);
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         for (let i = 0; i < Math.ceil(worldWidth / 20); i++) {
             ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % GROUND_Y, 2, 2);
         }
 
-        // Ground
         const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
         groundGrad.addColorStop(0, '#3d6026');
         groundGrad.addColorStop(1, '#1d3006');
         ctx.fillStyle = groundGrad;
         ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
 
-        // Ground line
-        ctx.strokeStyle = '#4d7036';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, GROUND_Y);
-        ctx.lineTo(worldWidth, GROUND_Y);
-        ctx.stroke();
+        if (sprites.tile_grass && sprites.tile_grass.loaded) {
+            const ts = 32;
+            for (let tx = 0; tx < worldWidth; tx += ts) {
+                ctx.drawImage(sprites.tile_grass.img, 0, 0, 16, 16, tx, GROUND_Y, ts, ts);
+            }
+        }
 
-        // Grass tufts
-        ctx.fillStyle = '#4d7036';
-        for (let i = 0; i < worldWidth; i += 30) {
-            ctx.fillRect(i, GROUND_Y - 4, 8, 6);
+        if (sprites.tile_dirt && sprites.tile_dirt.loaded) {
+            const ts = 32;
+            for (let tx = 0; tx < worldWidth; tx += ts) {
+                for (let ty = GROUND_Y + 32; ty < CANVAS_HEIGHT; ty += ts) {
+                    ctx.drawImage(sprites.tile_dirt.img, 0, 0, 16, 16, tx, ty, ts, ts);
+                }
+            }
         }
     }
 
-    // Platforms
     for (const p of platforms) {
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(p.x + 4, p.y + p.height + 2, p.width, 6);
 
-        // Platform body
-        const pGrad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.height);
-        pGrad.addColorStop(0, '#a09070');
-        pGrad.addColorStop(0.5, '#8b7355');
-        pGrad.addColorStop(1, '#6b5335');
-        ctx.fillStyle = pGrad;
-        ctx.fillRect(p.x, p.y, p.width, p.height);
-
-        // Top highlight
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.fillRect(p.x, p.y, p.width, 3);
-
-        // Outline
-        ctx.strokeStyle = '#5b4335';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(p.x, p.y, p.width, p.height);
+        if (sprites.tile_brick && sprites.tile_brick.loaded) {
+            const ts = 16;
+            for (let tx = 0; tx < p.width; tx += ts) {
+                for (let ty = 0; ty < p.height; ty += ts) {
+                    const dw = Math.min(ts, p.width - tx);
+                    const dh = Math.min(ts, p.height - ty);
+                    ctx.drawImage(sprites.tile_brick.img, 0, 0, dw, dh, p.x + tx, p.y + ty, dw, dh);
+                }
+            }
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(p.x, p.y, p.width, p.height);
+        } else {
+            const pGrad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.height);
+            pGrad.addColorStop(0, '#a09070');
+            pGrad.addColorStop(0.5, '#8b7355');
+            pGrad.addColorStop(1, '#6b5335');
+            ctx.fillStyle = pGrad;
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.strokeStyle = '#5b4335';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(p.x, p.y, p.width, p.height);
+        }
     }
 
     // Secret wells and sky portals (only in overworld)
