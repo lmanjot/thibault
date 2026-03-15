@@ -27,8 +27,10 @@ const STONE_LIGHTNING = 'LIGHTNING';
 const BONUS_HORNS = 'HORNS';
 const BONUS_PISTOL = 'PISTOL';
 const BONUS_FLAMETHROWER = 'FLAMETHROWER';
+const BONUS_FLYING = 'FLYING';
 
 const STATE_UNDERGROUND = 'UNDERGROUND';
+const STATE_SKY = 'SKY';
 
 // ============================================
 // SECTION 2: GAME STATE
@@ -53,6 +55,14 @@ let undergroundBonuses = [];
 let savedOverworldState = null;
 let undergroundExitX = 0;
 let undergroundTimer = 0;
+
+let skyPortals = [];
+let inSky = false;
+let skyEnemies = [];
+let skyBonuses = [];
+let savedSkyOverworldState = null;
+let skyExitX = 0;
+let skyWorldWidth = 0;
 let kamehamehaBeam = null;
 let kamehamehaChargeTimer = 0;
 let keySequence = [];
@@ -428,6 +438,21 @@ class Bonus {
             ctx.fillRect(this.x + 18, this.y + this.height / 2 - 2, 5, 8);
             ctx.fillStyle = '#ffcc00';
             ctx.fillRect(this.x + 20, this.y + this.height / 2 - 1, 3, 6);
+        } else if (this.type === BONUS_FLYING) {
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00ccff';
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#00ccff';
+            ctx.fillRect(this.x + offsetX, this.y + offsetY, size, size);
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 0;
+            // Wing/feather icon
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width / 2 - 8, this.y + this.height / 2 + 4);
+            ctx.quadraticCurveTo(this.x + this.width / 2, this.y + 2, this.x + this.width / 2 + 8, this.y + this.height / 2 + 4);
+            ctx.quadraticCurveTo(this.x + this.width / 2, this.y + this.height / 2 + 8, this.x + this.width / 2 - 8, this.y + this.height / 2 + 4);
+            ctx.fill();
         }
         
         ctx.restore();
@@ -490,21 +515,29 @@ class Player {
             if (Math.abs(this.vx) < 0.3) this.vx = 0;
         }
 
-        // Jump - requires releasing and re-pressing space
-        if (isJump() && this.onGround && !jumpPressed) {
-            this.vy = JUMP_STRENGTH;
-            this.onGround = false;
-            jumpPressed = true;
-            spawnParticles(this.x + this.width / 2, this.y + this.height, '#aaa', 5, 3);
-            if (sounds.jump) sounds.jump();
-        }
-        if (!isJump()) {
-            jumpPressed = false;
-        }
+        const flying = typeof inSky !== 'undefined' && inSky;
+        const flySpeed = 4;
 
-        // Gravity
-        this.vy += GRAVITY;
-        if (this.vy > 15) this.vy = 15;
+        if (flying) {
+            if (isLeft()) this.vx = -flySpeed;
+            else if (isRight()) this.vx = flySpeed;
+            else this.vx *= 0.8;
+            if (isJump() || keys['ArrowUp'] || keys['KeyW']) this.vy = -flySpeed;
+            else if (isDown() || keys['ArrowDown'] || keys['KeyS']) this.vy = flySpeed;
+            else this.vy *= 0.8;
+            if (Math.abs(this.vy) < 0.2 && !isJump() && !isDown()) this.vy = 0;
+        } else {
+            if (isJump() && this.onGround && !jumpPressed) {
+                this.vy = JUMP_STRENGTH;
+                this.onGround = false;
+                jumpPressed = true;
+                spawnParticles(this.x + this.width / 2, this.y + this.height, '#aaa', 5, 3);
+                if (sounds.jump) sounds.jump();
+            }
+            if (!isJump()) jumpPressed = false;
+            this.vy += GRAVITY;
+            if (this.vy > 15) this.vy = 15;
+        }
 
         // Move horizontally, then vertically (separated for better collision)
         this.x += this.vx;
@@ -513,25 +546,24 @@ class Player {
 
         this.y += this.vy;
 
-        // Ground + platform collision
         this.onGround = false;
-
-        // Check ground
-        if (this.y + this.height >= GROUND_Y) {
-            this.y = GROUND_Y - this.height;
-            this.vy = 0;
-            this.onGround = true;
-        }
-
-        // Check platforms (only land on top when falling)
-        for (const plat of platforms) {
-            if (this.vy >= 0 &&
-                this.x + this.width > plat.x && this.x < plat.x + plat.width &&
-                this.y + this.height >= plat.y && this.y + this.height <= plat.y + plat.height + 8) {
-                this.y = plat.y - this.height;
+        if (!flying) {
+            if (this.y + this.height >= GROUND_Y) {
+                this.y = GROUND_Y - this.height;
                 this.vy = 0;
                 this.onGround = true;
             }
+            for (const plat of platforms) {
+                if (this.vy >= 0 &&
+                    this.x + this.width > plat.x && this.x < plat.x + plat.width &&
+                    this.y + this.height >= plat.y && this.y + this.height <= plat.y + plat.height + 8) {
+                    this.y = plat.y - this.height;
+                    this.vy = 0;
+                    this.onGround = true;
+                }
+            }
+        } else {
+            this.y = Math.max(60, Math.min(GROUND_Y - this.height - 40, this.y));
         }
 
         // Attack handling - requires releasing and re-pressing
@@ -740,41 +772,83 @@ class Player {
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 3, this.width / 2.5, 5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Flash red when hit
         const flash = this.flashTimer > 0;
-
-        // Body
         const bx = this.x, by = this.y, bw = this.width, bh = this.height;
-        const grad = ctx.createLinearGradient(bx, by, bx, by + bh);
-        grad.addColorStop(0, flash ? '#ff6666' : '#6aaef0');
-        grad.addColorStop(1, flash ? '#cc3333' : '#3a70b2');
-        ctx.fillStyle = grad;
-        ctx.fillRect(bx, by, bw, bh);
 
-        // Armor outline
-        ctx.strokeStyle = flash ? '#ff0000' : '#2a5a92';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
+        // Legs (realistic proportions - lower third)
+        const legY = by + bh * 0.62;
+        const legH = bh * 0.38;
+        const skinColor = flash ? '#e8a090' : '#d4a574';
+        const skinDark = flash ? '#c08070' : '#b8956a';
+        ctx.fillStyle = skinDark;
+        ctx.fillRect(bx + 6, legY, 10, legH);
+        ctx.fillRect(bx + bw - 16, legY, 10, legH);
+        ctx.fillStyle = skinColor;
+        ctx.fillRect(bx + 7, legY, 8, legH - 2);
+        ctx.fillRect(bx + bw - 15, legY, 8, legH - 2);
 
-        // Helmet visor
-        ctx.fillStyle = '#2a5a92';
-        ctx.fillRect(bx + 6, by + 4, bw - 12, 14);
-        ctx.fillStyle = '#1a4a82';
-        ctx.fillRect(bx + 8, by + 6, bw - 16, 10);
+        // Torso - armored chest plate (realistic knight armor)
+        const torsoY = by + bh * 0.22;
+        const torsoH = bh * 0.42;
+        const armorGrad = ctx.createLinearGradient(bx, torsoY, bx + bw, torsoY + torsoH);
+        armorGrad.addColorStop(0, flash ? '#cc8888' : '#5a6a7a');
+        armorGrad.addColorStop(0.2, flash ? '#dd9999' : '#6a7a8a');
+        armorGrad.addColorStop(0.5, flash ? '#eebbbb' : '#8a9aaa');
+        armorGrad.addColorStop(0.8, flash ? '#dd9999' : '#6a7a8a');
+        armorGrad.addColorStop(1, flash ? '#cc8888' : '#5a6a7a');
+        ctx.fillStyle = armorGrad;
+        ctx.fillRect(bx + 4, torsoY, bw - 8, torsoH);
+        ctx.strokeStyle = flash ? '#ff4444' : '#3a4a5a';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        // Eyes (two bright dots)
-        ctx.fillStyle = '#fff';
-        if (this.facing === 1) {
-            ctx.fillRect(bx + 18, by + 8, 4, 5);
-            ctx.fillRect(bx + 26, by + 8, 4, 5);
-        } else {
-            ctx.fillRect(bx + 8, by + 8, 4, 5);
-            ctx.fillRect(bx + 16, by + 8, 4, 5);
-        }
+        // Shoulder pauldrons
+        ctx.fillStyle = flash ? '#dd9999' : '#4a5a6a';
+        ctx.beginPath();
+        ctx.ellipse(bx + 2, torsoY + 8, 10, 12, 0, 0, Math.PI * 2);
+        ctx.ellipse(bx + bw - 2, torsoY + 8, 10, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
 
         // Belt
+        ctx.fillStyle = '#6b5344';
+        ctx.fillRect(bx + 2, legY - 6, bw - 4, 6);
         ctx.fillStyle = '#8b6914';
-        ctx.fillRect(bx + 2, by + bh * 0.55, bw - 4, 5);
+        ctx.fillRect(bx + 4, legY - 5, 8, 4);
+        ctx.fillRect(bx + bw - 12, legY - 5, 8, 4);
+
+        // Head - helmet with face visible
+        const headSize = 18;
+        const headX = bx + (bw - headSize) / 2;
+        const headY = by + 2;
+        ctx.fillStyle = flash ? '#dd9999' : '#4a5a6a';
+        ctx.beginPath();
+        ctx.ellipse(bx + bw / 2, headY + headSize / 2, headSize / 2 + 2, headSize / 2 + 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#3a4a5a';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Visor slit
+        ctx.fillStyle = '#1a2535';
+        ctx.fillRect(headX + 2, headY + headSize / 2 - 2, headSize - 4, 4);
+
+        // Eyes
+        ctx.fillStyle = '#f5f5dc';
+        if (this.facing === 1) {
+            ctx.fillRect(headX + 8, headY + 6, 3, 4);
+            ctx.fillRect(headX + 14, headY + 6, 3, 4);
+        } else {
+            ctx.fillRect(headX + 4, headY + 6, 3, 4);
+            ctx.fillRect(headX + 10, headY + 6, 3, 4);
+        }
+        ctx.fillStyle = '#2c1810';
+        if (this.facing === 1) {
+            ctx.fillRect(headX + 9, headY + 7, 2, 2);
+            ctx.fillRect(headX + 15, headY + 7, 2, 2);
+        } else {
+            ctx.fillRect(headX + 5, headY + 7, 2, 2);
+            ctx.fillRect(headX + 11, headY + 7, 2, 2);
+        }
 
         // Sword with animation
         const sLen = 38;
@@ -1039,52 +1113,187 @@ class Enemy {
     render(ctx) {
         ctx.save();
         const flash = this.flashTimer > 0;
+        const colors = {
+            basic:  { armor: '#7a6a5a', cloth: '#8b4513', skin: '#c9a86c' },
+            medium: { armor: '#5a5a6a', cloth: '#4a4a5a', skin: '#b89868' },
+            hard:   { armor: '#4a3a3a', cloth: '#2a2a3a', skin: '#a88858' }
+        };
+        const c = colors[this.type] || colors.basic;
 
-        // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.beginPath();
         ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body
-        const colors = {
-            basic:  { top: '#ff6b6b', bot: '#cc3333' },
-            medium: { top: '#e05050', bot: '#a02020' },
-            hard:   { top: '#cc2222', bot: '#880000' }
-        };
-        const c = colors[this.type] || colors.basic;
-        const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
-        grad.addColorStop(0, flash ? '#ffffff' : c.top);
-        grad.addColorStop(1, flash ? '#ffaaaa' : c.bot);
-        ctx.fillStyle = grad;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        // Head
+        const headW = 18, headH = 16;
+        ctx.fillStyle = c.skin;
+        ctx.fillRect(this.x + (this.width - headW) / 2, this.y + 2, headW, headH);
 
-        // Outline
-        ctx.strokeStyle = '#600';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(this.x + 1, this.y + 1, this.width - 2, this.height - 2);
+        // Torso - armored
+        const torsoY = this.y + headH + 2;
+        const torsoH = 14;
+        const grad = ctx.createLinearGradient(this.x, torsoY, this.x, torsoY + torsoH);
+        grad.addColorStop(0, flash ? '#aaa' : c.armor);
+        grad.addColorStop(0.5, flash ? '#ddd' : c.armor);
+        grad.addColorStop(1, flash ? '#888' : c.armor);
+        ctx.fillStyle = grad;
+        ctx.fillRect(this.x + 2, torsoY, this.width - 4, torsoH);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(this.x + 2, torsoY, this.width - 4, torsoH);
+
+        // Legs
+        const legY = this.y + headH + torsoH + 4;
+        ctx.fillStyle = c.cloth;
+        ctx.fillRect(this.x + 4, legY, 10, this.height - legY - 2);
+        ctx.fillRect(this.x + this.width - 14, legY, 10, this.height - legY - 2);
+        ctx.fillStyle = c.skin;
+        ctx.fillRect(this.x + 6, legY + 2, 6, 6);
+        ctx.fillRect(this.x + this.width - 12, legY + 2, 6, 6);
 
         // Eyes
         ctx.fillStyle = '#fff';
-        ctx.fillRect(this.x + 6, this.y + 10, 6, 7);
-        ctx.fillRect(this.x + this.width - 12, this.y + 10, 6, 7);
-        ctx.fillStyle = '#000';
-        ctx.fillRect(this.x + 8, this.y + 12, 3, 4);
-        ctx.fillRect(this.x + this.width - 10, this.y + 12, 3, 4);
+        ctx.fillRect(this.x + 6, this.y + 6, 3, 4);
+        ctx.fillRect(this.x + this.width - 9, this.y + 6, 3, 4);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(this.x + 7, this.y + 7, 1, 2);
+        ctx.fillRect(this.x + this.width - 8, this.y + 7, 1, 2);
 
-        // Mouth
-        ctx.fillStyle = '#600';
-        ctx.fillRect(this.x + 10, this.y + 26, this.width - 20, 4);
-
-        // HP bar (small, above head)
+        // HP bar
         if (this.hp < this.maxHp) {
-            const bw = this.width;
             ctx.fillStyle = '#333';
-            ctx.fillRect(this.x, this.y - 8, bw, 4);
+            ctx.fillRect(this.x, this.y - 8, this.width, 4);
             ctx.fillStyle = '#e74c3c';
-            ctx.fillRect(this.x, this.y - 8, bw * (this.hp / this.maxHp), 4);
+            ctx.fillRect(this.x, this.y - 8, this.width * (this.hp / this.maxHp), 4);
         }
 
+        ctx.restore();
+    }
+}
+
+// ============================================
+// SECTION 7.5: ENTITY - SKY DRAGON
+// ============================================
+
+class SkyDragon {
+    constructor(x, y) {
+        this.id = entityIdCounter++;
+        this.x = x;
+        this.y = y;
+        this.width = 56;
+        this.height = 40;
+        this.vx = 1.5;
+        this.vy = 0.3;
+        this.hp = 45;
+        this.maxHp = 45;
+        this.attackCooldown = 0;
+        this.flashTimer = 0;
+        this.dead = false;
+        this.wingPhase = 0;
+    }
+
+    update(player, platforms) {
+        this.wingPhase += 0.15;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        if (Math.abs(dx) > 80) {
+            this.vx += (dx > 0 ? 0.08 : -0.08);
+        }
+        if (Math.abs(dy) > 60) {
+            this.vy += (dy > 0 ? 0.05 : -0.05);
+        }
+        this.vx = Math.max(-2.5, Math.min(2.5, this.vx));
+        this.vy = Math.max(-1.5, Math.min(1.5, this.vy));
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < 50) this.vx = 1;
+        if (this.x > worldWidth - 100) this.vx = -1;
+        if (this.y < 80) this.vy = 0.5;
+        if (this.y > GROUND_Y - 120) this.vy = -0.5;
+
+        const dist = Math.hypot(dx, dy);
+        if (dist < 70 && this.attackCooldown <= 0) {
+            player.takeDamage(12);
+            this.attackCooldown = 100;
+        }
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (this.flashTimer > 0) this.flashTimer--;
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        this.flashTimer = 8;
+        if (this.hp <= 0) {
+            this.dead = true;
+            spawnParticles(this.x + this.width / 2, this.y + this.height / 2, '#ff6600', 12, 6);
+        }
+        if (sounds.enemyHit) sounds.enemyHit();
+        return this.dead;
+    }
+
+    render(ctx) {
+        ctx.save();
+        const flash = this.flashTimer > 0;
+        const wingFlap = Math.sin(this.wingPhase) * 8;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(this.x + this.width / 2, this.y + this.height + 2, this.width / 2.5, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const grad = ctx.createLinearGradient(this.x, this.y, this.x + this.width, this.y + this.height);
+        grad.addColorStop(0, flash ? '#ffaa88' : '#c0392b');
+        grad.addColorStop(0.5, flash ? '#ff8866' : '#922b21');
+        grad.addColorStop(1, flash ? '#ff6644' : '#641e16');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(this.x + 8, this.y + this.height / 2);
+        ctx.lineTo(this.x + this.width - 8, this.y + this.height / 2 - 5);
+        ctx.lineTo(this.x + this.width, this.y + this.height / 2 + 5);
+        ctx.lineTo(this.x + this.width - 8, this.y + this.height / 2 + 10);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = flash ? '#ffccaa' : '#e74c3c';
+        ctx.beginPath();
+        ctx.ellipse(this.x + this.width - 4, this.y + this.height / 2 + 2, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#641e16';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.arc(this.x + this.width - 2, this.y + this.height / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = flash ? '#ffddbb' : '#ecf0f1';
+        ctx.fillRect(this.x + 12, this.y + 8, 10, 8);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(this.x + 15, this.y + 10, 4, 4);
+
+        ctx.fillStyle = flash ? '#ff8866' : '#e67e22';
+        ctx.beginPath();
+        ctx.moveTo(this.x + 4, this.y + this.height / 2 - wingFlap);
+        ctx.lineTo(this.x - 10, this.y + this.height / 2 - 5);
+        ctx.lineTo(this.x + 4, this.y + this.height / 2 + wingFlap);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.width - 4, this.y + this.height / 2 - wingFlap);
+        ctx.lineTo(this.x + this.width + 10, this.y + this.height / 2 - 5);
+        ctx.lineTo(this.x + this.width - 4, this.y + this.height / 2 + wingFlap);
+        ctx.closePath();
+        ctx.fill();
+
+        if (this.hp < this.maxHp) {
+            ctx.fillStyle = '#333';
+            ctx.fillRect(this.x, this.y - 10, this.width, 5);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 5);
+        }
         ctx.restore();
     }
 }
@@ -1281,25 +1490,36 @@ class Boss {
             ctx.restore();
 
         } else {
-            // REGULAR BOSS
-            const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
-            grad.addColorStop(0, flash ? '#ffaaaa' : '#b02020');
-            grad.addColorStop(1, flash ? '#ff6666' : '#6b0000');
+            // REGULAR BOSS - imposing armored knight
+            const grad = ctx.createLinearGradient(this.x, this.y, this.x + this.width, this.y + this.height);
+            grad.addColorStop(0, flash ? '#cc9999' : '#5a4a4a');
+            grad.addColorStop(0.3, flash ? '#ddaaaa' : '#6a5a5a');
+            grad.addColorStop(0.5, flash ? '#eebbbb' : '#7a6a6a');
+            grad.addColorStop(0.7, flash ? '#ddaaaa' : '#6a5a5a');
+            grad.addColorStop(1, flash ? '#cc9999' : '#4a3a3a');
             ctx.fillStyle = grad;
             ctx.fillRect(this.x, this.y, this.width, this.height);
 
-            // Armor plates
-            ctx.fillStyle = flash ? '#ff8888' : '#4a0000';
-            ctx.fillRect(this.x + 8, this.y + 8, this.width - 16, 14);
-            ctx.fillRect(this.x + 8, this.y + this.height - 22, this.width - 16, 14);
+            // Armor plates - chest
+            ctx.fillStyle = flash ? '#aa8888' : '#3a3232';
+            ctx.fillRect(this.x + 10, this.y + 12, this.width - 20, 18);
+            ctx.fillRect(this.x + 10, this.y + this.height - 28, this.width - 20, 18);
+
+            // Shoulder pauldrons
+            ctx.fillStyle = flash ? '#bb9999' : '#4a4040';
+            ctx.beginPath();
+            ctx.ellipse(this.x + 5, this.y + 20, 14, 18, 0, 0, Math.PI * 2);
+            ctx.ellipse(this.x + this.width - 5, this.y + 20, 14, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Helmet visor
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(this.x + 18, this.y + 22, this.width - 36, 12);
 
             // Eyes
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(this.x + 14, this.y + 18, 10, 10);
-            ctx.fillRect(this.x + this.width - 24, this.y + 18, 10, 10);
-            ctx.fillStyle = '#ff0';
-            ctx.fillRect(this.x + 17, this.y + 20, 5, 6);
-            ctx.fillRect(this.x + this.width - 21, this.y + 20, 5, 6);
+            ctx.fillStyle = '#ffdd44';
+            ctx.fillRect(this.x + 22, this.y + 24, 6, 8);
+            ctx.fillRect(this.x + this.width - 28, this.y + 24, 6, 8);
         }
 
         // Outline
@@ -1345,37 +1565,55 @@ function rectsOverlap(a, b) {
 
 const levels = [
     {
-        worldWidth: 4000,
+        worldWidth: 6500,
         platforms: [
             { x: 200, y: 420, width: 150, height: 18 },
             { x: 500, y: 370, width: 150, height: 18 },
             { x: 800, y: 320, width: 150, height: 18 },
-            { x: 1200, y: 420, width: 150, height: 18 },
-            { x: 1500, y: 370, width: 150, height: 18 },
-            { x: 1800, y: 320, width: 150, height: 18 },
-            { x: 2200, y: 420, width: 150, height: 18 },
-            { x: 2500, y: 370, width: 150, height: 18 },
-            { x: 2800, y: 320, width: 150, height: 18 },
-            { x: 3200, y: 420, width: 150, height: 18 },
-            { x: 3500, y: 370, width: 150, height: 18 }
+            { x: 1100, y: 420, width: 150, height: 18 },
+            { x: 1400, y: 370, width: 150, height: 18 },
+            { x: 1700, y: 320, width: 150, height: 18 },
+            { x: 2000, y: 420, width: 150, height: 18 },
+            { x: 2300, y: 370, width: 150, height: 18 },
+            { x: 2600, y: 320, width: 150, height: 18 },
+            { x: 2900, y: 420, width: 150, height: 18 },
+            { x: 3200, y: 370, width: 150, height: 18 },
+            { x: 3500, y: 320, width: 150, height: 18 },
+            { x: 3800, y: 420, width: 150, height: 18 },
+            { x: 4100, y: 370, width: 150, height: 18 },
+            { x: 4400, y: 320, width: 150, height: 18 },
+            { x: 4700, y: 420, width: 150, height: 18 },
+            { x: 5000, y: 370, width: 150, height: 18 },
+            { x: 5300, y: 320, width: 150, height: 18 },
+            { x: 5600, y: 420, width: 150, height: 18 },
+            { x: 5900, y: 370, width: 150, height: 18 }
         ],
         enemies: [
             { x: 350, y: 100, type: 'basic' },
             { x: 650, y: 100, type: 'basic' },
             { x: 950, y: 100, type: 'basic' },
-            { x: 1300, y: 100, type: 'medium' },
-            { x: 1600, y: 100, type: 'basic' },
-            { x: 1900, y: 100, type: 'medium' },
-            { x: 2300, y: 100, type: 'basic' },
-            { x: 2600, y: 100, type: 'hard' },
-            { x: 2900, y: 100, type: 'medium' },
-            { x: 3300, y: 100, type: 'hard' }
+            { x: 1250, y: 100, type: 'medium' },
+            { x: 1550, y: 100, type: 'basic' },
+            { x: 1850, y: 100, type: 'medium' },
+            { x: 2150, y: 100, type: 'basic' },
+            { x: 2450, y: 100, type: 'hard' },
+            { x: 2750, y: 100, type: 'medium' },
+            { x: 3050, y: 100, type: 'basic' },
+            { x: 3350, y: 100, type: 'hard' },
+            { x: 3650, y: 100, type: 'medium' },
+            { x: 3950, y: 100, type: 'basic' },
+            { x: 4250, y: 100, type: 'hard' },
+            { x: 4550, y: 100, type: 'medium' },
+            { x: 4850, y: 100, type: 'hard' },
+            { x: 5150, y: 100, type: 'medium' },
+            { x: 5450, y: 100, type: 'hard' }
         ],
-        wells: [{ x: 1850, y: GROUND_Y - 40, width: 48, height: 40 }],
-        bossX: 3800
+        wells: [{ x: 3000, y: GROUND_Y - 40, width: 48, height: 40 }],
+        skyPortals: [{ x: 2000, y: 280, width: 60, height: 50 }],
+        bossX: 6100
     },
     {
-        worldWidth: 4500,
+        worldWidth: 7500,
         platforms: [
             { x: 150, y: 450, width: 130, height: 18 },
             { x: 350, y: 390, width: 130, height: 18 },
@@ -1390,36 +1628,52 @@ const levels = [
             { x: 2700, y: 450, width: 130, height: 18 },
             { x: 3000, y: 320, width: 130, height: 18 },
             { x: 3300, y: 450, width: 130, height: 18 },
-            { x: 3600, y: 390, width: 130, height: 18 }
+            { x: 3600, y: 390, width: 130, height: 18 },
+            { x: 3900, y: 340, width: 130, height: 18 },
+            { x: 4200, y: 450, width: 130, height: 18 },
+            { x: 4500, y: 390, width: 130, height: 18 },
+            { x: 4800, y: 320, width: 130, height: 18 },
+            { x: 5100, y: 450, width: 130, height: 18 },
+            { x: 5400, y: 390, width: 130, height: 18 },
+            { x: 5700, y: 340, width: 130, height: 18 },
+            { x: 6000, y: 450, width: 130, height: 18 },
+            { x: 6300, y: 390, width: 130, height: 18 }
         ],
         enemies: [
             { x: 250, y: 100, type: 'basic' },
             { x: 450, y: 100, type: 'medium' },
             { x: 700, y: 100, type: 'basic' },
-            { x: 900, y: 100, type: 'medium' },
-            { x: 1300, y: 100, type: 'hard' },
-            { x: 1600, y: 100, type: 'medium' },
-            { x: 1900, y: 100, type: 'basic' },
-            { x: 2200, y: 100, type: 'hard' },
-            { x: 2500, y: 100, type: 'medium' },
-            { x: 2800, y: 100, type: 'hard' },
-            { x: 3100, y: 100, type: 'medium' },
-            { x: 3400, y: 100, type: 'hard' }
+            { x: 1000, y: 100, type: 'medium' },
+            { x: 1400, y: 100, type: 'hard' },
+            { x: 1750, y: 100, type: 'medium' },
+            { x: 2100, y: 100, type: 'basic' },
+            { x: 2450, y: 100, type: 'hard' },
+            { x: 2800, y: 100, type: 'medium' },
+            { x: 3150, y: 100, type: 'hard' },
+            { x: 3500, y: 100, type: 'medium' },
+            { x: 3850, y: 100, type: 'hard' },
+            { x: 4200, y: 100, type: 'basic' },
+            { x: 4550, y: 100, type: 'hard' },
+            { x: 4900, y: 100, type: 'medium' },
+            { x: 5250, y: 100, type: 'hard' },
+            { x: 5600, y: 100, type: 'medium' },
+            { x: 5950, y: 100, type: 'hard' }
         ],
-        wells: [{ x: 2600, y: GROUND_Y - 40, width: 48, height: 40 }],
-        bossX: 4200
+        wells: [{ x: 4000, y: GROUND_Y - 40, width: 48, height: 40 }],
+        skyPortals: [{ x: 2800, y: 260, width: 60, height: 50 }],
+        bossX: 7000
     },
     {
-        worldWidth: 5000,
+        worldWidth: 9000,
         platforms: [
             { x: 100, y: 460, width: 110, height: 18 },
             { x: 260, y: 410, width: 110, height: 18 },
             { x: 420, y: 360, width: 110, height: 18 },
             { x: 580, y: 410, width: 110, height: 18 },
             { x: 740, y: 460, width: 110, height: 18 },
-            { x: 880, y: 360, width: 110, height: 18 },
-            { x: 1020, y: 410, width: 110, height: 18 },
-            { x: 1200, y: 310, width: 110, height: 18 },
+            { x: 900, y: 360, width: 110, height: 18 },
+            { x: 1060, y: 410, width: 110, height: 18 },
+            { x: 1220, y: 310, width: 110, height: 18 },
             { x: 1400, y: 460, width: 110, height: 18 },
             { x: 1560, y: 410, width: 110, height: 18 },
             { x: 1720, y: 360, width: 110, height: 18 },
@@ -1435,34 +1689,86 @@ const levels = [
             { x: 3340, y: 460, width: 110, height: 18 },
             { x: 3500, y: 360, width: 110, height: 18 },
             { x: 3660, y: 410, width: 110, height: 18 },
-            { x: 3820, y: 310, width: 110, height: 18 }
+            { x: 3820, y: 310, width: 110, height: 18 },
+            { x: 4000, y: 460, width: 110, height: 18 },
+            { x: 4160, y: 410, width: 110, height: 18 },
+            { x: 4320, y: 360, width: 110, height: 18 },
+            { x: 4480, y: 410, width: 110, height: 18 },
+            { x: 4640, y: 460, width: 110, height: 18 },
+            { x: 4800, y: 360, width: 110, height: 18 },
+            { x: 4960, y: 410, width: 110, height: 18 },
+            { x: 5120, y: 310, width: 110, height: 18 },
+            { x: 5300, y: 460, width: 110, height: 18 },
+            { x: 5460, y: 410, width: 110, height: 18 },
+            { x: 5620, y: 360, width: 110, height: 18 },
+            { x: 5780, y: 410, width: 110, height: 18 },
+            { x: 5940, y: 460, width: 110, height: 18 },
+            { x: 6100, y: 360, width: 110, height: 18 },
+            { x: 6260, y: 410, width: 110, height: 18 },
+            { x: 6420, y: 310, width: 110, height: 18 },
+            { x: 6600, y: 460, width: 110, height: 18 },
+            { x: 6760, y: 410, width: 110, height: 18 },
+            { x: 6920, y: 360, width: 110, height: 18 },
+            { x: 7080, y: 410, width: 110, height: 18 },
+            { x: 7240, y: 460, width: 110, height: 18 },
+            { x: 7400, y: 360, width: 110, height: 18 },
+            { x: 7560, y: 410, width: 110, height: 18 },
+            { x: 7720, y: 310, width: 110, height: 18 }
         ],
         enemies: [
             { x: 200, y: 100, type: 'basic' },
             { x: 370, y: 100, type: 'medium' },
             { x: 520, y: 100, type: 'hard' },
-            { x: 670, y: 100, type: 'basic' },
-            { x: 820, y: 100, type: 'medium' },
-            { x: 960, y: 100, type: 'hard' },
-            { x: 1300, y: 100, type: 'hard' },
-            { x: 1500, y: 100, type: 'medium' },
-            { x: 1700, y: 100, type: 'hard' },
-            { x: 1900, y: 100, type: 'basic' },
-            { x: 2100, y: 100, type: 'hard' },
-            { x: 2300, y: 100, type: 'medium' },
-            { x: 2500, y: 100, type: 'hard' },
-            { x: 2700, y: 100, type: 'hard' },
-            { x: 2900, y: 100, type: 'medium' },
-            { x: 3100, y: 100, type: 'hard' },
-            { x: 3300, y: 100, type: 'hard' },
-            { x: 3500, y: 100, type: 'hard' }
+            { x: 700, y: 100, type: 'basic' },
+            { x: 900, y: 100, type: 'medium' },
+            { x: 1100, y: 100, type: 'hard' },
+            { x: 1400, y: 100, type: 'hard' },
+            { x: 1650, y: 100, type: 'medium' },
+            { x: 1900, y: 100, type: 'hard' },
+            { x: 2150, y: 100, type: 'basic' },
+            { x: 2400, y: 100, type: 'hard' },
+            { x: 2650, y: 100, type: 'medium' },
+            { x: 2900, y: 100, type: 'hard' },
+            { x: 3150, y: 100, type: 'hard' },
+            { x: 3400, y: 100, type: 'medium' },
+            { x: 3650, y: 100, type: 'hard' },
+            { x: 3900, y: 100, type: 'hard' },
+            { x: 4150, y: 100, type: 'medium' },
+            { x: 4400, y: 100, type: 'hard' },
+            { x: 4650, y: 100, type: 'hard' },
+            { x: 4900, y: 100, type: 'medium' },
+            { x: 5150, y: 100, type: 'hard' },
+            { x: 5400, y: 100, type: 'hard' },
+            { x: 5650, y: 100, type: 'medium' },
+            { x: 5900, y: 100, type: 'hard' },
+            { x: 6150, y: 100, type: 'hard' },
+            { x: 6400, y: 100, type: 'medium' },
+            { x: 6650, y: 100, type: 'hard' },
+            { x: 6900, y: 100, type: 'hard' },
+            { x: 7150, y: 100, type: 'hard' }
         ],
-        wells: [{ x: 2000, y: GROUND_Y - 40, width: 48, height: 40 }],
-        bossX: 4700
+        wells: [{ x: 4500, y: GROUND_Y - 40, width: 48, height: 40 }],
+        skyPortals: [{ x: 3500, y: 240, width: 60, height: 50 }],
+        bossX: 8500
+    },
+    {
+        worldWidth: 4000,
+        isSpaceLevel: true,
+        platforms: [],
+        enemies: [],
+        wells: [],
+        skyPortals: [],
+        bossX: 0
     }
 ];
 
 let player = null;
+let inSpaceLevel = false;
+let spaceship = null;
+let spaceInvaders = [];
+let spaceInvaderBullets = [];
+let spaceWaves = 0;
+let spaceWaveTimer = 0;
 let enemies = [];
 let boss = null;
 let platforms = [];
@@ -1470,6 +1776,42 @@ let worldWidth = 1200;
 
 function loadLevel(levelNum) {
     const level = levels[levelNum - 1];
+    inSpaceLevel = level.isSpaceLevel || false;
+
+    if (inSpaceLevel) {
+        const oldHp = player ? player.hp : 100;
+        spaceship = {
+            x: 100,
+            y: GROUND_Y - 80,
+            width: 60,
+            height: 40,
+            vx: 0,
+            hp: oldHp,
+            maxHp: 100,
+            shootCooldown: 0,
+            invincible: 120
+        };
+        spaceInvaders = [];
+        spaceInvaderBullets = [];
+        spaceWaves = 0;
+        spaceWaveTimer = 180;
+        worldWidth = level.worldWidth || 4000;
+        spawnSpaceInvaderWave();
+        platforms = [];
+        enemies = [];
+        boss = null;
+        secretWells = [];
+        skyPortals = [];
+        particles = [];
+        bonuses = [];
+        playerBullets = [];
+        flameProjectiles = [];
+        cameraX = 0;
+        screenShake = 0;
+        inUnderground = false;
+        inSky = false;
+        return;
+    }
 
     const oldHp = player ? player.hp : 100;
     const oldStones = player ? [...player.stones] : [];
@@ -1497,6 +1839,9 @@ function loadLevel(levelNum) {
     enemies = level.enemies.map(e => new Enemy(e.x, e.y, e.type));
     boss = new Boss(level.bossX, 100, levelNum);
     secretWells = (level.wells || []).map(w => ({ ...w }));
+    skyPortals = (level.skyPortals || []).map(p => ({ ...p }));
+    inSky = false;
+    savedSkyOverworldState = null;
     particles = [];
     bonuses = [];
     playerBullets = [];
@@ -1506,7 +1851,9 @@ function loadLevel(levelNum) {
     screenShake = 0;
     entityIdCounter = 100;
     inUnderground = false;
+    inSky = false;
     savedOverworldState = null;
+    savedSkyOverworldState = null;
     kamehamehaBeam = null;
     kamehamehaChargeTimer = 0;
     keySequence = [];
@@ -1669,6 +2016,147 @@ function exitUnderground() {
     
     screenShake = 6;
     spawnParticles(player.x + player.width / 2, player.y + player.height, '#ffd700', 15, 5);
+}
+
+// ============================================
+// SECTION 10.6: SKY PORTAL & SKY WORLD
+// ============================================
+
+function renderSkyPortal(portal) {
+    ctx.save();
+    const px = portal.x, py = portal.y, pw = portal.width, ph = portal.height;
+    const bob = Math.sin(Date.now() * 0.004) * 6;
+    
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = '#00ccff';
+    const cloudGrad = ctx.createLinearGradient(px, py, px + pw, py + ph);
+    cloudGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    cloudGrad.addColorStop(0.5, 'rgba(200,230,255,0.85)');
+    cloudGrad.addColorStop(1, 'rgba(150,200,255,0.8)');
+    ctx.fillStyle = cloudGrad;
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 2, py + ph / 2 + bob, pw / 2, ph / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 4, py + ph * 0.7 + bob, pw / 3, ph / 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px + pw * 0.75, py + ph * 0.65 + bob, pw / 3.5, ph / 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    ctx.fillStyle = '#00aaff';
+    ctx.globalAlpha = 0.6 + Math.sin(Date.now() * 0.006) * 0.2;
+    ctx.beginPath();
+    ctx.arc(px + pw / 2, py + ph / 2 + bob, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    if (player && Math.abs(player.x + player.width / 2 - (px + pw / 2)) < 80 &&
+        player.y + player.height > py && player.y < py + ph + 30) {
+        ctx.fillStyle = '#00ccff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u2191 CIEL', px + pw / 2, py - 8 + Math.sin(Date.now() * 0.008) * 3);
+    }
+    ctx.restore();
+}
+
+function generateSkyWorld() {
+    skyWorldWidth = 2000;
+    skyEnemies = [
+        new SkyDragon(400, 150),
+        new SkyDragon(700, 200),
+        new SkyDragon(1000, 120),
+        new SkyDragon(1300, 250),
+        new SkyDragon(1600, 180)
+    ];
+    skyBonuses = [
+        new Bonus(1100, 100, BONUS_PISTOL)
+    ];
+    skyExitX = 1850;
+    return skyWorldWidth;
+}
+
+function enterSky() {
+    if (inUnderground || inSky) return;
+    savedSkyOverworldState = {
+        platforms, enemies, boss, bonuses, worldWidth,
+        playerX: player.x, playerY: player.y,
+        playerBullets, flameProjectiles, cameraX
+    };
+    const sw = generateSkyWorld();
+    worldWidth = sw;
+    platforms = [];
+    enemies = skyEnemies;
+    bonuses = skyBonuses;
+    boss = null;
+    playerBullets = [];
+    flameProjectiles = [];
+    player.x = 80;
+    player.y = 200;
+    player.vy = 0;
+    player.vx = 0;
+    cameraX = 0;
+    particles = [];
+    inSky = true;
+    screenShake = 8;
+    spawnParticles(player.x + player.width / 2, player.y + player.height / 2, '#00ccff', 25, 6);
+    if (sounds.enterPipe) sounds.enterPipe();
+}
+
+function exitSky() {
+    if (!savedSkyOverworldState) return;
+    platforms = savedSkyOverworldState.platforms;
+    enemies = savedSkyOverworldState.enemies;
+    boss = savedSkyOverworldState.boss;
+    bonuses = savedSkyOverworldState.bonuses;
+    worldWidth = savedSkyOverworldState.worldWidth;
+    playerBullets = savedSkyOverworldState.playerBullets;
+    flameProjectiles = [];
+    player.x = savedSkyOverworldState.playerX;
+    player.y = savedSkyOverworldState.playerY - 20;
+    player.vy = -8;
+    cameraX = savedSkyOverworldState.cameraX;
+    particles = [];
+    inSky = false;
+    savedSkyOverworldState = null;
+    screenShake = 6;
+    spawnParticles(player.x + player.width / 2, player.y, '#00ccff', 15, 5);
+}
+
+function renderSkyBackground() {
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    skyGrad.addColorStop(0, '#0a1628');
+    skyGrad.addColorStop(0.3, '#1a3a5c');
+    skyGrad.addColorStop(0.7, '#2a5a8c');
+    skyGrad.addColorStop(1, '#4a7ab0');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, worldWidth, CANVAS_HEIGHT);
+
+    for (let i = 0; i < Math.ceil(worldWidth / 30); i++) {
+        const cx = (i * 47 + 13) % worldWidth;
+        const cy = (i * 31 + 7) % (GROUND_Y - 100);
+        ctx.fillStyle = `rgba(255,255,255,${0.4 + Math.sin(i + Date.now() * 0.001) * 0.2})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    for (let i = 0; i < worldWidth; i += 120) {
+        const cloudY = 40 + Math.sin(i * 0.02) * 30;
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.beginPath();
+        ctx.ellipse(i + 30, cloudY, 60, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let i = 0; i < worldWidth; i += 80) {
+        ctx.beginPath();
+        ctx.arc(i, GROUND_Y - 20, 100, 0, Math.PI);
+        ctx.fill();
+    }
 }
 
 function renderUndergroundBackground() {
@@ -1961,6 +2449,16 @@ function renderUI() {
         ctx.fillText('SOUTERRAIN', CANVAS_WIDTH - 30, 70);
     }
 
+    // Sky indicator
+    if (inSky) {
+        ctx.fillStyle = 'rgba(0,204,255,0.3)';
+        ctx.fillRect(CANVAS_WIDTH - 180, 52, 160, 24);
+        ctx.fillStyle = '#00ccff';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText('CIEL - DRAGONS', CANVAS_WIDTH - 30, 70);
+    }
+
     // Boss health bar
     if (boss && boss.hp > 0) {
         const bbw = 420, bbh = 28;
@@ -2033,7 +2531,7 @@ function renderTitleScreen() {
     ctx.fillText('Vainquez les ennemis, collectez les pierres de dragon, forgez l\'épée ultime !', CANVAS_WIDTH / 2, 210);
 
     // Controls box
-    const boxX = CANVAS_WIDTH / 2 - 220, boxY = 260, boxW = 440, boxH = 180;
+    const boxX = CANVAS_WIDTH / 2 - 220, boxY = 260, boxW = 440, boxH = 200;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(boxX, boxY, boxW, boxH);
     ctx.strokeStyle = '#ffd700';
@@ -2047,11 +2545,15 @@ function renderTitleScreen() {
     ctx.font = '17px Arial';
     ctx.fillText('Flèches / WASD : Se déplacer + Sauter', CANVAS_WIDTH / 2, boxY + 58);
     ctx.fillText('X / Z / J : Attaquer  |  C / K : Tirer', CANVAS_WIDTH / 2, boxY + 82);
-    ctx.fillText('\u2193 sur tuyau vert : Monde souterrain secret !', CANVAS_WIDTH / 2, boxY + 106);
+    ctx.fillText('\u2193 tuyau vert : Souterrain  |  \u2191 nuage : Ciel (dragons)', CANVAS_WIDTH / 2, boxY + 106);
     ctx.fillStyle = '#ffd700';
     ctx.fillText('C \u2192 X \u2192 C (rapide) : KAMEHAMEHA !', CANVAS_WIDTH / 2, boxY + 134);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '14px Arial';
+    ctx.fillText('Niveau 4 : Vaisseau - Flèches + C pour tirer, atteignez la fin !', CANVAS_WIDTH / 2, boxY + 158);
     ctx.fillStyle = '#fff';
-    ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 162);
+    ctx.font = '17px Arial';
+    ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 182);
 
     // Blinking start prompt
     if (Math.sin(t * 3) > 0) {
@@ -2117,8 +2619,13 @@ function renderVictory() {
 
     ctx.fillStyle = '#fff';
     ctx.font = '26px Arial';
-    ctx.fillText('Vous avez vaincu le Roi Démon !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-    ctx.fillText('L\'épée ultime du dragon est à vous !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+    if (inSpaceLevel) {
+        ctx.fillText('Vous avez échappé de la planète !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.fillText('Le chevalier est libre !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+    } else {
+        ctx.fillText('Vous avez vaincu le Roi Démon !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+        ctx.fillText('L\'épée ultime du dragon est à vous !', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 40);
+    }
 
     ctx.font = '22px Arial';
     ctx.fillStyle = '#ccc';
@@ -2154,7 +2661,9 @@ function renderGame() {
     }
     ctx.translate(-cameraX + shakeX, shakeY);
 
-    if (inUnderground) {
+    if (inSky) {
+        renderSkyBackground();
+    } else if (inUnderground) {
         renderUndergroundBackground();
     } else {
         // Sky gradient (full world width)
@@ -2217,11 +2726,36 @@ function renderGame() {
         ctx.strokeRect(p.x, p.y, p.width, p.height);
     }
 
-    // Secret wells (only in overworld)
-    if (!inUnderground) {
+    // Secret wells and sky portals (only in overworld)
+    if (!inUnderground && !inSky) {
         for (const well of secretWells) {
             renderSecretWell(well);
         }
+        for (const portal of skyPortals) {
+            renderSkyPortal(portal);
+        }
+    }
+
+    // Sky exit portal
+    if (inSky) {
+        ctx.save();
+        const portalX = skyExitX;
+        const portalY = GROUND_Y - 100;
+        const pulse = Math.sin(Date.now() * 0.005) * 6;
+        ctx.shadowBlur = 25 + pulse;
+        ctx.shadowColor = '#00ccff';
+        ctx.strokeStyle = '#00ccff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(portalX + 30, portalY + 30, 25 + pulse, 35 + pulse, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(0,204,255,0.2)';
+        ctx.fill();
+        ctx.fillStyle = '#00ccff';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SORTIE', portalX + 30, portalY - 12);
+        ctx.restore();
     }
 
     // Enemies
@@ -2283,10 +2817,252 @@ function renderGame() {
 }
 
 // ============================================
+// SECTION 13.5: SPACE LEVEL (SPACE INVADERS)
+// ============================================
+
+function spawnSpaceInvaderWave() {
+    spaceWaves++;
+    const cols = 8 + Math.min(spaceWaves, 4);
+    const rows = 3 + Math.min(Math.floor(spaceWaves / 2), 2);
+    const startX = cameraX + 150;
+    const startY = 80;
+    const spacingX = 50;
+    const spacingY = 35;
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            spaceInvaders.push({
+                x: startX + c * spacingX,
+                y: startY + r * spacingY,
+                width: 28,
+                height: 20,
+                vx: 1.5 + spaceWaves * 0.2,
+                hp: 1,
+                type: r === 0 ? 'squid' : r === 1 ? 'crab' : 'octopus'
+            });
+        }
+    }
+}
+
+function updateSpaceLevel() {
+    const sp = spaceship;
+    if (!sp) return;
+
+    sp.vx = 0;
+    if (isLeft()) sp.vx = -8;
+    if (isRight()) sp.vx = 8;
+    sp.x += sp.vx;
+    if (sp.x < 20) sp.x = 20;
+    if (sp.x + sp.width > worldWidth - 20) sp.x = worldWidth - 20;
+
+    if (sp.invincible > 0) sp.invincible--;
+
+    if (sp.shootCooldown > 0) sp.shootCooldown--;
+    if (isShoot() && sp.shootCooldown <= 0) {
+        playerBullets.push({
+            x: sp.x + sp.width / 2 - 3,
+            y: sp.y,
+            vx: 0,
+            vy: -14,
+            width: 6,
+            height: 12,
+            damage: 1
+        });
+        sp.shootCooldown = 12;
+        if (sounds.attack) sounds.attack();
+    }
+
+    for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const b = playerBullets[i];
+        b.y += b.vy;
+        if (b.y < -20) {
+            playerBullets.splice(i, 1);
+            continue;
+        }
+        let hit = false;
+        for (let j = spaceInvaders.length - 1; j >= 0; j--) {
+            const inv = spaceInvaders[j];
+            if (b.x < inv.x + inv.width && b.x + b.width > inv.x &&
+                b.y < inv.y + inv.height && b.y + b.height > inv.y) {
+                spaceInvaders.splice(j, 1);
+                playerBullets.splice(i, 1);
+                spawnParticles(b.x, b.y, '#00ff88', 6, 4);
+                hit = true;
+                break;
+            }
+        }
+        if (hit) continue;
+    }
+
+    let rightmost = 0, leftmost = worldWidth, bottommost = 0;
+    for (const inv of spaceInvaders) {
+        rightmost = Math.max(rightmost, inv.x + inv.width);
+        leftmost = Math.min(leftmost, inv.x);
+        bottommost = Math.max(bottommost, inv.y + inv.height);
+        inv.x += inv.vx;
+    }
+    if (rightmost > cameraX + CANVAS_WIDTH - 40 || leftmost < cameraX + 40) {
+        for (const inv of spaceInvaders) {
+            inv.vx *= -1;
+            inv.y += 20;
+        }
+    }
+
+    if (Math.random() < 0.008 && spaceInvaders.length > 0) {
+        const inv = spaceInvaders[Math.floor(Math.random() * spaceInvaders.length)];
+        spaceInvaderBullets.push({
+            x: inv.x + inv.width / 2 - 2,
+            y: inv.y + inv.height,
+            vx: 0,
+            vy: 5,
+            width: 4,
+            height: 10
+        });
+    }
+
+    for (let i = spaceInvaderBullets.length - 1; i >= 0; i--) {
+        const b = spaceInvaderBullets[i];
+        b.y += b.vy;
+        if (b.y > CANVAS_HEIGHT + 20) {
+            spaceInvaderBullets.splice(i, 1);
+            continue;
+        }
+        if (sp.invincible <= 0 && b.x < sp.x + sp.width && b.x + b.width > sp.x &&
+            b.y < sp.y + sp.height && b.y + b.height > sp.y) {
+            sp.hp -= 15;
+            sp.invincible = 90;
+            spaceInvaderBullets.splice(i, 1);
+            screenShake = 8;
+            spawnParticles(sp.x + sp.width / 2, sp.y + sp.height / 2, '#ff4444', 10, 5);
+            if (sounds.hit) sounds.hit();
+        }
+    }
+
+    if (spaceInvaders.length === 0) {
+        spaceWaveTimer--;
+        if (spaceWaveTimer <= 0) {
+            spawnSpaceInvaderWave();
+            spaceWaveTimer = 150;
+        }
+    }
+
+    const targetX = spaceship.x - CANVAS_WIDTH / 2 + spaceship.width / 2;
+    cameraX = Math.max(0, Math.min(worldWidth - CANVAS_WIDTH, targetX));
+
+    if (sp.hp <= 0) {
+        gameState = STATE_GAME_OVER;
+    }
+
+    if (sp.x + sp.width >= worldWidth - 100) {
+        gameState = STATE_VICTORY;
+    }
+
+    updateParticles();
+}
+
+function renderSpaceLevel() {
+    ctx.save();
+
+    const shakeX = screenShake > 0 ? (Math.random() - 0.5) * 4 : 0;
+    const shakeY = screenShake > 0 ? (Math.random() - 0.5) * 4 : 0;
+    ctx.translate(-cameraX + shakeX, shakeY);
+    if (screenShake > 0) screenShake--;
+
+    const spaceGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    spaceGrad.addColorStop(0, '#000011');
+    spaceGrad.addColorStop(0.5, '#000022');
+    spaceGrad.addColorStop(1, '#0a0015');
+    ctx.fillStyle = spaceGrad;
+    ctx.fillRect(0, 0, worldWidth, CANVAS_HEIGHT);
+
+    for (let i = 0; i < 150; i++) {
+        const sx = (i * 31 + 7) % worldWidth;
+        const sy = (i * 19 + 11) % CANVAS_HEIGHT;
+        ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(i + Date.now() * 0.002) * 0.2})`;
+        ctx.fillRect(sx, sy, 2, 2);
+    }
+
+    for (const inv of spaceInvaders) {
+        ctx.save();
+        const colors = { squid: '#00ff88', crab: '#ffcc00', octopus: '#ff4444' };
+        ctx.fillStyle = colors[inv.type] || '#00ff88';
+        ctx.fillRect(inv.x, inv.y, inv.width, inv.height);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(inv.x + 4, inv.y + 4, 6, 4);
+        ctx.fillRect(inv.x + inv.width - 10, inv.y + 4, 6, 4);
+        ctx.restore();
+    }
+
+    for (const b of spaceInvaderBullets) {
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+    }
+
+    for (const b of playerBullets) {
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#00ff88';
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+        ctx.shadowBlur = 0;
+    }
+
+    if (spaceship) {
+        ctx.save();
+        if (spaceship.invincible > 0 && Math.floor(spaceship.invincible / 5) % 2 === 0) {
+            ctx.globalAlpha = 0.5;
+        }
+        const sx = spaceship.x, sy = spaceship.y, sw = spaceship.width, sh = spaceship.height;
+        const shipGrad = ctx.createLinearGradient(sx, sy, sx + sw, sy + sh);
+        shipGrad.addColorStop(0, '#4a6a8a');
+        shipGrad.addColorStop(0.5, '#6a8aaa');
+        shipGrad.addColorStop(1, '#3a5a7a');
+        ctx.fillStyle = shipGrad;
+        ctx.beginPath();
+        ctx.moveTo(sx + sw / 2, sy);
+        ctx.lineTo(sx + sw, sy + sh);
+        ctx.lineTo(sx + sw / 2, sy + sh - 8);
+        ctx.lineTo(sx, sy + sh);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#8aacc8';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#ff6600';
+        ctx.fillRect(sx + sw / 2 - 4, sy + sh - 6, 8, 6);
+        ctx.restore();
+    }
+
+    renderParticles();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(18, 18, 224, 26);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(20, 20, 220, 22);
+    const hpPct = spaceship ? spaceship.hp / spaceship.maxHp : 0;
+    ctx.fillStyle = hpPct > 0.5 ? '#2ecc71' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
+    ctx.fillRect(21, 21, 218 * hpPct, 20);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`VAISSEAU: ${Math.ceil(spaceship ? spaceship.hp : 0)} / 100`, 28, 36);
+    ctx.fillStyle = '#00ccff';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText('NIVEAU 4 - FUITE', CANVAS_WIDTH - 30, 38);
+    ctx.fillText('Atteignez la fin pour vous échapper !', CANVAS_WIDTH - 30, 58);
+    ctx.restore();
+}
+
+// ============================================
 // SECTION 14: GAME UPDATE LOOP
 // ============================================
 
 function update() {
+    if (gameState === STATE_PLAYING && inSpaceLevel) {
+        updateSpaceLevel();
+        return;
+    }
     if (gameState === STATE_PLAYING) {
         player.update(platforms);
 
@@ -2307,7 +3083,8 @@ function update() {
             const spawnX = player.x + 200 + Math.random() * 400; // Spawn ahead of player
             if (spawnX < worldWidth - 100) {
                 const spawnY = 100;
-                const bonusType = Math.random() < 0.5 ? BONUS_HORNS : BONUS_PISTOL;
+                const r = Math.random();
+                const bonusType = r < 0.4 ? BONUS_HORNS : r < 0.8 ? BONUS_PISTOL : BONUS_FLYING;
                 bonuses.push(new Bonus(spawnX, spawnY, bonusType));
                 bonusSpawnTimer = 0;
             }
@@ -2339,6 +3116,9 @@ function update() {
                     player.flamethrowerTimer = 1200; // 20 seconds at 60fps
                     spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ff4400', 20, 8);
                     spawnParticles(bonus.x + bonus.width / 2, bonus.y + bonus.height / 2, '#ffcc00', 15, 6);
+                    if (sounds.bonusPickup) sounds.bonusPickup();
+                } else if (bonus.type === BONUS_FLYING) {
+                    enterSky();
                     if (sounds.bonusPickup) sounds.bonusPickup();
                 }
                 bonus.collected = true;
@@ -2455,12 +3235,14 @@ function update() {
                 levelTransitionTimer = 180;
             } else if (currentLevel === 3) {
                 player.addStone(STONE_LIGHTNING);
-                gameState = STATE_VICTORY;
+                levelTransitionMessage = 'Échappez en vaisseau spatial !';
+                gameState = STATE_LEVEL_TRANSITION;
+                levelTransitionTimer = 180;
             }
         }
 
         // Secret well interaction: stand on well + press Down
-        if (!inUnderground) {
+        if (!inUnderground && !inSky) {
             for (const well of secretWells) {
                 const playerCX = player.x + player.width / 2;
                 const wellCX = well.x + well.width / 2;
@@ -2469,6 +3251,16 @@ function update() {
                     Math.abs(player.y + player.height - (well.y + well.height)) < 12 &&
                     isDown()) {
                     enterUnderground(well.x);
+                    break;
+                }
+            }
+            for (const portal of skyPortals) {
+                const playerCX = player.x + player.width / 2;
+                const portalCX = portal.x + portal.width / 2;
+                if (Math.abs(playerCX - portalCX) < 50 &&
+                    player.y + player.height > portal.y && player.y < portal.y + portal.height + 40 &&
+                    isJump()) {
+                    enterSky();
                     break;
                 }
             }
@@ -2481,6 +3273,15 @@ function update() {
             if (Math.abs(playerCX - (undergroundExitX + 25)) < 35 &&
                 player.y + player.height > GROUND_Y - 80) {
                 exitUnderground();
+            }
+        }
+
+        // Sky exit check
+        if (inSky) {
+            const playerCX = player.x + player.width / 2;
+            if (Math.abs(playerCX - (skyExitX + 30)) < 45 &&
+                player.y + player.height > GROUND_Y - 120) {
+                exitSky();
             }
         }
         
@@ -2596,7 +3397,7 @@ function update() {
         updateParticles();
         if (levelTransitionTimer <= 0) {
             currentLevel++;
-            if (currentLevel <= 3) {
+            if (currentLevel <= levels.length) {
                 loadLevel(currentLevel);
                 gameState = STATE_PLAYING;
             } else {
@@ -2616,14 +3417,19 @@ function gameLoop() {
     if (gameState === STATE_TITLE) {
         renderTitleScreen();
     } else if (gameState === STATE_LEVEL_TRANSITION) {
-        renderGame();
+        if (inSpaceLevel) renderSpaceLevel();
+        else renderGame();
         renderLevelTransition();
     } else if (gameState === STATE_GAME_OVER) {
-        renderGame();
+        if (inSpaceLevel) renderSpaceLevel();
+        else renderGame();
         renderGameOver();
     } else if (gameState === STATE_VICTORY) {
-        renderGame();
+        if (inSpaceLevel) renderSpaceLevel();
+        else renderGame();
         renderVictory();
+    } else if (inSpaceLevel) {
+        renderSpaceLevel();
     } else {
         renderGame();
     }
@@ -2651,7 +3457,11 @@ function startGame() {
     keySequence = [];
     flameProjectiles = [];
     inUnderground = false;
+    inSky = false;
+    inSpaceLevel = false;
+    spaceship = null;
     savedOverworldState = null;
+    savedSkyOverworldState = null;
     loadLevel(1);
     gameState = STATE_PLAYING;
 }
