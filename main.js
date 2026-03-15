@@ -169,17 +169,6 @@ function loadAllSprites() {
     loadSingleFrames('knight_run_attack', Array.from({ length: 8 }, (_, i) => `${knightBase}/Run_Attack/run_attack${i + 1}.png`));
     loadSingleFrames('knight_jump', Array.from({ length: 7 }, (_, i) => `${knightBase}/Jump/jump${i + 1}.png`));
 
-    for (let lvl = 1; lvl <= 3; lvl++) {
-        const base = `assets/characters/swordsman_lvl${lvl}`;
-        loadSprite(`sw${lvl}_idle`, `${base}/Idle.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_run`, `${base}/Run.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_attack`, `${base}/attack.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_hurt`, `${base}/Hurt.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_death`, `${base}/Death.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_walk`, `${base}/Walk.png`, 64, 64, SIDE_RIGHT);
-        loadSprite(`sw${lvl}_run_attack`, `${base}/Run_Attack.png`, 64, 64, SIDE_RIGHT);
-    }
-
     for (let o = 1; o <= 3; o++) {
         const base = `assets/enemies/orc${o}`;
         loadSprite(`orc${o}_idle`, `${base}/idle.png`, 64, 64, SIDE_RIGHT);
