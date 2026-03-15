@@ -36,6 +36,9 @@ const STATE_SKY = 'SKY';
 // SECTION 2: GAME STATE
 // ============================================
 
+let gameDifficulty = 'hard';
+let difficultySelected = false;
+
 let gameState = STATE_TITLE;
 let currentLevel = 1;
 let levelTransitionTimer = 0;
@@ -269,10 +272,26 @@ window.addEventListener('keydown', (e) => {
     }
 
     if (e.code === 'Enter') {
-        if (gameState === STATE_TITLE || gameState === STATE_GAME_OVER || gameState === STATE_VICTORY) {
+        if (gameState === STATE_TITLE) {
+            if (!difficultySelected) {
+                difficultySelected = true;
+            } else {
+                startGame();
+            }
+        } else if (gameState === STATE_GAME_OVER || gameState === STATE_VICTORY) {
             startGame();
         }
         e.preventDefault();
+    }
+
+    if (gameState === STATE_TITLE && !difficultySelected) {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+            gameDifficulty = 'normal';
+            e.preventDefault();
+        } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+            gameDifficulty = 'hard';
+            e.preventDefault();
+        }
     }
 
     // Kamehameha combo detection: C, X, C pressed rapidly
@@ -587,7 +606,7 @@ class Player {
         this.height = 54;
         this.vx = 0;
         this.vy = 0;
-        this.maxHp = 100;
+        this.maxHp = gameDifficulty === 'normal' ? 150 : 100;
         this.hp = this.maxHp;
         this.onGround = false;
         this.facing = 1;
@@ -832,10 +851,10 @@ class Player {
     }
 
     takeDamage(amount) {
-        // Horns power-up makes player invincible to enemy damage
         if (this.hasHorns) return;
         if (this.invincible > 0) return;
-        this.hp -= amount;
+        const dmg = gameDifficulty === 'normal' ? Math.round(amount * 0.6) : amount;
+        this.hp -= dmg;
         if (this.hp < 0) this.hp = 0;
         this.invincible = INVINCIBILITY_FRAMES;
         this.flashTimer = 20;
@@ -1030,9 +1049,11 @@ class Enemy {
         this.vx = 0;
         this.vy = 0;
         this.type = type || 'basic';
-        this.hp = this.type === 'basic' ? 20 : this.type === 'medium' ? 35 : 50;
+        const easyMult = gameDifficulty === 'normal' ? 0.6 : 1;
+        this.hp = Math.round((this.type === 'basic' ? 20 : this.type === 'medium' ? 35 : 50) * easyMult);
         this.maxHp = this.hp;
-        this.speed = this.type === 'basic' ? 1.2 : this.type === 'medium' ? 1.8 : 2.2;
+        const spdMult = gameDifficulty === 'normal' ? 0.7 : 1;
+        this.speed = (this.type === 'basic' ? 1.2 : this.type === 'medium' ? 1.8 : 2.2) * spdMult;
         this.attackCooldown = 0;
         this.onGround = false;
         this.flashTimer = 0;
@@ -1163,10 +1184,10 @@ class SkyDragon {
         this.y = y;
         this.width = 56;
         this.height = 40;
-        this.vx = 1.5;
+        this.vx = 1.5 * (gameDifficulty === 'normal' ? 0.7 : 1);
         this.vy = 0.3;
-        this.hp = 45;
-        this.maxHp = 45;
+        this.hp = Math.round(45 * (gameDifficulty === 'normal' ? 0.6 : 1));
+        this.maxHp = this.hp;
         this.attackCooldown = 0;
         this.flashTimer = 0;
         this.dead = false;
@@ -1265,9 +1286,10 @@ class Boss {
         this.height = level === 3 ? 100 : 80;
         this.vx = 0;
         this.vy = 0;
-        this.hp = level === 1 ? 80 : level === 2 ? 150 : 250;
+        const bossMult = gameDifficulty === 'normal' ? 0.6 : 1;
+        this.hp = Math.round((level === 1 ? 80 : level === 2 ? 150 : 250) * bossMult);
         this.maxHp = this.hp;
-        this.speed = level === 3 ? 1.2 : 1;
+        this.speed = (level === 3 ? 1.2 : 1) * (gameDifficulty === 'normal' ? 0.7 : 1);
         this.attackTimer = 0;
         this.attackCooldown = 0;
         this.projectiles = [];
@@ -1691,7 +1713,7 @@ function loadLevel(levelNum) {
             vx: 0,
             vy: 0,
             hp: oldHp,
-            maxHp: 100,
+            maxHp: gameDifficulty === 'normal' ? 150 : 100,
             shootCooldown: 0,
             invincible: 120
         };
@@ -2458,15 +2480,52 @@ function renderTitleScreen() {
     ctx.font = '17px Arial';
     ctx.fillText('Entrée : Confirmer', CANVAS_WIDTH / 2, boxY + 182);
 
-    // Blinking start prompt
-    if (Math.sin(t * 3) > 0) {
-        ctx.save();
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#ffd700';
+    if (!difficultySelected) {
         ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 30px Arial';
-        ctx.fillText('Appuyez sur ENTRÉE pour commencer', CANVAS_WIDTH / 2, 510);
-        ctx.restore();
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText('Choisissez la difficulté', CANVAS_WIDTH / 2, 490);
+
+        const btnW = 160, btnH = 44, gap = 30;
+        const leftX = CANVAS_WIDTH / 2 - btnW - gap / 2;
+        const rightX = CANVAS_WIDTH / 2 + gap / 2;
+        const btnY = 505;
+
+        const normalSel = gameDifficulty === 'normal';
+        ctx.fillStyle = normalSel ? '#ffd700' : 'rgba(255,255,255,0.15)';
+        ctx.fillRect(leftX, btnY, btnW, btnH);
+        ctx.strokeStyle = normalSel ? '#ffd700' : '#888';
+        ctx.lineWidth = normalSel ? 3 : 1;
+        ctx.strokeRect(leftX, btnY, btnW, btnH);
+        ctx.fillStyle = normalSel ? '#1a1a3e' : '#aaa';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('Normal', leftX + btnW / 2, btnY + 29);
+
+        const hardSel = gameDifficulty === 'hard';
+        ctx.fillStyle = hardSel ? '#ff4444' : 'rgba(255,255,255,0.15)';
+        ctx.fillRect(rightX, btnY, btnW, btnH);
+        ctx.strokeStyle = hardSel ? '#ff4444' : '#888';
+        ctx.lineWidth = hardSel ? 3 : 1;
+        ctx.strokeRect(rightX, btnY, btnW, btnH);
+        ctx.fillStyle = hardSel ? '#fff' : '#aaa';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('Difficile', rightX + btnW / 2, btnY + 29);
+
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Arial';
+        ctx.fillText('← → pour choisir, ENTRÉE pour confirmer', CANVAS_WIDTH / 2, 572);
+    } else {
+        if (Math.sin(t * 3) > 0) {
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ffd700';
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 30px Arial';
+            ctx.fillText('Appuyez sur ENTRÉE pour commencer', CANVAS_WIDTH / 2, 510);
+            ctx.restore();
+        }
+        ctx.fillStyle = gameDifficulty === 'hard' ? '#ff4444' : '#44cc44';
+        ctx.font = 'bold 18px Arial';
+        ctx.fillText(gameDifficulty === 'hard' ? '⚔ Mode Difficile' : '🛡 Mode Normal', CANVAS_WIDTH / 2, 545);
     }
 }
 
@@ -3468,6 +3527,7 @@ function gameLoop() {
 // ============================================
 
 function startGame() {
+    difficultySelected = true;
     currentLevel = 1;
     player = null;
     enemies = [];
