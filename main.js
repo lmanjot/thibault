@@ -187,18 +187,44 @@ function loadAllSprites() {
     loadSingleFrames('firearrow', Array.from({length: 8}, (_, i) =>
         `assets/magic/firearrow/frame_${String(i + 1).padStart(2, '0')}.png`));
 
-    const treeFiles = [
-        'Curved_tree1.png', 'Curved_tree2.png', 'Curved_tree3.png',
-        'Mega_tree1.png', 'Mega_tree2.png',
-        'Luminous_tree1.png', 'Luminous_tree2.png',
-        'White_tree1.png', 'White_tree2.png',
-        'Willow1.png', 'Willow2.png'
+    const bigTrees = [
+        'Mega_tree1.png', 'Tree_idol_dragon.png',
+        'Curved_tree1.png', 'Luminous_tree1.png', 'Willow1.png',
+        'Ent_man.png', 'Light_balls_tree1.png', 'Swirling tree1.png',
+        'Living gazebo1.png', 'Mega_tree2.png'
     ];
-    treeFiles.forEach((f, i) => {
+    bigTrees.forEach((f, i) => {
         const img = new Image();
         img.src = `assets/trees/${f}`;
-        sprites[`tree_${i}`] = { img, loaded: false, isSingleImage: true };
-        img.onload = () => { sprites[`tree_${i}`].loaded = true; };
+        sprites[`bigtree_${i}`] = { img, loaded: false, isSingleImage: true };
+        img.onload = () => { sprites[`bigtree_${i}`].loaded = true; };
+    });
+
+    const medTrees = [
+        'Curved_tree2.png', 'Luminous_tree2.png', 'Willow2.png',
+        'White_tree1.png', 'Ent_woman.png', 'Light_balls_tree2.png',
+        'Swirling tree2.png', 'Living gazebo2.png',
+        'Blue-green_balls_tree1.png', 'Tree_idol_wolf.png'
+    ];
+    medTrees.forEach((f, i) => {
+        const img = new Image();
+        img.src = `assets/trees/${f}`;
+        sprites[`medtree_${i}`] = { img, loaded: false, isSingleImage: true };
+        img.onload = () => { sprites[`medtree_${i}`].loaded = true; };
+    });
+
+    const smallPlants = [
+        'Beige_green_mushroom1.png', 'White-red_mushroom1.png',
+        'Chanterelles1.png', 'Curved_tree3.png', 'Luminous_tree3.png',
+        'White_tree2.png', 'Beige_green_mushroom2.png',
+        'Chanterelles2.png', 'White-red_mushroom2.png',
+        'Light_balls_tree3.png', 'Swirling tree3.png', 'Blue-green_balls_tree2.png'
+    ];
+    smallPlants.forEach((f, i) => {
+        const img = new Image();
+        img.src = `assets/trees/${f}`;
+        sprites[`plant_${i}`] = { img, loaded: false, isSingleImage: true };
+        img.onload = () => { sprites[`plant_${i}`].loaded = true; };
     });
 
     loadSprite('dragon_fly', 'assets/enemies/5/Fly.png', 48, 48);
@@ -2506,31 +2532,66 @@ function renderGame() {
         renderUndergroundBackground();
     } else {
         const skyGrad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-        skyGrad.addColorStop(0, '#1a1a3e');
-        skyGrad.addColorStop(0.6, '#0f1a2e');
-        skyGrad.addColorStop(1, '#0a0e27');
+        skyGrad.addColorStop(0, '#0d1b2a');
+        skyGrad.addColorStop(0.3, '#1b2838');
+        skyGrad.addColorStop(0.7, '#1a3a2a');
+        skyGrad.addColorStop(1, '#0f2818');
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, worldWidth, GROUND_Y);
 
-        if (sprites.bg1 && sprites.bg1.loaded) {
-            ctx.globalAlpha = 0.15;
-            const ts = 64;
-            for (let tx = 0; tx < worldWidth; tx += ts) {
-                for (let ty = 0; ty < GROUND_Y; ty += ts) {
-                    ctx.drawImage(sprites.bg1.img, tx, ty, ts, ts);
-                }
-            }
-            ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        for (let i = 0; i < Math.ceil(worldWidth / 25); i++) {
+            ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % (GROUND_Y * 0.4), 2, 2);
         }
 
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        for (let i = 0; i < Math.ceil(worldWidth / 20); i++) {
-            ctx.fillRect((i * 37 + 5) % worldWidth, (i * 23 + 3) % GROUND_Y, 2, 2);
+        const BIG_COUNT = 10;
+        for (let i = 0; i < Math.floor(worldWidth / 500); i++) {
+            const idx = ((i * 7 + 2) % BIG_COUNT);
+            const t = sprites[`bigtree_${idx}`];
+            if (t && t.loaded) {
+                const treeX = 80 + i * 500 + ((i * 173) % 120);
+                const h = (idx <= 1) ? 220 : 160;
+                const w = h;
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                ctx.drawImage(t.img, treeX, GROUND_Y - h + 20, w, h);
+                ctx.restore();
+            }
+        }
+
+        const MED_COUNT = 10;
+        for (let i = 0; i < Math.floor(worldWidth / 300); i++) {
+            const idx = ((i * 5 + 1) % MED_COUNT);
+            const t = sprites[`medtree_${idx}`];
+            if (t && t.loaded) {
+                const treeX = 40 + i * 300 + ((i * 97) % 100);
+                const h = 120;
+                const w = h;
+                ctx.save();
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(t.img, treeX, GROUND_Y - h + 15, w, h);
+                ctx.restore();
+            }
+        }
+
+        for (let i = 0; i < Math.floor(worldWidth / 250); i++) {
+            const idx = ((i * 3 + 4) % BIG_COUNT);
+            const t = sprites[`bigtree_${idx}`];
+            if (t && t.loaded) {
+                const treeX = 200 + i * 250 + ((i * 131) % 60);
+                const h = 140;
+                const w = h;
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.drawImage(t.img, treeX, GROUND_Y - h + 10, w, h);
+                ctx.restore();
+            }
         }
 
         const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_HEIGHT);
-        groundGrad.addColorStop(0, '#3d6026');
-        groundGrad.addColorStop(1, '#1d3006');
+        groundGrad.addColorStop(0, '#2a4a1a');
+        groundGrad.addColorStop(0.3, '#1e3a12');
+        groundGrad.addColorStop(1, '#0f2008');
         ctx.fillStyle = groundGrad;
         ctx.fillRect(0, GROUND_Y, worldWidth, CANVAS_HEIGHT - GROUND_Y);
 
@@ -2550,48 +2611,57 @@ function renderGame() {
             }
         }
 
-        const TREE_COUNT = 11;
-        for (let i = 0; i < Math.floor(worldWidth / 350); i++) {
-            const treeIdx = ((i * 7 + 3) % TREE_COUNT);
-            const t = sprites[`tree_${treeIdx}`];
+        const PLANT_COUNT = 12;
+        for (let i = 0; i < Math.floor(worldWidth / 120); i++) {
+            const idx = ((i * 3 + 1) % PLANT_COUNT);
+            const t = sprites[`plant_${idx}`];
             if (t && t.loaded) {
-                const treeX = 120 + i * 350 + ((i * 137) % 80);
-                const treeH = (treeIdx >= 3 && treeIdx <= 4) ? 120 : 80;
-                const treeW = treeH;
-                ctx.save();
-                ctx.globalAlpha = 0.7;
-                ctx.drawImage(t.img, treeX, GROUND_Y - treeH + 8, treeW, treeH);
-                ctx.restore();
+                const px = 30 + i * 120 + ((i * 53) % 40);
+                const sz = (idx >= 3) ? 50 : 30;
+                ctx.drawImage(t.img, px, GROUND_Y - sz + 12, sz, sz);
             }
         }
     }
 
-    for (const p of platforms) {
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.fillRect(p.x + 4, p.y + p.height + 2, p.width, 6);
+    for (let pi = 0; pi < platforms.length; pi++) {
+        const p = platforms[pi];
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(p.x + 4, p.y + p.height + 2, p.width, 5);
 
-        if (sprites.tile_brick && sprites.tile_brick.loaded) {
-            const ts = 16;
-            for (let tx = 0; tx < p.width; tx += ts) {
-                for (let ty = 0; ty < p.height; ty += ts) {
-                    const dw = Math.min(ts, p.width - tx);
-                    const dh = Math.min(ts, p.height - ty);
-                    ctx.drawImage(sprites.tile_brick.img, 0, 0, dw, dh, p.x + tx, p.y + ty, dw, dh);
-                }
+        const platGrad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.height);
+        platGrad.addColorStop(0, '#5a3d1e');
+        platGrad.addColorStop(0.3, '#4a2e14');
+        platGrad.addColorStop(1, '#3a2010');
+        ctx.fillStyle = platGrad;
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+
+        ctx.fillStyle = '#6b4a28';
+        ctx.fillRect(p.x, p.y, p.width, 3);
+        ctx.fillStyle = '#2a1808';
+        ctx.fillRect(p.x, p.y + p.height - 2, p.width, 2);
+
+        ctx.strokeStyle = 'rgba(90,60,20,0.6)';
+        ctx.lineWidth = 1;
+        for (let vx = p.x + 20; vx < p.x + p.width - 10; vx += 35 + (pi * 7) % 15) {
+            ctx.beginPath();
+            ctx.moveTo(vx, p.y);
+            ctx.lineTo(vx, p.y + p.height);
+            ctx.stroke();
+        }
+
+        if (!inUnderground && !inSky) {
+            const platPlantIdx = (pi * 3 + 2) % 12;
+            const pt = sprites[`plant_${platPlantIdx}`];
+            if (pt && pt.loaded) {
+                const psz = 28;
+                ctx.drawImage(pt.img, p.x + p.width / 2 - psz / 2, p.y - psz + 6, psz, psz);
             }
-            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(p.x, p.y, p.width, p.height);
-        } else {
-            const pGrad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.height);
-            pGrad.addColorStop(0, '#a09070');
-            pGrad.addColorStop(0.5, '#8b7355');
-            pGrad.addColorStop(1, '#6b5335');
-            ctx.fillStyle = pGrad;
-            ctx.fillRect(p.x, p.y, p.width, p.height);
-            ctx.strokeStyle = '#5b4335';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(p.x, p.y, p.width, p.height);
+            const platPlantIdx2 = (pi * 5 + 7) % 12;
+            const pt2 = sprites[`plant_${platPlantIdx2}`];
+            if (pt2 && pt2.loaded && p.width > 80) {
+                const psz2 = 22;
+                ctx.drawImage(pt2.img, p.x + 10, p.y - psz2 + 4, psz2, psz2);
+            }
         }
     }
 
