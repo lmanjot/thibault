@@ -925,10 +925,10 @@ class Player {
         }
 
         const flipX = this.facing === -1;
-        const spriteW = 108;
-        const spriteH = 108;
+        const spriteW = 140;
+        const spriteH = 140;
         const sx = bx + bw / 2 - spriteW / 2;
-        const sy = by + bh - spriteH + 14;
+        const sy = by + bh - spriteH + 20;
         const drawFrame = useStaticFrame ? 0 : this._animFrame;
         if (!drawSprite(ctx, spriteName, drawFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
@@ -973,28 +973,25 @@ class Player {
             } else {
                 glowColor = '#ff4500';
             }
-            ctx.shadowBlur = 15 + stoneCount * 5;
+            ctx.globalAlpha = 0.3;
+            ctx.shadowBlur = 12;
             ctx.shadowColor = glowColor;
-            ctx.globalAlpha = 0.4;
-            ctx.strokeStyle = glowColor;
-            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.ellipse(bx + bw / 2, by + bh * 0.6, bw / 2 + 6, bh / 2 + 6, 0, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2 + 2, bh / 2 + 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = glowColor.startsWith('rgb') ? glowColor.replace('rgb', 'rgba').replace(')', ',0.15)') : glowColor + '26';
+            ctx.fill();
             ctx.restore();
         }
 
         if (this.isSuperSaiyan) {
             ctx.save();
-            const pulse = Math.sin(Date.now() * 0.008) * 0.15 + 0.35;
-            ctx.globalAlpha = pulse * 0.3;
-            ctx.shadowBlur = 25;
+            ctx.globalAlpha = 0.3;
+            ctx.shadowBlur = 12;
             ctx.shadowColor = '#ffd700';
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.ellipse(bx + bw / 2, by + bh * 0.6, bw / 2 + 8, bh / 2 + 8, 0, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2 + 2, bh / 2 + 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,215,0,0.15)';
+            ctx.fill();
             ctx.restore();
         }
 
@@ -1126,10 +1123,10 @@ class Enemy {
         }
 
         const flipX = this.vx < 0;
-        const spriteW = 94;
-        const spriteH = 94;
+        const spriteW = 122;
+        const spriteH = 122;
         const sx = this.x + this.width / 2 - spriteW / 2;
-        const sy = this.y + this.height - spriteH + 28;
+        const sy = this.y + this.height - spriteH + 38;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1403,8 +1400,8 @@ class Boss {
         }
 
         const flipX = this.vx < 0;
-        const spriteW = Math.round((this.width + 40) * 1.3);
-        const spriteH = Math.round((this.height + 40) * 1.3);
+        const spriteW = Math.round((this.width + 40) * 1.7);
+        const spriteH = Math.round((this.height + 40) * 1.7);
         const sx = this.x + this.width / 2 - spriteW / 2;
         const sy = this.y + this.height - spriteH + 16;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
