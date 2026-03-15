@@ -894,6 +894,8 @@ class Player {
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
+        const stoneCount = this.stones.length;
+
         let spriteName = 'knight_idle';
         if (flash) {
             spriteName = 'knight_hurt';
