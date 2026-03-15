@@ -159,6 +159,16 @@ function drawTiled(ctx, name, x, y, w, h, tileScale) {
 function loadAllSprites() {
     const SIDE_RIGHT = 3;
 
+    const knightBase = 'assets/characters/knight';
+    loadSingleFrames('knight_idle', Array.from({ length: 12 }, (_, i) => `${knightBase}/Idle/idle${i + 1}.png`));
+    loadSingleFrames('knight_run', Array.from({ length: 8 }, (_, i) => `${knightBase}/Run/run${i + 1}.png`));
+    loadSingleFrames('knight_attack', Array.from({ length: 5 }, (_, i) => `${knightBase}/Attack/attack${i}.png`));
+    loadSingleFrames('knight_hurt', Array.from({ length: 4 }, (_, i) => `${knightBase}/Hurt/hurt${i + 1}.png`));
+    loadSingleFrames('knight_death', Array.from({ length: 10 }, (_, i) => `${knightBase}/Death/death${i + 1}.png`));
+    loadSingleFrames('knight_walk', Array.from({ length: 6 }, (_, i) => `${knightBase}/Walk/walk${i + 1}.png`));
+    loadSingleFrames('knight_run_attack', Array.from({ length: 8 }, (_, i) => `${knightBase}/Run_Attack/run_attack${i + 1}.png`));
+    loadSingleFrames('knight_jump', Array.from({ length: 7 }, (_, i) => `${knightBase}/Jump/jump${i + 1}.png`));
+
     for (let lvl = 1; lvl <= 3; lvl++) {
         const base = `assets/characters/swordsman_lvl${lvl}`;
         loadSprite(`sw${lvl}_idle`, `${base}/Idle.png`, 64, 64, SIDE_RIGHT);
@@ -895,23 +905,24 @@ class Player {
         this._animTimer++;
         if (this._animTimer % 6 === 0) this._animFrame++;
 
-        const stoneCount = this.stones.length;
-        const swLvl = stoneCount >= 2 ? 3 : stoneCount >= 1 ? 2 : 1;
-        const swPfx = `sw${swLvl}`;
-        let spriteName = `${swPfx}_idle`;
+        let spriteName = 'knight_idle';
         if (flash) {
-            spriteName = `${swPfx}_hurt`;
+            spriteName = 'knight_hurt';
         } else if (this.attackDuration > 0 && Math.abs(this.vx) > 0.5) {
-            spriteName = `${swPfx}_run_attack`;
+            spriteName = 'knight_run_attack';
         } else if (this.attackDuration > 0) {
-            spriteName = `${swPfx}_attack`;
+            spriteName = 'knight_attack';
+        } else if (this.vy < -1) {
+            spriteName = 'knight_jump';
         } else if (Math.abs(this.vx) > 0.5) {
-            spriteName = `${swPfx}_run`;
+            spriteName = 'knight_run';
+        } else if (Math.abs(this.vx) > 0.1) {
+            spriteName = 'knight_walk';
         }
 
         const flipX = this.facing === -1;
-        const spriteW = 80;
-        const spriteH = 80;
+        const spriteW = 72;
+        const spriteH = 72;
         const sx = bx + bw / 2 - spriteW / 2;
         const sy = by + bh - spriteH + 10;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
