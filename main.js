@@ -912,10 +912,10 @@ class Player {
         }
 
         const flipX = this.facing === -1;
-        const spriteW = 72;
-        const spriteH = 72;
+        const spriteW = 108;
+        const spriteH = 108;
         const sx = bx + bw / 2 - spriteW / 2;
-        const sy = by + bh - spriteH + 10;
+        const sy = by + bh - spriteH + 14;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ff8888' : '#5a6a7a';
             ctx.fillRect(bx, by, bw, bh);
@@ -1099,10 +1099,10 @@ class Enemy {
         }
 
         const flipX = this.vx < 0;
-        const spriteW = 72;
-        const spriteH = 72;
+        const spriteW = 94;
+        const spriteH = 94;
         const sx = this.x + this.width / 2 - spriteW / 2;
-        const sy = this.y + this.height - spriteH + 10;
+        const sy = this.y + this.height - spriteH + 12;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#ddd' : '#7a6a5a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -1372,10 +1372,10 @@ class Boss {
         }
 
         const flipX = this.vx < 0;
-        const spriteW = this.width + 40;
-        const spriteH = this.height + 40;
+        const spriteW = Math.round((this.width + 40) * 1.3);
+        const spriteH = Math.round((this.height + 40) * 1.3);
         const sx = this.x + this.width / 2 - spriteW / 2;
-        const sy = this.y + this.height - spriteH + 12;
+        const sy = this.y + this.height - spriteH + 16;
         if (!drawSprite(ctx, spriteName, this._animFrame, sx, sy, spriteW, spriteH, flipX)) {
             ctx.fillStyle = flash ? '#cc9999' : '#5a4a4a';
             ctx.fillRect(this.x, this.y, this.width, this.height);
