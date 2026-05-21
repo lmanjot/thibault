@@ -12,11 +12,11 @@ import {
 import { getGeneratedImagesDir } from "./db";
 
 const storySchema = z.object({
-  title: z.string().describe("A short, catchy title for the story"),
+  title: z.string().describe("Un titre court et accrocheur pour l'histoire"),
   paragraphs: z
     .array(z.string())
     .describe(
-      "Story split into short paragraphs, one scene per paragraph. Each paragraph is 2-4 sentences."
+      "Histoire découpée en courts paragraphes, une scène par paragraphe. Chaque paragraphe fait 2 à 4 phrases."
     ),
 });
 
@@ -24,7 +24,7 @@ function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENAI_API_KEY is not set. Add it to kids-stories/.env.local to generate stories and images."
+      "OPENAI_API_KEY n'est pas définie. Ajoutez-la dans kids-stories/.env.local pour générer les histoires et les images."
     );
   }
   return createOpenAI({ apiKey });
@@ -45,18 +45,19 @@ export async function generateStoryText({
   const { object } = await generateObject({
     model: openai("gpt-4o-mini"),
     schema: storySchema,
-    prompt: `You are a warm, imaginative children's author.
+    prompt: `Tu es un auteur d'histoires pour enfants, chaleureux et imaginatif.
 
-Write an original story for a ${childAge}-year-old child based on this idea:
-"${prompt}"
+Écris une histoire originale en français pour un enfant de ${childAge} ans, à partir de cette idée :
+« ${prompt} »
 
-Requirements:
-- Exactly ${paragraphCount} paragraphs (one scene per paragraph)
-- Vocabulary and themes appropriate for age ${childAge}
-- Each paragraph: 2-4 short sentences, easy to read aloud
-- Positive tone, gentle conflict if any, satisfying ending
-- No scary violence; keep it cozy and age-appropriate
-- Do not include paragraph numbers or labels in the text`,
+Exigences :
+- Exactement ${paragraphCount} paragraphes (une scène par paragraphe)
+- Vocabulaire et thèmes adaptés à ${childAge} ans
+- Chaque paragraphe : 2 à 4 phrases courtes, faciles à lire à voix haute
+- Ton positif, conflit léger éventuel, fin satisfaisante
+- Pas de violence effrayante ; ambiance douce et adaptée à l'âge
+- Tout le texte (titre et paragraphes) doit être en français
+- N'inclus pas de numéros de paragraphe ni d'étiquettes dans le texte`,
   });
 
   return object;
@@ -78,10 +79,10 @@ export async function generateParagraphImage({
   const openai = getOpenAI();
   const styleDescription = DRAWING_STYLES[drawingStyle];
 
-  const imagePrompt = `Children's book illustration for the story "${storyTitle}".
-Scene: ${paragraphText}
-Art style: ${styleDescription}.
-No text, letters, or words in the image. Safe for young children. Single clear scene.`;
+  const imagePrompt = `Illustration de livre pour enfants pour l'histoire « ${storyTitle} ».
+Scène : ${paragraphText}
+Style artistique : ${styleDescription}.
+Aucun texte, lettre ni mot dans l'image. Contenu adapté aux jeunes enfants. Une seule scène claire.`;
 
   const { image } = await generateImage({
     model: openai.image("dall-e-3"),

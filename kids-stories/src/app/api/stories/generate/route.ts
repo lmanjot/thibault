@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     body = bodySchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: "Requête invalide" }, { status: 400 });
   }
 
   const storyId = uuidv4();
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   try {
     insertStory({
       id: storyId,
-      title: "Creating your story…",
+      title: "Création de votre histoire…",
       prompt: body.prompt,
       child_age: body.childAge,
       length: body.length,
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ storyId });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Story generation failed";
+      error instanceof Error ? error.message : "Échec de la génération de l'histoire";
     updateStoryStatus(storyId, "error", message);
     return NextResponse.json({ error: message, storyId }, { status: 500 });
   }

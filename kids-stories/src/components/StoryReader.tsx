@@ -16,7 +16,7 @@ export function StoryReader({
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!confirm("Delete this story? This cannot be undone.")) return;
+    if (!confirm("Supprimer cette histoire ? Cette action est irréversible.")) return;
     setDeleting(true);
     await fetch(`/api/stories/${story.id}`, { method: "DELETE" });
     router.push("/stories");
@@ -27,7 +27,7 @@ export function StoryReader({
     return (
       <div className="rounded-2xl bg-rose-50 p-8 text-center">
         <h2 className="font-display text-xl font-semibold text-rose-900">
-          Something went wrong
+          Un problème est survenu
         </h2>
         <p className="mt-2 text-rose-800">{story.error_message}</p>
         <button
@@ -36,7 +36,7 @@ export function StoryReader({
           disabled={deleting}
           className="mt-6 text-sm text-rose-700 underline"
         >
-          Remove story
+          Supprimer l&apos;histoire
         </button>
       </div>
     );
@@ -49,8 +49,8 @@ export function StoryReader({
           {story.title}
         </h1>
         <p className="mt-2 text-sm text-amber-800/60">
-          For ages {story.child_age}+ · Created{" "}
-          {new Date(story.created_at).toLocaleDateString()}
+          Pour {story.child_age} ans et plus · Créée le{" "}
+          {new Date(story.created_at).toLocaleDateString("fr-FR")}
         </p>
       </header>
 
@@ -66,7 +66,7 @@ export function StoryReader({
               {p.image_path ? (
                 <Image
                   src={p.image_path}
-                  alt={`Illustration for scene ${index + 1}`}
+                  alt={`Illustration de la scène ${index + 1}`}
                   fill
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 50vw"
@@ -74,7 +74,7 @@ export function StoryReader({
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-amber-600/60">
-                  Painting scene…
+                  Illustration en cours…
                 </div>
               )}
             </div>
@@ -92,7 +92,7 @@ export function StoryReader({
           disabled={deleting}
           className="text-sm text-amber-800/50 transition hover:text-rose-600"
         >
-          {deleting ? "Deleting…" : "Delete story"}
+          {deleting ? "Suppression…" : "Supprimer l'histoire"}
         </button>
       </div>
     </article>

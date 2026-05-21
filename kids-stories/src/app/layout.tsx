@@ -15,9 +15,9 @@ const body = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "Storytime — Illustrated tales for kids",
+  title: "Contes — Histoires illustrées pour enfants",
   description:
-    "Create personalized illustrated stories for your children from a simple idea.",
+    "Créez des histoires illustrées personnalisées pour vos enfants à partir d'une simple idée.",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <body className={`${display.variable} ${body.variable} antialiased`}>
         <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50/30 to-rose-50/40">
           <header className="border-b border-amber-200/60 bg-white/70 backdrop-blur-sm">
@@ -35,20 +35,20 @@ export default function RootLayout({
                 href="/"
                 className="font-display text-xl font-bold text-amber-600 hover:text-amber-700"
               >
-                ✨ Storytime
+                ✨ Contes
               </Link>
               <div className="flex gap-4 text-sm font-medium">
                 <Link
                   href="/create"
                   className="text-amber-900/80 hover:text-amber-700"
                 >
-                  New story
+                  Nouvelle histoire
                 </Link>
                 <Link
                   href="/stories"
                   className="text-amber-900/80 hover:text-amber-700"
                 >
-                  My stories
+                  Mes histoires
                 </Link>
               </div>
             </nav>

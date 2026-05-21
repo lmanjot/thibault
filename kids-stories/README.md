@@ -1,45 +1,46 @@
-# Storytime — Illustrated kids' stories
+# Contes — Histoires illustrées pour enfants
 
-Create personalized illustrated stories for your children. Describe an idea, set the child's age, story length, and drawing style — the app writes a tale split into short paragraphs, each with a matching AI-generated illustration. Stories are saved locally so you can revisit them anytime.
+Créez des histoires illustrées personnalisées pour vos enfants. Décrivez une idée, indiquez l'âge de l'enfant, la longueur du récit et le style de dessin — l'application rédige un conte en français, découpé en courts paragraphes, chacun accompagné d'une illustration générée par IA. Les histoires sont enregistrées localement pour les relire à tout moment.
 
-## Features
+## Fonctionnalités
 
-- **Story ideas** — Start from any prompt (e.g. "a shy robot who wants to dance")
-- **Parameters** — Child age (3–12), length (short / medium / long), drawing style (watercolor, cartoon, storybook, pixel, clay, pencil)
-- **Scene-by-scene** — Each paragraph gets its own illustration
-- **Library** — Browse, read, and delete saved stories
+- **Idée d'histoire** — Partez de n'importe quelle idée (ex. « un dragon qui a le vertige »)
+- **Paramètres** — Âge (3–12 ans), longueur (courte / moyenne / longue), style de dessin (aquarelle, cartoon, conte illustré, pixel art, pâte à modeler, crayons)
+- **Scène par scène** — Chaque paragraphe a sa propre illustration
+- **Bibliothèque** — Parcourir, lire et supprimer les histoires enregistrées
 
-## Setup
+## Installation
 
-1. Install dependencies:
+1. Installer les dépendances :
 
 ```bash
 cd kids-stories
 npm install
 ```
 
-2. Copy the environment file and add your OpenAI API key (used for story text and DALL·E 3 images):
+2. Copier le fichier d'environnement et ajouter votre clé API OpenAI (texte et images DALL·E 3) :
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. Run the dev server:
+3. Lancer le serveur de développement :
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-## Tech
+## Technique
 
 - [Next.js](https://nextjs.org/) App Router
-- [Vercel AI SDK](https://sdk.vercel.ai/) + OpenAI (GPT-4o mini for text, DALL·E 3 for images)
-- SQLite (`better-sqlite3`) for story storage
-- Images saved under `public/generated/`
+- [Vercel AI SDK](https://sdk.vercel.ai/) + OpenAI (GPT-4o mini pour le texte, DALL·E 3 pour les images)
+- SQLite (`better-sqlite3`) pour le stockage
+- Images enregistrées dans `public/generated/`
 
 ## Notes
 
-- Generation takes 1–3 minutes depending on story length (one image per paragraph).
-- Data is stored in `data/stories.db` on your machine — back up the `data/` and `public/generated/` folders if you care about keeping stories.
+- La génération prend 1 à 3 minutes selon la longueur (une image par paragraphe).
+- Les histoires sont générées **en français**.
+- Les données sont dans `data/stories.db` sur votre machine — sauvegardez les dossiers `data/` et `public/generated/` si vous souhaitez les conserver.

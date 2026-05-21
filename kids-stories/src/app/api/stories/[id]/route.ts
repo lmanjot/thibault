@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const story = getStory(id);
   if (!story) {
-    return NextResponse.json({ error: "Story not found" }, { status: 404 });
+    return NextResponse.json({ error: "Histoire introuvable" }, { status: 404 });
   }
   const paragraphs = getParagraphs(id);
   return NextResponse.json({ story, paragraphs });
@@ -21,7 +21,7 @@ export async function DELETE(
   const { id } = await params;
   const story = getStory(id);
   if (!story) {
-    return NextResponse.json({ error: "Story not found" }, { status: 404 });
+    return NextResponse.json({ error: "Histoire introuvable" }, { status: 404 });
   }
   deleteStory(id);
   return NextResponse.json({ ok: true });

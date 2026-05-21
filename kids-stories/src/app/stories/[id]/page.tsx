@@ -22,7 +22,7 @@ export default async function StoryPage({
         href="/stories"
         className="mb-8 inline-block text-sm font-medium text-amber-700 hover:text-amber-800"
       >
-        ← Back to stories
+        ← Retour aux histoires
       </Link>
       <StoryReader story={story} paragraphs={paragraphs} />
     </div>

@@ -3,7 +3,7 @@ import type { StoryRow } from "@/lib/db";
 import { STORY_LENGTHS } from "@/lib/constants";
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString("fr-FR", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -13,10 +13,10 @@ function formatDate(iso: string) {
 export function StoryCard({ story }: { story: StoryRow }) {
   const statusLabel =
     story.status === "ready"
-      ? "Ready"
+      ? "Prête"
       : story.status === "generating"
-        ? "Creating…"
-        : "Error";
+        ? "En cours…"
+        : "Erreur";
 
   return (
     <Link
@@ -41,7 +41,8 @@ export function StoryCard({ story }: { story: StoryRow }) {
       </div>
       <p className="mt-2 line-clamp-2 text-sm text-amber-900/70">{story.prompt}</p>
       <p className="mt-3 text-xs text-amber-800/60">
-        Age {story.child_age} · {STORY_LENGTHS[story.length as keyof typeof STORY_LENGTHS]?.label ?? story.length} ·{" "}
+        {story.child_age} ans ·{" "}
+        {STORY_LENGTHS[story.length as keyof typeof STORY_LENGTHS]?.label ?? story.length} ·{" "}
         {formatDate(story.created_at)}
       </p>
     </Link>

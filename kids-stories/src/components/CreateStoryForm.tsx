@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   AGE_OPTIONS,
-  DRAWING_STYLES,
+  DRAWING_STYLE_LABELS,
   STORY_LENGTHS,
   type DrawingStyle,
   type StoryLength,
@@ -32,11 +32,11 @@ export function CreateStoryForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? "Failed to create story");
+        throw new Error(data.error ?? "Impossible de créer l'histoire");
       }
       router.push(`/stories/${data.storyId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "Une erreur est survenue");
       setLoading(false);
     }
   }
@@ -48,7 +48,7 @@ export function CreateStoryForm() {
           htmlFor="prompt"
           className="mb-2 block font-display text-sm font-semibold text-amber-950"
         >
-          Story idea
+          Idée d&apos;histoire
         </label>
         <textarea
           id="prompt"
@@ -56,7 +56,7 @@ export function CreateStoryForm() {
           rows={4}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="A brave little fox who learns to share her favorite berries with forest friends…"
+          placeholder="Un petit renard courageux qui apprend à partager ses baies préférées avec ses amis de la forêt…"
           className="w-full resize-none rounded-xl border border-amber-200 bg-white px-4 py-3 text-amber-950 placeholder:text-amber-400/80 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-200"
           disabled={loading}
         />
@@ -68,7 +68,7 @@ export function CreateStoryForm() {
             htmlFor="age"
             className="mb-2 block font-display text-sm font-semibold text-amber-950"
           >
-            Child&apos;s age
+            Âge de l&apos;enfant
           </label>
           <select
             id="age"
@@ -79,7 +79,7 @@ export function CreateStoryForm() {
           >
             {AGE_OPTIONS.map((age) => (
               <option key={age} value={age}>
-                {age} years old
+                {age} ans
               </option>
             ))}
           </select>
@@ -87,7 +87,7 @@ export function CreateStoryForm() {
 
         <div>
           <span className="mb-2 block font-display text-sm font-semibold text-amber-950">
-            Story length
+            Longueur de l&apos;histoire
           </span>
           <div className="flex flex-col gap-2">
             {(Object.keys(STORY_LENGTHS) as StoryLength[]).map((key) => (
@@ -122,7 +122,7 @@ export function CreateStoryForm() {
             htmlFor="style"
             className="mb-2 block font-display text-sm font-semibold text-amber-950"
           >
-            Drawing style
+            Style de dessin
           </label>
           <select
             id="style"
@@ -131,9 +131,9 @@ export function CreateStoryForm() {
             className="w-full rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-amber-950 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-200"
             disabled={loading}
           >
-            {(Object.keys(DRAWING_STYLES) as DrawingStyle[]).map((key) => (
+            {(Object.keys(DRAWING_STYLE_LABELS) as DrawingStyle[]).map((key) => (
               <option key={key} value={key}>
-                {key.charAt(0).toUpperCase() + key.slice(1)}
+                {DRAWING_STYLE_LABELS[key]}
               </option>
             ))}
           </select>
@@ -149,12 +149,12 @@ export function CreateStoryForm() {
         disabled={loading || !prompt.trim()}
         className="w-full rounded-2xl bg-amber-500 px-6 py-4 font-display text-lg font-semibold text-white shadow-md transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
       >
-        {loading ? "Creating your story…" : "Create story"}
+        {loading ? "Création en cours…" : "Créer l'histoire"}
       </button>
 
       {loading && (
         <p className="text-sm text-amber-800/70">
-          This takes a minute or two — we&apos;re writing your tale and painting each scene.
+          Cela prend une ou deux minutes — nous écrivons votre conte et illustrons chaque scène.
         </p>
       )}
     </form>
