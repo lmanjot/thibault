@@ -1,12 +1,26 @@
-# thibault
+# Contes — Histoires illustrées pour enfants
 
-## Application Contes
+Application Next.js (français) pour créer des histoires illustrées avec l'IA.
 
-Voir **[kids-stories/README.md](kids-stories/README.md)** pour **Contes** — histoires illustrées pour enfants (français).
+**Déploiement Vercel** : le projet est à la racine du repo (`package.json` avec Next.js). L'URL de production est celle du projet Vercel (ex. `https://thibault.vercel.app`).
 
-**Sur Vercel** : l'app est dans `kids-stories/` (voir `vercel.json` à la racine). L'URL est celle du projet Vercel (ex. `https://thibault.vercel.app`), pas la page des jeux HTML à la racine du repo.
+Les anciens jeux HTML sont dans le dossier [`games/`](games/).
+
+## Démarrage local
 
 ```bash
-cd kids-stories && cp .env.example .env.local  # OPENAI_API_KEY
-npm install && npm run dev
+cp .env.example .env.local   # OPENAI_API_KEY
+npm install
+npm run dev
 ```
+
+→ http://localhost:3000
+
+## Variables Vercel
+
+| Variable | Obligatoire |
+|----------|-------------|
+| `OPENAI_API_KEY` | Oui |
+| `BLOB_READ_WRITE_TOKEN` | Oui en production (Storage → Blob dans Vercel) |
+
+Voir aussi les détails dans le code source (`src/lib/storage/`).

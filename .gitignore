@@ -1,4 +1,31 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
 
+# next.js
+/.next/
+/out/
 
-# HubSpot config file
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# env
+.env*
+!.env.example
+
+# app data
+/data/
+/public/generated/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# HubSpot
 hubspot.config.yml

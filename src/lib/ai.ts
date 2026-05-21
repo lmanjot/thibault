@@ -22,7 +22,7 @@ function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENAI_API_KEY n'est pas définie. Ajoutez-la dans les variables d'environnement Vercel (ou kids-stories/.env.local en local)."
+      "OPENAI_API_KEY n'est pas définie. Ajoutez-la dans les variables d'environnement Vercel (ou .env.local en local)."
     );
   }
   return createOpenAI({ apiKey });
