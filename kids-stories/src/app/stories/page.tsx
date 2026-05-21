@@ -4,8 +4,8 @@ import { StoryCard } from "@/components/StoryCard";
 
 export const dynamic = "force-dynamic";
 
-export default function StoriesPage() {
-  const stories = listStories();
+export default async function StoriesPage() {
+  const stories = await listStories();
 
   return (
     <div>

@@ -6,11 +6,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const story = getStory(id);
+  const story = await getStory(id);
   if (!story) {
     return NextResponse.json({ error: "Histoire introuvable" }, { status: 404 });
   }
-  const paragraphs = getParagraphs(id);
+  const paragraphs = await getParagraphs(id);
   return NextResponse.json({ story, paragraphs });
 }
 
@@ -19,10 +19,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const story = getStory(id);
+  const story = await getStory(id);
   if (!story) {
     return NextResponse.json({ error: "Histoire introuvable" }, { status: 404 });
   }
-  deleteStory(id);
+  await deleteStory(id);
   return NextResponse.json({ ok: true });
 }

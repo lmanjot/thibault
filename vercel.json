@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd kids-stories && npm install",
+  "buildCommand": "cd kids-stories && npm run build",
+  "framework": "nextjs"
+}

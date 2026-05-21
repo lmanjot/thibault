@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { StoryIllustrator } from "@/components/StoryIllustrator";
 import { StoryReader } from "@/components/StoryReader";
 import { getParagraphs, getStory } from "@/lib/db";
 
@@ -11,10 +12,10 @@ export default async function StoryPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const story = getStory(id);
+  const story = await getStory(id);
   if (!story) notFound();
 
-  const paragraphs = getParagraphs(id);
+  const paragraphs = await getParagraphs(id);
 
   return (
     <div>
@@ -24,6 +25,7 @@ export default async function StoryPage({
       >
         ← Retour aux histoires
       </Link>
+      <StoryIllustrator story={story} paragraphs={paragraphs} />
       <StoryReader story={story} paragraphs={paragraphs} />
     </div>
   );

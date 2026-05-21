@@ -1,0 +1,9 @@
+{
+  "name": "thibault",
+  "private": true,
+  "scripts": {
+    "vercel-build": "cd kids-stories && npm install && npm run build",
+    "build": "cd kids-stories && npm run build",
+    "dev": "cd kids-stories && npm run dev"
+  }
+}

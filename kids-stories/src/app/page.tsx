@@ -4,8 +4,8 @@ import { StoryCard } from "@/components/StoryCard";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const recent = listStories().slice(0, 3);
+export default async function HomePage() {
+  const recent = (await listStories()).slice(0, 3);
 
   return (
     <div className="space-y-12">

@@ -154,7 +154,7 @@ export function CreateStoryForm() {
 
       {loading && (
         <p className="text-sm text-amber-800/70">
-          Cela prend une ou deux minutes — nous écrivons votre conte et illustrons chaque scène.
+          Rédaction du texte en cours… les illustrations suivront sur la page de l&apos;histoire.
         </p>
       )}
     </form>

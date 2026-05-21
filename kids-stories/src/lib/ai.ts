@@ -1,15 +1,13 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject, experimental_generateImage as generateImage } from "ai";
 import { z } from "zod";
-import fs from "fs";
-import path from "path";
 import {
   DRAWING_STYLES,
   STORY_LENGTHS,
   type DrawingStyle,
   type StoryLength,
 } from "./constants";
-import { getGeneratedImagesDir } from "./db";
+import { saveParagraphImage } from "./db";
 
 const storySchema = z.object({
   title: z.string().describe("Un titre court et accrocheur pour l'histoire"),
@@ -24,7 +22,7 @@ function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENAI_API_KEY n'est pas définie. Ajoutez-la dans kids-stories/.env.local pour générer les histoires et les images."
+      "OPENAI_API_KEY n'est pas définie. Ajoutez-la dans les variables d'environnement Vercel (ou kids-stories/.env.local en local)."
     );
   }
   return createOpenAI({ apiKey });
@@ -90,11 +88,6 @@ Aucun texte, lettre ni mot dans l'image. Contenu adapté aux jeunes enfants. Une
     size: "1024x1024",
   });
 
-  const dir = getGeneratedImagesDir(storyId);
-  const filename = `${position}.png`;
-  const filePath = path.join(dir, filename);
   const buffer = Buffer.from(image.base64, "base64");
-  fs.writeFileSync(filePath, buffer);
-
-  return `/generated/${storyId}/${filename}`;
+  return saveParagraphImage(storyId, position, buffer);
 }
