@@ -39,6 +39,12 @@ export default function RootLayout({
               </Link>
               <div className="flex gap-4 text-sm font-medium">
                 <Link
+                  href="/jeux"
+                  className="text-amber-900/80 hover:text-amber-700"
+                >
+                  Jeux DB
+                </Link>
+                <Link
                   href="/create"
                   className="text-amber-900/80 hover:text-amber-700"
                 >
