@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Jeux Dragon Ball</title>
+  <title>Les jeux de Thibault</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700&display=swap" rel="stylesheet" />
@@ -11,9 +11,6 @@
     :root {
       --ink: #3b2410;
       --muted: #7a5a38;
-      --orange: #f0821a;
-      --orange-deep: #e45a10;
-      --blue: #2f7fd4;
       --gold: #ffd24a;
       --card: rgba(255, 252, 245, 0.92);
     }
@@ -50,13 +47,10 @@
     .intro {
       color: var(--muted);
       font-size: 1.05rem;
-      margin-bottom: 28px;
+      margin-bottom: 22px;
       max-width: 26rem;
     }
-    .hero {
-      text-align: center;
-      margin-bottom: 8px;
-    }
+    .hero { text-align: center; margin-bottom: 8px; }
     .spark {
       font-size: 2.4rem;
       filter: drop-shadow(0 4px 0 rgba(0,0,0,0.06));
@@ -65,6 +59,12 @@
     @keyframes bob {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-6px); }
+    }
+    .section-title {
+      font-family: Fredoka, sans-serif;
+      font-size: 1.05rem;
+      color: var(--muted);
+      margin: 22px 0 12px 4px;
     }
     .grid { display: grid; gap: 16px; }
     a.card {
@@ -92,6 +92,10 @@
     }
     a.card.fire { --stripe-a: #ff9a2e; --stripe-b: #e44512; }
     a.card.horde { --stripe-a: #4aa7ff; --stripe-b: #2660d4; }
+    a.card.knight { --stripe-a: #9b6dff; --stripe-b: #4c2db8; }
+    a.card.mine { --stripe-a: #e0a020; --stripe-b: #a66a00; }
+    a.card.slug { --stripe-a: #3dcb8a; --stripe-b: #1a8a5c; }
+    a.card.snake { --stripe-a: #8fd94a; --stripe-b: #3d8a18; }
     .icon {
       width: 64px; height: 64px;
       border-radius: 18px;
@@ -103,6 +107,10 @@
     }
     .fire .icon { background: linear-gradient(145deg, #ff9a2e, #e44512); }
     .horde .icon { background: linear-gradient(145deg, #4aa7ff, #2660d4); }
+    .knight .icon { background: linear-gradient(145deg, #9b6dff, #4c2db8); }
+    .mine .icon { background: linear-gradient(145deg, #e0a020, #a66a00); }
+    .slug .icon { background: linear-gradient(145deg, #3dcb8a, #1a8a5c); }
+    .snake .icon { background: linear-gradient(145deg, #8fd94a, #3d8a18); }
     .body { min-width: 0; padding-top: 2px; }
     .title-row {
       display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -120,6 +128,10 @@
     }
     .fire .chip { background: #ffe0c2; color: #a94410; }
     .horde .chip { background: #d6ebff; color: #1d4f9c; }
+    .knight .chip { background: #ebe0ff; color: #5a2fb8; }
+    .mine .chip { background: #ffe8b8; color: #8a5a00; }
+    .slug .chip { background: #d4f5e6; color: #1a6a48; }
+    .snake .chip { background: #e4f7c8; color: #3d6a10; }
     .body p {
       color: var(--muted);
       font-size: 0.95rem;
@@ -132,6 +144,10 @@
       color: #a85a12;
     }
     .horde .cta { color: #1f5fb8; }
+    .knight .cta { color: #5a2fb8; }
+    .mine .cta { color: #8a5a00; }
+    .slug .cta { color: #1a6a48; }
+    .snake .cta { color: #3d6a10; }
     .tip {
       text-align: center;
       margin-top: 26px;
@@ -154,12 +170,13 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div class="aura"><span class="spark">🐉</span></div>
+      <div class="aura"><span class="spark">🎮</span></div>
       <span class="badge">Tournoi des jeux</span>
-      <h1>Jeux Dragon Ball</h1>
-      <p class="intro">Salut guerrier ! Choisis ton défi et entraîne-toi comme un vrai Saiyan.</p>
+      <h1>Les jeux de Thibault</h1>
+      <p class="intro">Salut guerrier ! Choisis ton défi — Dragon Ball ou aventure fantasy.</p>
     </div>
 
+    <h3 class="section-title">🐉 Dragon Ball</h3>
     <div class="grid">
       <a class="card fire" href="/fireball.html">
         <div class="icon">🔥</div>
@@ -186,7 +203,58 @@
       </a>
     </div>
 
-    <p class="tip">← → ou glisse pour bouger · Entrée pour commencer</p>
+    <h3 class="section-title">🎮 Autres jeux</h3>
+    <div class="grid">
+      <a class="card knight" href="/games/index.html">
+        <div class="icon">⚔️</div>
+        <div class="body">
+          <div class="title-row">
+            <h2>Chevalier des Pierres</h2>
+            <span class="chip">Aventure</span>
+          </div>
+          <p>Le grand jeu plateforme : combats, magie et pierres de dragon à collecter.</p>
+          <div class="cta">Jouer →</div>
+        </div>
+      </a>
+
+      <a class="card mine" href="/games/mine.html">
+        <div class="icon">⛏️</div>
+        <div class="body">
+          <div class="title-row">
+            <h2>Mine du Nain-Elfe</h2>
+            <span class="chip">Craft</span>
+          </div>
+          <p>Creuse, craft et explore les profondeurs de la mine enchantée.</p>
+          <div class="cta">Jouer →</div>
+        </div>
+      </a>
+
+      <a class="card slug" href="/games/metal-slug.html">
+        <div class="icon">💥</div>
+        <div class="body">
+          <div class="title-row">
+            <h2>Course armée</h2>
+            <span class="chip">Shoot</span>
+          </div>
+          <p>Course d’obstacles façon run &amp; gun — avance, tire, survive !</p>
+          <div class="cta">Jouer →</div>
+        </div>
+      </a>
+
+      <a class="card snake" href="/games/snake.html">
+        <div class="icon">🐍</div>
+        <div class="body">
+          <div class="title-row">
+            <h2>Snake</h2>
+            <span class="chip">Rétro</span>
+          </div>
+          <p>Le classique Nokia 3310. Mange, grandis, ne te mords pas la queue.</p>
+          <div class="cta">Jouer →</div>
+        </div>
+      </a>
+    </div>
+
+    <p class="tip">Clavier ou tactile selon le jeu · Entrée pour commencer</p>
   </div>
 </body>
 </html>

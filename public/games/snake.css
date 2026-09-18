@@ -1,0 +1,69 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #4a5c2a;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+}
+
+#game-container {
+    position: relative;
+    background: #3b4a1f;
+    padding: 24px;
+    border-radius: 18px;
+    border: 4px solid #2a3615;
+    box-shadow: 
+        inset 0 0 30px rgba(0,0,0,0.3),
+        0 8px 32px rgba(0,0,0,0.5);
+}
+
+#game-container::before {
+    content: 'SNAKE';
+    display: block;
+    text-align: center;
+    color: #1a2008;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 6px;
+    margin-bottom: 8px;
+}
+
+#gameCanvas {
+    display: block;
+    border: 3px solid #2a3615;
+    background: #9bbc0f;
+    image-rendering: pixelated;
+}
+
+#score-display {
+    text-align: center;
+    color: #1a2008;
+    font-size: 13px;
+    font-weight: bold;
+    margin-top: 8px;
+    letter-spacing: 2px;
+}
+
+p {
+    text-align: center;
+    margin-top: 12px;
+}
+
+p a {
+    color: #1a2008;
+    font-size: 12px;
+    text-decoration: none;
+    letter-spacing: 1px;
+}
+
+p a:hover {
+    text-decoration: underline;
+}

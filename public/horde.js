@@ -1,9 +1,13 @@
 // ============================================
-// LAST SAIYAN — Last Z style, sprites DB, difficulté allégée
+// LAST SAIYAN — Last Z style, sprites DB
 // ============================================
 
-const CW = 420;
-const CH = 740;
+let CW = 420;
+let CH = 740;
+let PLAYER_Y = CH - 110;
+let ROAD_LEFT = 50;
+let ROAD_RIGHT = CW - 50;
+let ROAD_W = ROAD_RIGHT - ROAD_LEFT;
 
 const STATE_TITLE = 'TITLE';
 const STATE_PLAYING = 'PLAYING';
@@ -12,15 +16,26 @@ const STATE_VICTORY = 'VICTORY';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = CW;
-canvas.height = CH;
 
-const PLAYER_Y = CH - 95; // bas de l'écran (au-dessus de la barre skills)
-const ROAD_LEFT = 50;
-const ROAD_RIGHT = CW - 50;
-const ROAD_W = ROAD_RIGHT - ROAD_LEFT;
+function resizeCanvas() {
+    const prevW = CW || 420;
+    CW = Math.max(320, Math.floor(window.innerWidth));
+    CH = Math.max(480, Math.floor(window.innerHeight));
+    canvas.width = CW;
+    canvas.height = CH;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    PLAYER_Y = CH - 110;
+    ROAD_LEFT = Math.max(36, Math.floor(CW * 0.1));
+    ROAD_RIGHT = CW - ROAD_LEFT;
+    ROAD_W = ROAD_RIGHT - ROAD_LEFT;
+    if (typeof squad !== 'undefined') {
+        if (prevW > 0) squad.x = (squad.x / prevW) * CW;
+        squad.x = Math.max(ROAD_LEFT + 30, Math.min(ROAD_RIGHT - 30, squad.x || CW / 2));
+    }
+}
 
-// Escouade = persos Dragon Ball distincts (pas des clones de Goku)
+// Escouade = persos Dragon Ball distincts
 const ROSTER = ['goku', 'vegeta', 'piccolo', 'gohan', 'trunks', 'krillin', 'goku_ssj'];
 
 const imgs = {};
@@ -58,13 +73,18 @@ let message = '';
 let messageT = 0;
 
 const squad = {
-    x: CW / 2,
+    x: 210,
     count: 2,
     fireRate: 4.5,
     damage: 1.2,
     fireCD: 0,
     weapon: 'ki'
 };
+
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+window.addEventListener('load', resizeCanvas);
 
 let bullets = [];
 let barriers = [];
@@ -182,10 +202,25 @@ function useSkill(id) {
     if (id === 'airstrike') {
         showMsg('FRAPPE AÉRIENNE !');
         screenFlash = 0.35;
-        for (const b of barriers) { b.hp -= 60; burst(b.x, b.y, '#ff4400', 10, 5); }
-        for (const e of enemies) { e.hp -= 30; burst(e.x, e.y, '#ff6600', 8, 4); }
-        for (const bo of bonuses) { bo.hp -= 40; }
-        if (boss) { boss.hp -= 100; burst(boss.x, boss.y, '#ff0044', 25, 8); }
+        const dps = squadDPS();
+        const barDmg = dps * 2.2;
+        const foeDmg = dps * 1.4;
+        const bossDmg = dps * 4;
+        for (const b of barriers) { b.hp -= barDmg; burst(b.x, b.y, '#ff4400', 10, 5); }
+        for (const e of enemies) { e.hp -= foeDmg; burst(e.x, e.y, '#ff6600', 8, 4); }
+        for (const bo of bonuses) { bo.hp -= dps * 1.8; }
+        if (boss) { boss.hp -= bossDmg; burst(boss.x, boss.y, '#ff0044', 25, 8); }
+        // cleanup dead
+        barriers = barriers.filter((b) => {
+            if (b.hp > 0) return true;
+            burst(b.x, b.y, '#ff8844', 10, 4);
+            return false;
+        });
+        enemies = enemies.filter((e) => {
+            if (e.hp > 0) return true;
+            burst(e.x, e.y, '#88ff44', 8, 3);
+            return false;
+        });
         for (let i = 0; i < 10; i++) {
             particles.push({
                 x: ROAD_LEFT + Math.random() * ROAD_W, y: -10,
@@ -215,13 +250,15 @@ function burst(x, y, color, n, spd) {
 
 function activateBonus(bo) {
     if (bo.kind === 'add') {
-        squad.count = Math.min(36, squad.count + bo.value);
+        squad.count = Math.min(28, squad.count + bo.value);
         showMsg(`+${bo.value} Guerriers !`);
     } else if (bo.kind === 'mult') {
-        squad.count = Math.min(36, Math.max(1, Math.floor(squad.count * bo.value)));
-        showMsg(`×${bo.value} Escouade !`);
+        // ×2 trop snowball → ×1.5 après 6 guerriers
+        const factor = squad.count >= 6 ? 1.5 : bo.value;
+        squad.count = Math.min(28, Math.max(1, Math.floor(squad.count * factor)));
+        showMsg(factor >= 2 ? `×${factor} Escouade !` : `×1.5 Escouade !`);
     } else if (bo.kind === 'rate') {
-        squad.fireRate = Math.min(14, squad.fireRate + bo.value);
+        squad.fireRate = Math.min(11, squad.fireRate + bo.value);
         showMsg('Cadence ↑');
     } else if (bo.kind === 'dmg') {
         squad.damage += bo.value;
@@ -241,21 +278,35 @@ function laneX(lane, lanes) {
     return ROAD_LEFT + pad + (usable / (lanes - 1)) * lane;
 }
 
-/** DPS effectif si le joueur concentre le tir sur UNE cible (~55% des projectiles). */
+const BASE_DPS = 2 * 4.5 * 1.2 * 0.7; // démarrage (count=2)
+
+/** DPS réel : plus l'escouade est large, plus les barrières prennent de tirs. */
 function squadDPS() {
     const visual = Math.min(squad.count, 12);
-    const extra = squad.count > 12 ? Math.min(8, Math.floor((squad.count - 12) / 2)) : 0;
+    const extra = squad.count > 12 ? Math.min(10, Math.floor((squad.count - 12) / 2)) : 0;
+    const shooters = visual + extra;
     const rate = squad.weapon === 'rapid' ? squad.fireRate * 1.7 : squad.fireRate;
     let dmg = squad.damage;
     if (squad.weapon === 'beam') dmg *= 1.7;
-    const focus = 0.55;
-    return Math.max(1, (visual + extra) * rate * dmg * focus);
+    // Focus monte avec la taille (barrières larges = beaucoup de hits)
+    const focus = Math.min(0.92, 0.62 + shooters * 0.02);
+    return Math.max(1, shooters * rate * dmg * focus);
+}
+
+/** Pression qui monte avec stage + puissance + distance. */
+function threatMult() {
+    const power = squadDPS() / BASE_DPS;
+    const stageM = 1 + (stage - 1) * 0.42;
+    // Extra HP dès que tu snowball (les bonus ne doivent pas rendre le jeu trivial)
+    const powerM = 1 + Math.max(0, power - 1) * 0.55;
+    const distM = 1 + distance / 6500;
+    return stageM * powerM * distM;
 }
 
 /** HP pour qu'une cible tienne `seconds` sous tir concentré. */
-function hpForSeconds(seconds, stageScale = true) {
-    const scale = stageScale ? (1 + (stage - 1) * 0.18) : 1;
-    return Math.max(3, Math.round(squadDPS() * seconds * scale));
+function hpForSeconds(seconds, applyThreat = true) {
+    const scale = applyThreat ? threatMult() : 1;
+    return Math.max(4, Math.round(squadDPS() * seconds * scale));
 }
 
 /** Temps avant contact selon la vitesse de scroll actuelle. */
@@ -264,37 +315,52 @@ function timeToContact(fromY) {
     return dist / Math.max(20, scrollSpeed);
 }
 
+/** Fraction du TTC à survivre — monte avec le stage. */
+function holdFrac(base) {
+    return base + (stage - 1) * 0.06 + Math.min(0.2, (squad.count - 2) * 0.012);
+}
+
 function spawnWave() {
     const pattern = Math.random();
     const y = -70;
-    const ttc = timeToContact(y); // ~12–14s en début de partie
+    const ttc = timeToContact(y);
+    const dens = 1 + Math.min(0.8, (stage - 1) * 0.12 + Math.max(0, squad.count - 4) * 0.03);
 
-    if (pattern < 0.38) {
-        const cols = 3;
+    if (pattern < 0.36) {
+        const cols = stage >= 3 && Math.random() < 0.45 ? 4 : 3;
         for (let c = 0; c < cols; c++) {
-            // Barrière : ~35% du temps avant contact
-            const hp = hpForSeconds(ttc * 0.32 + Math.random() * 0.4);
+            // Barrière : ~55–75% du temps avant contact
+            const hp = hpForSeconds(ttc * holdFrac(0.55) + Math.random() * 0.5);
             barriers.push({
-                x: laneX(c, cols), y, w: Math.min(72, ROAD_W / cols - 8),
+                x: laneX(c, cols), y: y - (c % 2) * 18,
+                w: Math.min(72, ROAD_W / cols - 8),
                 h: 46, hp, maxHp: hp, style: Math.random() < 0.5 ? 'rock' : 'capsule'
             });
         }
-    } else if (pattern < 0.72) {
+    } else if (pattern < 0.68) {
         const cols = 2;
         for (let c = 0; c < cols; c++) {
             const bx = laneX(c, cols);
-            const hp = hpForSeconds(ttc * 0.28 + 0.3);
+            const hp = hpForSeconds(ttc * holdFrac(0.5) + 0.4);
             barriers.push({ x: bx, y, w: 82, h: 50, hp, maxHp: hp, style: 'energy' });
             spawnBonusAbove(bx, y - 55);
         }
+        // Ligne de fond plus corsée en mid/late
+        if (stage >= 2 && Math.random() < 0.55) {
+            const hp = hpForSeconds(ttc * holdFrac(0.4));
+            barriers.push({
+                x: CW / 2, y: y - 70, w: Math.min(110, ROAD_W * 0.45),
+                h: 42, hp, maxHp: hp, style: 'rock'
+            });
+        }
     } else {
-        const n = 3 + Math.floor(Math.random() * (1 + Math.min(3, stage)));
+        const n = Math.floor((4 + Math.random() * (2 + stage)) * dens);
         for (let i = 0; i < n; i++) {
-            const elite = Math.random() < 0.2;
-            const hp = hpForSeconds(elite ? ttc * 0.25 : ttc * 0.14);
+            const elite = Math.random() < (0.18 + stage * 0.04);
+            const hp = hpForSeconds(elite ? ttc * holdFrac(0.4) : ttc * holdFrac(0.22));
             enemies.push({
                 x: ROAD_LEFT + 40 + Math.random() * (ROAD_W - 80),
-                y: y - Math.random() * 40,
+                y: y - Math.random() * 90,
                 r: elite ? 20 : 17,
                 hp, maxHp: hp,
                 kind: elite ? 'elite' : 'grunt'
@@ -302,38 +368,47 @@ function spawnWave() {
         }
     }
 
-    if (Math.random() < 0.75) {
+    // Bonus un peu moins fréquents quand tu es déjà fort
+    const bonusChance = Math.max(0.35, 0.72 - (squad.count - 2) * 0.025);
+    if (Math.random() < bonusChance) {
         spawnBonusAbove(laneX(Math.floor(Math.random() * 3), 3), y - 110);
     }
 }
 
 function spawnBonusAbove(x, y) {
     const roll = Math.random();
-    let kind, value, label, color, icon;
-    if (roll < 0.32) {
-        kind = 'add'; value = 1 + Math.floor(Math.random() * 2); label = `+${value}`; color = '#44ff88'; icon = 'saiyan';
-    } else if (roll < 0.45) {
-        kind = 'mult'; value = 2; label = '×2'; color = '#ffe566'; icon = 'star';
-    } else if (roll < 0.65) {
-        kind = 'rate'; value = 0.6; label = 'CAD'; color = '#4fc3f7'; icon = 'gun';
-    } else if (roll < 0.82) {
-        kind = 'dmg'; value = 0.4; label = 'KI'; color = '#ff8844'; icon = 'fist';
+    let kind, value, label, color, motif, stars;
+    if (roll < 0.28) {
+        kind = 'add'; value = 1 + Math.floor(Math.random() * 2); label = `+${value}`;
+        color = '#ff9a1a'; motif = 'dragonball'; stars = value;
+    } else if (roll < 0.38) {
+        // ×2 plus rare
+        kind = 'mult'; value = 2; label = '×2';
+        color = '#ffb020'; motif = 'dragonball'; stars = 4;
+    } else if (roll < 0.6) {
+        kind = 'rate'; value = 0.45; label = 'CAPSULE';
+        color = '#3d9eff'; motif = 'capsule';
+    } else if (roll < 0.8) {
+        kind = 'dmg'; value = 0.3; label = 'SENZU';
+        color = '#6dff6a'; motif = 'senzu';
     } else {
         kind = 'weapon'; value = Math.random() < 0.5 ? 'beam' : 'rapid';
-        label = value === 'beam' ? 'KAME' : 'RAPIDE'; color = '#88aaff'; icon = 'beam';
+        label = value === 'beam' ? 'KAME' : 'KI';
+        color = value === 'beam' ? '#5ec8ff' : '#ffcc33';
+        motif = value === 'beam' ? 'kame' : 'ki';
     }
-    // Bonus : ~1.6–2.2 s de tir concentré
-    const hp = hpForSeconds(1.6 + Math.random() * 0.6);
-    bonuses.push({ x, y, r: 30, hp, maxHp: hp, kind, value, label, color, icon });
+    // Bonus plus durs à casser quand l'escouade grossit
+    const hp = hpForSeconds(2.4 + Math.random() * 0.8 + stage * 0.25);
+    bonuses.push({ x, y, r: 34, hp, maxHp: hp, kind, value, label, color, motif, stars: stars || 1 });
 }
 
 function spawnBoss() {
     showMsg(`BOSS — Stage ${stage}`);
-    // Boss : ~14–18 s de DPS actuel
-    const hp = hpForSeconds(14 + stage * 1.5, false);
-    boss = { x: CW / 2, y: -80, r: 55, hp, maxHp: hp, vx: 40, t: 0 };
+    // Boss : long fight qui scale avec la menace
+    const hp = hpForSeconds(16 + stage * 3.5);
+    boss = { x: CW / 2, y: -80, r: 55, hp, maxHp: hp, vx: 40 + stage * 8, t: 0 };
     for (let c = 0; c < 3; c++) {
-        const h = hpForSeconds(2.2);
+        const h = hpForSeconds(3.2 + stage * 0.4);
         barriers.push({ x: laneX(c, 3), y: 30, w: 75, h: 44, hp: h, maxHp: h, style: 'energy' });
     }
 }
@@ -431,14 +506,15 @@ function update(dt) {
         if (boss.x < ROAD_LEFT + 50 || boss.x > ROAD_RIGHT - 50) boss.vx *= -1;
     }
 
-    // Espacement large entre vagues
-        if (distance >= nextWaveAt && !boss) {
+    // Vagues plus serrées plus tu es fort
+    if (distance >= nextWaveAt && !boss) {
         spawnWave();
-        nextWaveAt = distance + 340 + Math.random() * 80;
+        const gap = Math.max(200, 320 - stage * 18 - Math.min(60, squad.count * 3));
+        nextWaveAt = distance + gap + Math.random() * 50;
     }
     if (distance >= nextBossAt && !boss) {
         spawnBoss();
-        nextBossAt = distance + 2400 + stage * 200;
+        nextBossAt = distance + 2000 + stage * 150;
     }
 
     const rate = squad.weapon === 'rapid' ? squad.fireRate * 1.8 : squad.fireRate;
@@ -505,11 +581,12 @@ function update(dt) {
                 burst(boss.x, boss.y, '#ffe566', 50, 10);
                 boss = null;
                 stage++;
-                scrollSpeed = Math.min(85, 50 + stage * 6);
-                squad.count = Math.min(36, squad.count + 1);
-                squad.damage += 0.25;
+                scrollSpeed = Math.min(110, 48 + stage * 9 + Math.min(20, squad.count));
+                // Petite récompense stage, pas un free snowball
+                squad.count = Math.min(28, squad.count + 1);
+                squad.damage += 0.15;
                 showMsg(`Stage ${stage} !`);
-                if (stage > 5) {
+                if (stage > 7) {
                     if (score > highScore) {
                         highScore = score;
                         localStorage.setItem('saiyanHigh', String(highScore));
@@ -640,66 +717,207 @@ function drawBarrier(bar) {
     ctx.fillText(num, x, y + 4);
 }
 
-function drawBonus(bo) {
-    const pulse = 1 + Math.sin(animT * 6) * 0.06;
-    const glow = ctx.createRadialGradient(bo.x, bo.y, 4, bo.x, bo.y, bo.r * 1.5 * pulse);
-    glow.addColorStop(0, bo.color);
+function drawDragonBall(x, y, r, stars) {
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#ffe08a');
+    g.addColorStop(0.45, '#ff9a1a');
+    g.addColorStop(1, '#c45a00');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(120,40,0,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // specular
+    ctx.fillStyle = 'rgba(255,255,220,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(x - r * 0.28, y - r * 0.32, r * 0.28, r * 0.18, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // stars
+    const n = Math.max(1, Math.min(7, stars | 0));
+    ctx.fillStyle = '#c62828';
+    const layout = [
+        [[0, 0]],
+        [[-0.22, 0], [0.22, 0]],
+        [[0, -0.22], [-0.22, 0.18], [0.22, 0.18]],
+        [[-0.2, -0.18], [0.2, -0.18], [-0.2, 0.2], [0.2, 0.2]]
+    ];
+    const pts = layout[Math.min(n, 4) - 1];
+    for (const [ox, oy] of pts) {
+        drawStar(x + ox * r, y + oy * r, r * 0.16, 5);
+    }
+}
+
+function drawStar(cx, cy, rad, points) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / points;
+        const rr = i % 2 === 0 ? rad : rad * 0.42;
+        const px = cx + Math.cos(a) * rr;
+        const py = cy + Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawCapsule(x, y, r) {
+    const w = r * 1.15, h = r * 1.7;
+    // body
+    const grad = ctx.createLinearGradient(x - w / 2, y, x + w / 2, y);
+    grad.addColorStop(0, '#1e6ad4');
+    grad.addColorStop(0.48, '#6ec0ff');
+    grad.addColorStop(0.5, '#f5f5f5');
+    grad.addColorStop(0.52, '#ffe566');
+    grad.addColorStop(1, '#e8a800');
+    ctx.fillStyle = grad;
+    roundRect(x - w / 2, y - h / 2, w, h, w / 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // band
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x - w / 2 + 1, y - 3, w - 2, 6);
+    ctx.fillStyle = '#222';
+    ctx.font = 'bold 8px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('C', x, y);
+}
+
+function drawSenzu(x, y, r) {
+    const g = ctx.createRadialGradient(x - 4, y - 6, 2, x, y, r);
+    g.addColorStop(0, '#c8ff9a');
+    g.addColorStop(0.55, '#5ad43a');
+    g.addColorStop(1, '#1f7a18');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 2, r * 0.55, r * 0.85, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20,60,10,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // sprout
+    ctx.strokeStyle = '#2e7d22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 0.55);
+    ctx.quadraticCurveTo(x + 6, y - r * 0.9, x + 10, y - r * 0.7);
+    ctx.stroke();
+    ctx.fillStyle = '#7cff5a';
+    ctx.beginPath();
+    ctx.ellipse(x + 11, y - r * 0.72, 5, 3, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawKiOrb(x, y, r, color) {
+    const pulse = 1 + Math.sin(animT * 8) * 0.08;
+    const glow = ctx.createRadialGradient(x, y, 2, x, y, r * 1.35 * pulse);
+    glow.addColorStop(0, '#fffce8');
+    glow.addColorStop(0.35, color);
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(bo.x, bo.y, bo.r * 1.4 * pulse, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 1.35 * pulse, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = 'rgba(15,25,45,0.7)';
+    ctx.fillStyle = '#fff8d0';
     ctx.beginPath();
-    ctx.arc(bo.x, bo.y, bo.r, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = bo.color;
-    ctx.lineWidth = 3;
-    ctx.stroke();
+}
 
-    // Mini Goku icon for add bonus
-    if (bo.icon === 'saiyan' && imgs.goku) {
-        ctx.drawImage(imgs.goku, bo.x - 14, bo.y - 22, 28, 36);
-    } else {
-        ctx.fillStyle = bo.color;
-        ctx.font = 'bold 14px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.fillText(bo.label, bo.x, bo.y + 2);
+function drawKameCharge(x, y, r) {
+    const pulse = 1 + Math.sin(animT * 10) * 0.1;
+    for (let i = 3; i >= 0; i--) {
+        const rr = r * (0.45 + i * 0.22) * pulse;
+        ctx.strokeStyle = `rgba(80,200,255,${0.25 + i * 0.15})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, rr, 0, Math.PI * 2);
+        ctx.stroke();
     }
+    const g = ctx.createRadialGradient(x, y, 1, x, y, r * 0.55);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.4, '#7ad8ff');
+    g.addColorStop(1, '#1a6ad4');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+}
 
+function roundRect(x, y, w, h, rad) {
+    const r = Math.min(rad, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function drawBonus(bo) {
+    const pulse = 1 + Math.sin(animT * 5 + bo.x * 0.01) * 0.05;
+    // soft aura
+    const aura = ctx.createRadialGradient(bo.x, bo.y, 4, bo.x, bo.y, bo.r * 1.55 * pulse);
+    aura.addColorStop(0, bo.color + '99');
+    aura.addColorStop(1, 'transparent');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(bo.x, bo.y, bo.r * 1.5 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    const motif = bo.motif || 'dragonball';
+    if (motif === 'dragonball') drawDragonBall(bo.x, bo.y - 2, bo.r * 0.72, bo.stars || 1);
+    else if (motif === 'capsule') drawCapsule(bo.x, bo.y - 2, bo.r * 0.7);
+    else if (motif === 'senzu') drawSenzu(bo.x, bo.y - 2, bo.r * 0.7);
+    else if (motif === 'kame') drawKameCharge(bo.x, bo.y - 2, bo.r * 0.75);
+    else drawKiOrb(bo.x, bo.y - 2, bo.r * 0.7, bo.color);
+
+    // HP + label
     ctx.fillStyle = '#fff';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.font = 'bold 14px Segoe UI';
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold 15px Segoe UI';
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     const num = String(Math.ceil(bo.hp));
-    ctx.strokeText(num, bo.x, bo.y + 22);
-    ctx.fillText(num, bo.x, bo.y + 22);
+    ctx.strokeText(num, bo.x, bo.y + bo.r * 0.78);
+    ctx.fillText(num, bo.x, bo.y + bo.r * 0.78);
 
     ctx.fillStyle = bo.color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2.5;
     ctx.font = 'bold 11px Segoe UI';
-    ctx.fillText(bo.label, bo.x, bo.y - bo.r - 8);
+    ctx.strokeText(bo.label, bo.x, bo.y - bo.r - 6);
+    ctx.fillText(bo.label, bo.x, bo.y - bo.r - 6);
 }
 
 function drawEnemy(e) {
+    ctx.save();
     ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.imageSmoothingEnabled = true;
     const sprite = e.kind === 'elite' ? (imgs.soldier || imgs.saibaman) : imgs.saibaman;
-    const h = e.kind === 'elite' ? 52 : 48;
-    if (sprite) {
-        const w = (sprite.width / sprite.height) * h;
+    const h = e.kind === 'elite' ? 56 : 50;
+    if (sprite && sprite.complete && sprite.naturalWidth) {
+        const w = (sprite.naturalWidth / sprite.naturalHeight) * h;
         ctx.drawImage(sprite, e.x - w / 2, e.y - h / 2, w, h);
     } else {
-        ctx.fillStyle = '#3a8a30';
+        ctx.fillStyle = e.kind === 'elite' ? '#6a4a8a' : '#3a8a30';
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
         ctx.fill();
     }
+    ctx.restore();
     if (e.hp < e.maxHp) {
         ctx.fillStyle = '#333';
-        ctx.fillRect(e.x - 14, e.y - 28, 28, 4);
+        ctx.fillRect(e.x - 14, e.y - 32, 28, 4);
         ctx.fillStyle = '#44ff66';
-        ctx.fillRect(e.x - 14, e.y - 28, 28 * (e.hp / e.maxHp), 4);
+        ctx.fillRect(e.x - 14, e.y - 32, 28 * (e.hp / e.maxHp), 4);
     }
 }
 
@@ -893,7 +1111,7 @@ function draw() {
     } else if (state === STATE_GAME_OVER) {
         drawOverlay('K.O. !', `Score: ${score}`, 'Entrée / tap pour recommencer');
     } else if (state === STATE_VICTORY) {
-        drawOverlay('SUPER SAIYAN !', `Score: ${score}`, '5 stages vaincus !');
+        drawOverlay('SUPER SAIYAN !', `Score: ${score}`, '7 stages vaincus !');
     }
 }
 
