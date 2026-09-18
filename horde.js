@@ -547,7 +547,10 @@ function update(dt) {
         }
     }
 
-    bonuses = bonuses.filter(b => b.y < CH + 50);
+    // Bonus loupé = juste raté (pas de game over), disparait hors écran
+    for (let i = bonuses.length - 1; i >= 0; i--) {
+        if (bonuses[i].y > CH + 40) bonuses.splice(i, 1);
+    }
     barriers = barriers.filter(b => b.y < CH + 60);
 
     if (boss && boss.y + boss.r >= contactY) {
@@ -680,8 +683,9 @@ function drawBonus(bo) {
 }
 
 function drawEnemy(e) {
+    ctx.globalAlpha = 1;
     const sprite = e.kind === 'elite' ? (imgs.soldier || imgs.saibaman) : imgs.saibaman;
-    const h = e.kind === 'elite' ? 52 : 44;
+    const h = e.kind === 'elite' ? 52 : 48;
     if (sprite) {
         const w = (sprite.width / sprite.height) * h;
         ctx.drawImage(sprite, e.x - w / 2, e.y - h / 2, w, h);
@@ -729,6 +733,7 @@ function drawBoss() {
 }
 
 function drawSquad() {
+    ctx.globalAlpha = 1;
     const offs = shooterOffsets();
     for (let i = 0; i < offs.length; i++) {
         const name = ROSTER[i % ROSTER.length];
