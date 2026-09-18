@@ -334,7 +334,7 @@ function spawnWave() {
             barriers.push({
                 x: laneX(c, cols), y: y - (c % 2) * 18,
                 w: Math.min(72, ROAD_W / cols - 8),
-                h: 46, hp, maxHp: hp, style: Math.random() < 0.5 ? 'rock' : 'capsule'
+                h: 46, hp, maxHp: hp, style: Math.random() < 0.5 ? 'rock' : 'crystal'
             });
         }
     } else if (pattern < 0.68) {
@@ -386,8 +386,8 @@ function spawnBonusAbove(x, y) {
         kind = 'mult'; value = 2; label = '×2';
         color = '#ffb020'; motif = 'dragonball'; stars = 4;
     } else if (roll < 0.6) {
-        kind = 'rate'; value = 0.45; label = 'CAPSULE';
-        color = '#3d9eff'; motif = 'capsule';
+        kind = 'rate'; value = 0.45; label = 'SCOUTER';
+        color = '#3d9eff'; motif = 'scouter';
     } else if (roll < 0.8) {
         kind = 'dmg'; value = 0.3; label = 'SENZU';
         color = '#6dff6a'; motif = 'senzu';
@@ -599,11 +599,22 @@ function update(dt) {
     }
 
     const contactY = PLAYER_Y - 20;
+    const squadR = 32 + Math.min(40, squad.count * 1.5);
 
     for (let i = barriers.length - 1; i >= 0; i--) {
         const bar = barriers[i];
         if (bar.y + bar.h / 2 >= contactY) {
-            if (Math.abs(bar.x - squad.x) < bar.w / 2 + 35 + Math.min(70, squad.count * 3)) {
+            const hit = Math.abs(bar.x - squad.x) < bar.w / 2 + squadR;
+            // Capsules / pickups soft = jamais mortels (héritage style capsule)
+            if (bar.soft || bar.style === 'capsule') {
+                if (hit) {
+                    burst(bar.x, bar.y, '#4fc3f7', 10, 3);
+                    score += 10;
+                }
+                barriers.splice(i, 1);
+                continue;
+            }
+            if (hit) {
                 if (shieldT > 0) {
                     barriers.splice(i, 1);
                     burst(bar.x, bar.y, '#4fc3f7', 12, 4);
@@ -624,7 +635,7 @@ function update(dt) {
         }
     }
 
-    // Bonus loupé = juste raté (pas de game over), disparait hors écran
+    // Bonus : jamais mortels — contact = traverse, hors écran = disparu
     for (let i = bonuses.length - 1; i >= 0; i--) {
         if (bonuses[i].y > CH + 40) bonuses.splice(i, 1);
     }
@@ -675,35 +686,69 @@ function drawRoad() {
 
 function drawBarrier(bar) {
     const { x, y, w, h } = bar;
-    if (bar.style === 'rock') {
-        ctx.fillStyle = '#6a5a4a';
+    const rw = w * 0.55;
+    const rh = h * 0.55;
+
+    if (bar.style === 'rock' || bar.style === 'crystal') {
+        // Rocher / cristal organique (pas de rectangle)
+        const isCrystal = bar.style === 'crystal';
+        const g = ctx.createRadialGradient(x - rw * 0.2, y - rh * 0.3, 4, x, y, Math.max(rw, rh) * 1.2);
+        if (isCrystal) {
+            g.addColorStop(0, '#d8b8ff');
+            g.addColorStop(0.45, '#8a4cff');
+            g.addColorStop(1, '#3a1870');
+        } else {
+            g.addColorStop(0, '#9a8a78');
+            g.addColorStop(0.5, '#6a5a4a');
+            g.addColorStop(1, '#3a3028');
+        }
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(x - w / 2, y + h / 2);
-        ctx.lineTo(x - w / 2 + 6, y - h / 2);
-        ctx.lineTo(x + w / 2 - 4, y - h / 2 + 4);
-        ctx.lineTo(x + w / 2, y + h / 2);
-        ctx.closePath();
+        if (isCrystal) {
+            ctx.moveTo(x, y - rh * 1.15);
+            ctx.lineTo(x + rw * 0.85, y - rh * 0.2);
+            ctx.lineTo(x + rw * 0.55, y + rh);
+            ctx.lineTo(x - rw * 0.55, y + rh);
+            ctx.lineTo(x - rw * 0.85, y - rh * 0.2);
+            ctx.closePath();
+        } else {
+            ctx.moveTo(x - rw * 0.9, y + rh * 0.7);
+            ctx.quadraticCurveTo(x - rw * 1.1, y - rh * 0.2, x - rw * 0.35, y - rh);
+            ctx.quadraticCurveTo(x + rw * 0.15, y - rh * 1.15, x + rw * 0.75, y - rh * 0.35);
+            ctx.quadraticCurveTo(x + rw * 1.05, y + rh * 0.3, x + rw * 0.55, y + rh * 0.95);
+            ctx.quadraticCurveTo(x, y + rh * 1.15, x - rw * 0.9, y + rh * 0.7);
+            ctx.closePath();
+        }
         ctx.fill();
-    } else if (bar.style === 'capsule') {
-        ctx.fillStyle = '#3a8fd4';
-        ctx.fillRect(x - w / 2, y - h / 2, w, h);
-        ctx.strokeStyle = '#ffe566';
+        ctx.strokeStyle = isCrystal ? 'rgba(255,220,255,0.55)' : 'rgba(0,0,0,0.35)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 9px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.fillText('CAPSULE', x, y - 10);
+        ctx.stroke();
+        // highlight
+        ctx.fillStyle = isCrystal ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(x - rw * 0.25, y - rh * 0.35, rw * 0.22, rh * 0.14, -0.6, 0, Math.PI * 2);
+        ctx.fill();
     } else {
-        const eg = ctx.createLinearGradient(x - w / 2, y, x + w / 2, y);
-        eg.addColorStop(0, 'rgba(100,200,255,0.4)');
-        eg.addColorStop(0.5, 'rgba(200,240,255,0.6)');
-        eg.addColorStop(1, 'rgba(100,200,255,0.4)');
-        ctx.fillStyle = eg;
-        ctx.fillRect(x - w / 2, y - h / 2, w, h);
-        ctx.strokeStyle = '#a0e8ff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        // Mur de ki : anneau / dôme lumineux
+        const pulse = 1 + Math.sin(animT * 5 + x * 0.02) * 0.04;
+        const aura = ctx.createRadialGradient(x, y, 4, x, y, rw * 1.35 * pulse);
+        aura.addColorStop(0, 'rgba(180,240,255,0.75)');
+        aura.addColorStop(0.55, 'rgba(80,180,255,0.45)');
+        aura.addColorStop(1, 'transparent');
+        ctx.fillStyle = aura;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rw * 1.15 * pulse, rh * 1.05 * pulse, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(160,230,255,0.9)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rw * 0.95, rh * 0.85, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rw * 0.7, rh * 0.6, 0, 0, Math.PI * 2);
+        ctx.stroke();
     }
 
     ctx.fillStyle = '#fff';
@@ -713,8 +758,8 @@ function drawBarrier(bar) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const num = String(Math.max(0, Math.ceil(bar.hp)));
-    ctx.strokeText(num, x, y + 4);
-    ctx.fillText(num, x, y + 4);
+    ctx.strokeText(num, x, y + 2);
+    ctx.fillText(num, x, y + 2);
 }
 
 function drawDragonBall(x, y, r, stars) {
@@ -729,12 +774,10 @@ function drawDragonBall(x, y, r, stars) {
     ctx.strokeStyle = 'rgba(120,40,0,0.55)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // specular
     ctx.fillStyle = 'rgba(255,255,220,0.55)';
     ctx.beginPath();
     ctx.ellipse(x - r * 0.28, y - r * 0.32, r * 0.28, r * 0.18, -0.5, 0, Math.PI * 2);
     ctx.fill();
-    // stars
     const n = Math.max(1, Math.min(7, stars | 0));
     ctx.fillStyle = '#c62828';
     const layout = [
@@ -762,29 +805,34 @@ function drawStar(cx, cy, rad, points) {
     ctx.fill();
 }
 
-function drawCapsule(x, y, r) {
-    const w = r * 1.15, h = r * 1.7;
-    // body
-    const grad = ctx.createLinearGradient(x - w / 2, y, x + w / 2, y);
-    grad.addColorStop(0, '#1e6ad4');
-    grad.addColorStop(0.48, '#6ec0ff');
-    grad.addColorStop(0.5, '#f5f5f5');
-    grad.addColorStop(0.52, '#ffe566');
-    grad.addColorStop(1, '#e8a800');
-    ctx.fillStyle = grad;
-    roundRect(x - w / 2, y - h / 2, w, h, w / 2);
+/** Scouter / orbe de cadence — tout rond, style DB. */
+function drawScouter(x, y, r) {
+    const g = ctx.createRadialGradient(x - r * 0.25, y - r * 0.3, 2, x, y, r);
+    g.addColorStop(0, '#c8ecff');
+    g.addColorStop(0.4, '#3d9eff');
+    g.addColorStop(1, '#0a3a8a');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,220,80,0.85)';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    // band
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x - w / 2 + 1, y - 3, w - 2, 6);
-    ctx.fillStyle = '#222';
-    ctx.font = 'bold 8px Segoe UI';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('C', x, y);
+    // lens
+    ctx.fillStyle = 'rgba(40,255,120,0.55)';
+    ctx.beginPath();
+    ctx.arc(x + r * 0.15, y - r * 0.05, r * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x + r * 0.15, y - r * 0.05, r * 0.38, 0, Math.PI * 2);
+    ctx.stroke();
+    // antenna nub
+    ctx.fillStyle = '#ffe566';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.55, y - r * 0.55, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
 }
 
 function drawSenzu(x, y, r) {
@@ -799,7 +847,6 @@ function drawSenzu(x, y, r) {
     ctx.strokeStyle = 'rgba(20,60,10,0.5)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // sprout
     ctx.strokeStyle = '#2e7d22';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -861,7 +908,6 @@ function roundRect(x, y, w, h, rad) {
 
 function drawBonus(bo) {
     const pulse = 1 + Math.sin(animT * 5 + bo.x * 0.01) * 0.05;
-    // soft aura
     const aura = ctx.createRadialGradient(bo.x, bo.y, 4, bo.x, bo.y, bo.r * 1.55 * pulse);
     aura.addColorStop(0, bo.color + '99');
     aura.addColorStop(1, 'transparent');
@@ -872,12 +918,11 @@ function drawBonus(bo) {
 
     const motif = bo.motif || 'dragonball';
     if (motif === 'dragonball') drawDragonBall(bo.x, bo.y - 2, bo.r * 0.72, bo.stars || 1);
-    else if (motif === 'capsule') drawCapsule(bo.x, bo.y - 2, bo.r * 0.7);
+    else if (motif === 'scouter' || motif === 'capsule') drawScouter(bo.x, bo.y - 2, bo.r * 0.7);
     else if (motif === 'senzu') drawSenzu(bo.x, bo.y - 2, bo.r * 0.7);
     else if (motif === 'kame') drawKameCharge(bo.x, bo.y - 2, bo.r * 0.75);
     else drawKiOrb(bo.x, bo.y - 2, bo.r * 0.7, bo.color);
 
-    // HP + label
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = 'rgba(0,0,0,0.75)';
     ctx.lineWidth = 3;
