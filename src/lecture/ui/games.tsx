@@ -196,7 +196,7 @@ function Nuage({ onDone, level, seconds }: GameProps) {
     (w, dt) => {
       const speed = (0.26 + w.time * 0.005) * pace;
       let { score, spawn, got, wish, wishes } = w;
-      const x = w.x + (w.tx - w.x) * Math.min(1, dt * 12);
+      const x = w.x + (w.tx - w.x) * Math.min(1, dt * 20); // follows the finger closely, with a touch of smoothing
       const pops = w.pops.filter((p) => w.time - p.t < 0.7);
       const items: Fall[] = [];
       for (const it of w.items) {
@@ -235,18 +235,36 @@ function Nuage({ onDone, level, seconds }: GameProps) {
         // Mostly balls still missing from the collection, so the 7 come within reach.
         const missing = got.map((g, i) => (g ? 0 : i + 1)).filter(Boolean);
         const stars = missing.length && Math.random() < 0.75 ? missing[Math.floor(Math.random() * missing.length)] : 1 + Math.floor(Math.random() * 7);
-        items.push({ id: nextId++, x: rand(0.1, 0.9), y: -0.08, vy: speed * rand(0.85, 1.15), sway: rand(0, 0.12), kind: fire ? "fire" : "ball", stars });
+        items.push({ id: nextId++, x: rand(0.14, 0.86), y: -0.08, vy: speed * rand(0.85, 1.15), sway: rand(0, 0.12), kind: fire ? "fire" : "ball", stars });
       }
       return { ...w, x, score, spawn, items, pops, got, wish, wishes };
     },
     seconds,
   );
 
+  // Steering is a drag: Goku moves as much as the finger moves, wherever the finger is put down,
+  // so touching the screen never makes him jump across it.
+  const grab = useRef<{ fx: number; gx: number } | null>(null);
+  const press = (e: RPointerEvent) => {
+    grab.current = { fx: e.clientX, gx: world.tx };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // capture is a nicety
+    }
+  };
   const steer = (e: RPointerEvent) => {
+    const g = grab.current;
     const r = box.current?.getBoundingClientRect();
-    if (!r) return;
-    const tx = Math.min(0.92, Math.max(0.08, (e.clientX - r.left) / r.width));
+    if (!g || !r) return;
+    // Keep at least three quarters of Goku on screen.
+    const half = (box.current?.querySelector(".lz-rider img")?.getBoundingClientRect().width ?? 0) / 2;
+    const edge = Math.min(0.2, Math.max(0.06, (half * 0.5) / r.width));
+    const tx = Math.min(1 - edge, Math.max(edge, g.gx + ((e.clientX - g.fx) / r.width) * 1.2));
     setWorld((w) => ({ ...w, tx }));
+  };
+  const release = () => {
+    grab.current = null;
   };
 
   const tilt = Math.max(-14, Math.min(14, (world.tx - world.x) * 70));
@@ -256,8 +274,10 @@ function Nuage({ onDone, level, seconds }: GameProps) {
     <div
       ref={box}
       className={`lz-game lz-game-nuage ${wishing ? "is-wish" : ""}`}
-      onPointerDown={steer}
-      onPointerMove={(e) => (e.buttons || e.pointerType === "touch") && steer(e)}
+      onPointerDown={press}
+      onPointerMove={steer}
+      onPointerUp={release}
+      onPointerCancel={release}
     >
       <div className="lz-sky" aria-hidden>
         {SKY_CLOUDS.map((c, i) => (
@@ -288,7 +308,7 @@ function Nuage({ onDone, level, seconds }: GameProps) {
           <span className="lz-pop-text">{p.text}</span>
         </span>
       ))}
-      <div className="lz-rider" style={{ left: `${world.x * 100}%`, rotate: `${tilt}deg` }}>
+      <div className="lz-rider" style={{ transform: `translateX(${world.x * 100}vw) rotate(${tilt}deg)` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={ASSET("goku_kid_cloud.png")} alt="Goku sur le nuage magique" />
         <span className="lz-trail" aria-hidden />

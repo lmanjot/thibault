@@ -2760,17 +2760,19 @@
 .lz-rider {
   position: absolute;
   z-index: 3;
+  left: 0;
   bottom: 3vh;
   width: 0;
   display: grid;
   justify-items: center;
-  transform-origin: 50% 100%;
-  transition: rotate 0.15s;
+  transform-origin: 0 100%;
+  will-change: transform;
 }
 .lz-rider img {
   height: min(30vh, 230px);
   width: auto;
   max-width: none;
+  translate: -50% 0; /* centered on Goku's position (the rider itself has no width) */
   position: relative;
   z-index: 2;
   filter: drop-shadow(0 10px 10px rgba(20, 60, 110, 0.35));
@@ -2778,6 +2780,8 @@
 }
 .lz-trail {
   position: absolute;
+  left: 0;
+  translate: -50% 0;
   bottom: 2%;
   width: min(22vh, 170px);
   height: 40px;
