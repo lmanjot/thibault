@@ -3760,3 +3760,29 @@
     height: 96px;
   }
 }
+
+/* A coming letter, tapped once: tap again to start it. */
+.lz-weektile.is-upcoming.is-armed {
+  opacity: 1;
+  transform: none;
+  outline: 4px dashed var(--ki);
+  outline-offset: 3px;
+  animation: lz-pulse 0.9s ease-in-out infinite;
+}
+.lz-weektile.is-upcoming.is-armed .lz-read {
+  opacity: 1;
+}
+.lz-arm-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  translate: -50% 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--gi);
+  color: #fff;
+  font-family: var(--lz-display), Impact, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}

@@ -291,6 +291,13 @@ function Home({
   const focusDone = focus ? Math.min(3, level(save, gid(focus)) - 1) : 0;
   const gauge = next ? focusDone / 3 : 1;
   const companion = equipped(save, "companion");
+  // A new letter starts only on a second tap (a swipe across the row must not start one by accident).
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
 
   return (
     <div className="lz-home" style={{ backgroundImage: `url(${ASSET(equipped(save, "scene")?.img ?? "bg_papaya.png")})` }}>
@@ -345,15 +352,19 @@ function Home({
             {upcomingLetters(save, 2).map((g) => (
               <button
                 key={g}
-                className="lz-weektile is-upcoming"
-                aria-label={`Nouvelle lettre : ${GRAPHEME[g].display}`}
+                className={`lz-weektile is-upcoming ${armed === g ? "is-armed" : ""}`}
+                aria-label={armed === g ? `Commencer la lettre ${GRAPHEME[g].display}` : `Nouvelle lettre : ${GRAPHEME[g].display}`}
                 onClick={() => {
                   sfx.tap();
-                  onPick(g);
                   speak([namePart(g)]);
+                  if (armed === g) {
+                    setArmed(null);
+                    onPick(g);
+                  } else setArmed(g);
                 }}
               >
-                <span className="lz-week-star is-new">+</span>
+                <span className="lz-week-star is-new">{armed === g ? "✓" : "+"}</span>
+                {armed === g && <span className="lz-arm-hint">Encore !</span>}
                 <span className="lz-read">{GRAPHEME[g].display}</span>
                 <Pips level={1} />
               </button>

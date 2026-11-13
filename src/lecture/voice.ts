@@ -26,7 +26,8 @@ export const L = {
   findAll: "Trouve toutes les lettres…",
   three: "Il y en a trois !",
   foundAll: "Tu les as tous trouvés !",
-  fusion: "Fusion ! Fais…",
+  fusion: "Pour faire…",
+  fusionSlide: "glisse la bonne lettre dans la case !",
   show: "Montre-moi…",
   attacks: "attaque ! Réponds juste pour lancer ton Kaméhaméha !",
   kamehameha: "Kaaa… méééé… haaa… méééé… HAAAAA !",
@@ -46,10 +47,14 @@ export const PRAISE = ["Bravo !", "Super !", "Génial !", "Trop fort !", "Waouh,
 
 const SCHWA_SAY: Record<string, string> = { r: "reu", f: "feu", v: "veu", ch: "cheu", p: "peu", b: "beu" };
 
-/** Consonant sounds as pronounced (stretched when possible), never the letter's name. */
+/**
+ * Consonant sounds as pronounced (stretched when possible), never the letter's name.
+ * The voice cannot hold a bare L or R ("llll" came out as « non », "rrrr" as « rare »),
+ * so those two are said with a light « e », as in class: « lleu », « reu ».
+ */
 const CONSONANT_SAY: Record<string, string> = {
-  l: "llll",
-  r: "rrrr",
+  l: "lleu",
+  r: "reu",
   m: "mmmm",
   s: "ssss",
   f: "ffff",

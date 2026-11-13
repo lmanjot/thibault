@@ -21,7 +21,7 @@ export function promptParts(ex: Ex): Part[] {
     case "hunt":
       return [L.findAll, soundPart(ex.g), L.three];
     case "fusion":
-      return [L.fusion, sylPart(ex.c, ex.v)];
+      return [L.fusion, sylPart(ex.c, ex.v), L.fusionSlide];
     case "syllabe": {
       const { c, v } = parseSyl(ex.item);
       return [L.show, sylPart(c, v)];
@@ -40,7 +40,7 @@ function replayParts(ex: Ex): Part[] {
     case "hunt":
       return [soundPart(ex.g)];
     case "fusion":
-      return [sylPart(ex.c, ex.v)];
+      return [L.fusion, sylPart(ex.c, ex.v), L.fusionSlide];
     case "syllabe": {
       const { c, v } = parseSyl(ex.item);
       return [sylPart(c, v)];

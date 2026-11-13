@@ -2,6 +2,7 @@
 // Speech plays, in order of preference: the parent's own recording (for sounds), the stored
 // Goku clip (public/lecture/voice, generated once by scripts/gen-voice.mts), the device voice.
 
+import { WORDS } from "./content";
 import { LETTER_NAME, soundSay, sylSay } from "./voice";
 
 /** A piece of speech: a catalog line, or a sound/syllable that a parent recording can replace. */
@@ -73,6 +74,50 @@ let manifest: Record<string, string> | null = null;
 let manifestLoad: Promise<void> | null = null;
 const audioCache = new Map<string, HTMLAudioElement>();
 
+// Like an app: every clip is downloaded once and kept in memory, so a sentence made of several
+// pieces plays without waiting for the network between them (phones ignore audio preloading).
+const memory = new Map<string, string>(); // clip URL → in-memory (blob:) URL
+const pending = new Map<string, Promise<string | null>>();
+
+/** Download a clip into memory (once). Resolves to its in-memory URL, or null if it failed. */
+function keep(url: string): Promise<string | null> {
+  if (url.startsWith("blob:")) return Promise.resolve(url);
+  const have = memory.get(url);
+  if (have) return Promise.resolve(have);
+  let p = pending.get(url);
+  if (!p) {
+    p = fetch(url)
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => {
+        if (!b) return null;
+        const m = URL.createObjectURL(b);
+        memory.set(url, m);
+        audioCache.delete(url); // next play uses the in-memory copy
+        return m;
+      })
+      .catch(() => null)
+      .finally(() => pending.delete(url));
+    pending.set(url, p);
+  }
+  return p;
+}
+
+let preloading = false;
+
+/** Download every clip in the background, a few at a time (about 5 MB, kept by the browser). */
+function preloadAll() {
+  if (preloading || !manifest) return;
+  preloading = true;
+  const urls = [...new Set(Object.values(manifest))].map((f) => `/lecture/voice/${f}`);
+  let i = 0;
+  const next = (): Promise<void> => (i < urls.length ? keep(urls[i++]).then(next) : Promise.resolve());
+  setTimeout(() => Promise.all([next(), next(), next(), next()]), 1500); // after the screen has loaded
+}
+
+/** Picture words are said quickly by the voice: they play a little slower to match the sentences. */
+const WORD_RATE = 0.82;
+const wordTexts = new Set(WORDS.map((w) => w.w));
+
 /** Re-read the clip list (after a sentence was regenerated from the parent space). */
 export function reloadVoice(): Promise<void> {
   manifestLoad = null;
@@ -85,6 +130,7 @@ export function loadVoice(fresh = false): Promise<void> {
       .then((r) => (r.ok ? r.json() : null))
       .then((m) => {
         manifest = m?.clips ?? {};
+        preloadAll();
       })
       .catch(() => {
         manifest = {};
@@ -101,7 +147,7 @@ function clipUrl(text: string): string | null {
 function audioFor(url: string): HTMLAudioElement {
   let a = audioCache.get(url);
   if (!a) {
-    a = new Audio(url);
+    a = new Audio(memory.get(url) ?? url);
     a.preload = "auto";
     audioCache.set(url, a);
   }
@@ -115,7 +161,7 @@ export function prefetch(parts: Part[]) {
   loadVoice().then(() => {
     for (const p of parts) {
       const url = (typeof p !== "string" && recUrls.get(p.rec)) || clipUrl(textOf(p));
-      if (url) audioFor(url);
+      if (url) keep(url);
     }
   });
 }
@@ -165,9 +211,14 @@ function sayText(text: string): Promise<void> {
 let current: HTMLAudioElement | null = null;
 
 /** Plays a clip; resolves false if it could not be played (missing file, decode error). */
-function playUrl(url: string): Promise<boolean> {
+function playUrl(url: string, rate = 1): Promise<boolean> {
+  // Never wait here (phones only allow sound right after a tap): play the in-memory copy if it is
+  // there, else straight from the network while it is being kept for next time.
+  if (!memory.has(url)) keep(url);
   return new Promise((res) => {
     const a = audioFor(url);
+    a.preservesPitch = true; // slower, not deeper
+    a.playbackRate = rate;
     current = a;
     let done = false;
     const finish = (ok: boolean) => {
@@ -179,7 +230,7 @@ function playUrl(url: string): Promise<boolean> {
       }
     };
     // Safety net: never let a clip that doesn't report "ended" freeze the game.
-    const guard = setTimeout(() => finish(true), Number.isFinite(a.duration) && a.duration > 0 ? a.duration * 1000 + 800 : 6000);
+    const guard = setTimeout(() => finish(true), Number.isFinite(a.duration) && a.duration > 0 ? (a.duration / rate) * 1000 + 800 : 6000);
     a.currentTime = 0;
     a.onended = () => finish(true);
     a.onerror = () => finish(false);
@@ -207,7 +258,8 @@ export async function speak(parts: Part[]): Promise<void> {
     const url = rec ?? clipUrl(textOf(p));
     // If a clip can't be played (e.g. replaced since the page loaded), say it with the device voice
     // rather than skipping a word.
-    if (!url || !(await playUrl(url))) await sayText(textOf(p));
+    const rate = !rec && wordTexts.has(textOf(p)) ? WORD_RATE : 1;
+    if (!url || !(await playUrl(url, rate))) await sayText(textOf(p));
     // A short breath between the pieces of an assembled sentence.
     if (i < parts.length - 1) await new Promise((r) => setTimeout(r, 120));
   }
@@ -220,7 +272,7 @@ const KAME_URL = "/lecture/sfx/kamehameha.mp3";
 export const KAME_SECONDS = 6.5;
 
 export function prefetchKamehameha() {
-  if (typeof window !== "undefined") audioFor(KAME_URL);
+  if (typeof window !== "undefined") keep(KAME_URL);
 }
 
 /** Plays Goku's Kamehameha cry; resolves false if it could not be played. */

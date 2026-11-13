@@ -90,7 +90,9 @@ export function request(clip: Clip, tuning: Tuning = {}) {
       model_id: MODEL,
       language_code: "fr",
       previous_text: clip.word ? "Regarde, c'est un" : "Écoute bien, je vais le dire clairement :",
-      voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true, speed: tuning.speed ?? 0.92 },
+      // Picture words are said a little slower: at the end of a sentence the voice rushes them,
+      // and they came out ~60% faster than the instructions around them.
+      voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true, speed: tuning.speed ?? (clip.word ? 0.78 : 0.92) },
     };
   }
   const expression = tuning.expression ?? DEFAULT_LINE.expression;

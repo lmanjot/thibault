@@ -253,7 +253,7 @@ const SPICE_VOWELS = ["a", "i", "o", "u", "é", "e"];
  * then common vowels to make it less obvious.
  */
 function choices(s: Save, target: string, focus: string | null, n: number): string[] {
-  const known = knownSounds(s);
+  const known = readySounds(s); // never a letter the child has not learned yet
   const out: string[] = [target];
   const add = (x?: string) => {
     if (x && GRAPHEME[x] && !out.includes(x) && out.length < n) out.push(x);
@@ -423,24 +423,32 @@ const sylHas = (id: string, g: string) => {
   return c === g || v === g;
 };
 
+/** Syllables made with a letter and the letters already learned, even while that letter is new. */
+function syllablesWith(s: Save, g: string): string[] {
+  const ready = readySounds(s).filter((x) => x !== g);
+  const gr = GRAPHEME[g];
+  if (gr.kind === "c") return ready.filter((v) => GRAPHEME[v].kind === "v" && !gr.noVowels?.includes(v)).map((v) => sid(g, v));
+  return ready.filter((c) => GRAPHEME[c].kind === "c" && !GRAPHEME[c].noVowels?.includes(g)).map((c) => sid(c, g));
+}
+
 /**
- * A session of 11, mixed so the answer is never "always the same letter":
+ * A session of 11, mixed so the answer is never "always the same letter", using only letters the
+ * child has learned (level 2+, or known before this week) and the letter being worked on:
  * - Échauffement (2): letters and syllables learned before.
- * - Entraînement (7): 3 on the letter being worked on, 1 syllable with it (once it is ready),
- *   2 on what was learned before (syllables as soon as a consonant and a vowel are known),
- *   1 peek at the next letter of the class order (ear only, not scored).
+ * - Entraînement (7): 3 on the letter being worked on, 2 syllables with it (la, lu… from its very
+ *   first session), the rest on what was learned before.
  * - Défi (2): harder, mixed.
  */
 export function buildSession(s: Save): Ex[] {
   const out: Ex[] = [];
   const f = focusSound(s);
-  const others = knownSounds(s).filter((g) => g !== f);
+  const learned = readySounds(s).filter((g) => g !== f);
   const syls = availableSyllables(s);
   const pastSyls = f ? syls.filter((x) => !sylHas(x, f)) : syls;
-  const pastPool = [...others.map(gid), ...pastSyls];
+  const pastPool = [...learned.map(gid), ...pastSyls];
 
-  // 1. Échauffement — 2 things learned before (syllables come first when there are some)
-  const warm = pastSyls.length >= 2 ? [...pickReview(s, pastSyls, 1), ...pickReview(s, others.map(gid), 1)] : pickReview(s, pastPool, 2);
+  // 1. Échauffement — 2 things learned before (a syllable first when there are some)
+  const warm = pastSyls.length >= 2 ? [...pickReview(s, pastSyls, 1), ...pickReview(s, learned.map(gid), 1)] : pickReview(s, pastPool, 2);
   out.push(...warm.map((id) => itemEx(s, id, f, "warm")));
 
   // 2. Entraînement
@@ -448,25 +456,20 @@ export function buildSession(s: Save): Ex[] {
   if (f) {
     // The letter being worked on: three times, in different exercises.
     for (let i = 0; i < 3; i++) train.push(soundEx(s, f, f, "train", 0, train[i - 1]?.t));
-    // A syllable with it, once it can be blended with letters already known.
-    const focusSyls = syls.filter((x) => sylHas(x, f));
-    const extraPast = focusSyls.length ? 0 : 1;
-    if (focusSyls.length) train.push(sylEx(s, pickReview(s, focusSyls, 1)[0], "train"));
-    // What was learned before: the majority of the mix.
-    const past = pastPool.length ? pickReview(s, pastPool, 2 + extraPast) : [];
+    // Two syllables with it: reading is blending, from the start.
+    const focusSyls = syllablesWith(s, f);
+    for (const id of focusSyls.length ? pickReview(s, focusSyls, 2) : []) train.push(sylEx(s, id, "train"));
+    // What was learned before fills the rest (or more of the letter, when nothing is learned yet).
+    const rest = 7 - train.length;
+    const past = pastPool.length ? pickReview(s, pastPool, rest) : [];
     past.forEach((id) => train.push(itemEx(s, id, f, "train")));
-    for (let i = past.length; i < 2 + extraPast; i++) train.push(soundEx(s, f, f, "train"));
-    // A peek at what comes next: does this word have the next letter's sound?
-    const next = upcomingLetters(s, 1)[0];
-    const peek = next ? ecoute(next, "train", `p:${next}`) : null;
-    if (peek) train.push(peek);
-    else if (pastPool.length) train.push(itemEx(s, pickReview(s, pastPool, 1)[0], f, "train"));
+    for (let i = past.length; i < rest; i++) train.push(soundEx(s, f, f, "train"));
   }
   out.push(...spread(shuffle(train)));
 
   // 3. Défi — harder, mixed
   if (syls.length >= 3) out.push(...pickReview(s, syls, 2).map((id) => sylEx(s, id, "defi", 2)));
-  else for (const g of shuffle(knownSounds(s)).slice(0, 2)) out.push(soundEx(s, g, f, "defi", 2));
+  else for (const g of shuffle([...learned, ...(f ? [f] : [])]).slice(0, 2)) out.push(soundEx(s, g, f, "defi", 2));
   return out;
 }
 
@@ -480,8 +483,8 @@ export function buildBoss(s: Save, fight: Fight): Ex[] {
   const f = focusSound(s);
   if (fight.kind === "letter" && fight.letter) {
     const g = fight.letter;
-    const others = knownSounds(s).filter((x) => x !== g);
-    const targets = shuffle([g, g, g, g, ...pickReview(s, others.map(gid), 2).map((x) => x.slice(2))]);
+    const others = readySounds(s).filter((x) => x !== g);
+    const targets = shuffle([g, g, g, g, ...(others.length ? pickReview(s, others.map(gid), 2).map((x) => x.slice(2)) : [g, g])]);
     const out: Ex[] = [];
     targets.forEach((x, i) => out.push(soundEx(s, x, g, "boss", -2, out[i - 1]?.t))); // 4 choices: the easier fight
     return out;
@@ -489,7 +492,7 @@ export function buildBoss(s: Save, fight: Fight): Ex[] {
   const recent = (fight.letters ?? []).filter((g) => GRAPHEME[g]);
   const syls = availableSyllables(s);
   const recentItems = [...recent.map(gid), ...syls.filter((x) => recent.includes(parseSyl(x).c) || recent.includes(parseSyl(x).v))];
-  const rest = [...knownSounds(s).map(gid), ...syls].filter((x) => !recentItems.includes(x));
+  const rest = [...readySounds(s).map(gid), ...syls].filter((x) => !recentItems.includes(x));
   const a = pickReview(s, recentItems, 7);
   const b = pickReview(s, rest, 12 - a.length);
   const ids = [...a, ...b];
