@@ -1,0 +1,34 @@
+{
+  "Shenron exauce ton vœu !": {
+    "say": "Shenrone exauce ton voeu !"
+  },
+  "La boule de cristal à sept étoiles": {
+    "expression": 1
+  },
+  "Ultra Instinct": {
+    "say": "Ultra instinct",
+    "expression": 1,
+    "speed": 0.9
+  },
+  "Super Saiyan 2": {
+    "say": "Super Saiyan deux"
+  },
+  "Super Saiyan 3": {
+    "say": "Super saiyan trois"
+  },
+  "Goku gagne un nouveau pouvoir !": {
+    "expression": 1
+  },
+  "Bravo ! Tu as réussi la lettre…": {
+    "say": "Bravo ! Tu as réussi la lettre!"
+  },
+  "C-17": {
+    "say": "C dix-sept"
+  },
+  "C-18": {
+    "say": "C dix-huit"
+  },
+  "a": {
+    "say": "Ah."
+  }
+}
