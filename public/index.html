@@ -90,6 +90,7 @@
       width: 7px;
       background: linear-gradient(180deg, var(--stripe-a), var(--stripe-b));
     }
+    a.card.lecture { --stripe-a: #ffd23f; --stripe-b: #f47b20; }
     a.card.fire { --stripe-a: #ff9a2e; --stripe-b: #e44512; }
     a.card.horde { --stripe-a: #4aa7ff; --stripe-b: #2660d4; }
     a.card.knight { --stripe-a: #9b6dff; --stripe-b: #4c2db8; }
@@ -105,6 +106,7 @@
       color: #fff;
       box-shadow: 0 6px 0 rgba(0,0,0,0.1);
     }
+    .lecture .icon { background: linear-gradient(145deg, #ffd23f, #f47b20); }
     .fire .icon { background: linear-gradient(145deg, #ff9a2e, #e44512); }
     .horde .icon { background: linear-gradient(145deg, #4aa7ff, #2660d4); }
     .knight .icon { background: linear-gradient(145deg, #9b6dff, #4c2db8); }
@@ -126,6 +128,7 @@
       padding: 3px 9px;
       border-radius: 999px;
     }
+    .lecture .chip { background: #fff0c2; color: #a85a12; }
     .fire .chip { background: #ffe0c2; color: #a94410; }
     .horde .chip { background: #d6ebff; color: #1d4f9c; }
     .knight .chip { background: #ebe0ff; color: #5a2fb8; }
@@ -178,6 +181,18 @@
 
     <h3 class="section-title">🐉 Dragon Ball</h3>
     <div class="grid">
+      <a class="card lecture" href="/lecture/">
+        <div class="icon">📖</div>
+        <div class="body">
+          <div class="title-row">
+            <h2>Lecture Z</h2>
+            <span class="chip">Lecture</span>
+          </div>
+          <p>Apprends à lire avec Goku : chaque lettre réussie le rend plus fort !</p>
+          <div class="cta">Jouer →</div>
+        </div>
+      </a>
+
       <a class="card fire" href="/fireball.html">
         <div class="icon">🔥</div>
         <div class="body">
