@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ASSET, bossFor, formFor, GRAPHEME, type Boss } from "../content";
+import { ASSET, bossFor, formFor, GRAPHEME, rematchFor, type Boss } from "../content";
 import {
   nextFight,
+  practiceFight,
   lettersToRevision,
   type Fight,
   buildBoss,
@@ -29,7 +30,7 @@ import { Parent } from "./Parent";
 import { Goku, Icon, Pips, Stars, Zeni } from "./bits";
 import { MINI_GAMES, MiniGame, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { equipped, formStep, GAME_UNLOCK, gameLevel, gameOpen, ITEM, LETTER_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { equipped, formStep, GAME_UNLOCK, gameLevel, gameOpen, ITEM, LETTER_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
@@ -94,6 +95,14 @@ function Game({ fontClass }: { fontClass: string }) {
     speak([boss.name, L.attacks]);
   }
 
+  /** A revision fight he chooses: a rematch against a boss already met, harder, more zénis. */
+  function startPractice() {
+    sfx.unlock();
+    const boss = rematchFor(formStep(save), save.progress.beaten, save.progress.practices ?? 0);
+    setScreen({ s: "versus", boss, fight: practiceFight(save) });
+    speak([boss.name, L.attacks]);
+  }
+
   /** Back home, through the reward scene when a letter was just cleared. */
   function leave(cleared: string[]) {
     stopSpeech();
@@ -110,10 +119,12 @@ function Game({ fontClass }: { fontClass: string }) {
     const cleared = applySession(s, r.answers, fight ? (fight.letter ?? null) : focusSound(save));
     const stars = starsFor(r.ok, r.total);
     // Zénis: the answers, plus a bonus for finishing, for a perfect session and for each letter cleared.
-    const bossBonus = fight ? (fight.kind === "revision" ? REVISION_BOSS_BONUS : LETTER_BOSS_BONUS) : 0;
+    const bossBonus = fight ? (fight.practice ? PRACTICE_BOSS_BONUS : fight.kind === "revision" ? REVISION_BOSS_BONUS : LETTER_BOSS_BONUS) : 0;
     const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + cleared.length * LETTER_BONUS + bossBonus;
     s.progress.zeni = zeni(s) + earned;
-    if (boss) {
+    if (fight?.practice) {
+      s.progress.practices = (s.progress.practices ?? 0) + 1; // next time, another opponent
+    } else if (boss) {
       s.progress.bosses += 1;
       s.progress.fights = (s.progress.fights ?? []).slice(1); // that boss is beaten
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
@@ -133,6 +144,7 @@ function Game({ fontClass }: { fontClass: string }) {
           save={save}
           onTrain={start}
           onBoss={startBoss}
+          onPractice={startPractice}
           onParent={() => {
             stopSpeech();
             setScreen({ s: "parent" });
@@ -160,7 +172,11 @@ function Game({ fontClass }: { fontClass: string }) {
             </div>
           </div>
           <p className="lz-reward-kicker lz-vs-kind">
-            {screen.fight.kind === "revision" ? "Grande révision" : `Boss de la lettre ${GRAPHEME[screen.fight.letter ?? ""]?.display ?? ""}`}
+            {screen.fight.practice
+              ? "Combat de révision · zénis ×3"
+              : screen.fight.kind === "revision"
+                ? "Grande révision"
+                : `Boss de la lettre ${GRAPHEME[screen.fight.letter ?? ""]?.display ?? ""}`}
           </p>
           <h2 className="lz-title-sm">{screen.boss.name}</h2>
           <div className="lz-row">
@@ -269,6 +285,7 @@ function Home({
   save,
   onTrain,
   onBoss,
+  onPractice,
   onParent,
   onPick,
   onShop,
@@ -276,6 +293,7 @@ function Home({
   save: Save;
   onTrain: () => void;
   onBoss: () => void;
+  onPractice: () => void;
   onParent: () => void;
   onPick: (g: string) => void;
   onShop: () => void;
@@ -284,6 +302,7 @@ function Home({
   const fight = nextFight(save);
   const boss = fight ? bossFor(formStep(save), fight.kind, save.progress.beaten) : undefined;
   const toRevision = lettersToRevision(save);
+  const rematch = rematchFor(formStep(save), save.progress.beaten, save.progress.practices ?? 0);
   const week = save.settings.weekSounds.filter((g) => GRAPHEME[g]);
   const focus = focusSound(save);
   const letters = save.settings.classSounds.filter((g) => GRAPHEME[g]); // same order as in the parent settings
@@ -386,10 +405,19 @@ function Home({
               {fight.kind === "revision" ? "Révision" : "Boss"} : {boss.name}
             </button>
           ) : (
-            <div className="lz-locked" title="Un boss arrive après chaque lettre réussie, et une grande révision toutes les 3 lettres.">
-              <Icon name="lock" size={26} />
-              Boss : réussis une lettre · révision dans {toRevision} lettre{toRevision > 1 ? "s" : ""}
-            </div>
+            // No story boss waiting: a revision fight (a rematch) is always there, harder and worth more.
+            <button
+              className="lz-cta lz-cta-boss is-revision is-practice"
+              onClick={onPractice}
+              title={`Prochain boss de l'histoire : réussis une lettre · grande révision dans ${toRevision} lettre${toRevision > 1 ? "s" : ""}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ASSET(rematch.sprite)} alt="" className="lz-cta-face" />
+              <span className="lz-practice-label">
+                Révision
+                <small>zénis ×3</small>
+              </span>
+            </button>
           )}
         </div>
 

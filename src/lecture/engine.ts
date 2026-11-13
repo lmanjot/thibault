@@ -36,6 +36,7 @@ export interface Progress {
   levels?: Partial<Record<"nuage" | "kame" | "bulles", number>>; // mini-game level chosen
   fights?: Fight[]; // bosses waiting to be fought, oldest first
   beaten?: string[]; // names of the bosses beaten, so the story moves on
+  practices?: number; // revision fights chosen from the home screen (rematches)
 }
 
 /** A boss fight earned by reading: after each cleared letter, and a revision every few letters. */
@@ -43,6 +44,7 @@ export interface Fight {
   kind: "letter" | "revision";
   letter?: string; // the letter just cleared (letter bosses)
   letters?: string[]; // the letters covered (revision bosses)
+  practice?: boolean; // a rematch chosen from the home screen: revision questions, no story progress
 }
 
 /** A revision boss comes after this many cleared letters. */
@@ -204,6 +206,11 @@ export function availableSyllables(s: Save, onlyConsonant?: string): string[] {
   for (const c of cons)
     for (const v of vows) if (!GRAPHEME[c].noVowels?.includes(v)) out.push(sid(c, v));
   return out;
+}
+
+/** A revision fight available any time: the last letters learned, and everything before. */
+export function practiceFight(s: Save): Fight {
+  return { kind: "revision", practice: true, letters: knownSounds(s).slice(-3) };
 }
 
 /** The next boss waiting to be fought, if any. */

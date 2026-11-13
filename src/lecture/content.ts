@@ -431,4 +431,15 @@ export function bossFor(step: number, kind: "letter" | "revision", beaten: strin
   return list.find((b) => !beaten.includes(b.name)) ?? list[list.length - 1];
 }
 
+/**
+ * An opponent for a rematch: the bosses already met in the story (up to Goku's era), in turn,
+ * or the era's first ones while none is beaten yet.
+ */
+export function rematchFor(step: number, beaten: string[] = [], turn = 0): Boss {
+  const eras = BOSS_ERAS.filter((e) => step >= e.from);
+  const met = eras.flatMap((e) => [...e.letter, ...e.revision]).filter((b) => beaten.includes(b.name));
+  const pool = met.length ? met : (eras[eras.length - 1] ?? BOSS_ERAS[0]).letter;
+  return pool[turn % pool.length];
+}
+
 export const ASSET = (name: string) => `/assets/dbz/ready/${name}`;

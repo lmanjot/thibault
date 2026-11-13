@@ -29,6 +29,8 @@ export const PERFECT_BONUS = 10;
 export const LETTER_BONUS = 25;
 export const LETTER_BOSS_BONUS = 15;
 export const REVISION_BOSS_BONUS = 40;
+/** A revision fight he chooses himself (a rematch): harder, and it pays well. */
+export const PRACTICE_BOSS_BONUS = 30;
 
 export type ItemKind = "companion" | "scene" | "aura" | "game" | "level" | "senzu";
 

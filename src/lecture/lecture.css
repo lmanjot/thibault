@@ -3790,3 +3790,19 @@
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
+
+/* The revision fight he can start any time (a rematch), next to the shop. */
+.lz-cta-boss.is-practice {
+  animation: none;
+}
+.lz-practice-label {
+  display: grid;
+  line-height: 1;
+  text-align: left;
+}
+.lz-practice-label small {
+  margin-top: 4px;
+  font-size: 0.55em;
+  letter-spacing: 1px;
+  color: var(--ki);
+}
