@@ -1,6 +1,9 @@
 /* Lecture Z — full-screen reading game. Everything is scoped under .lz */
 
 .lz {
+  --lz-script: "Andika";
+  --lz-cursive: "Playwrite FR Moderne";
+  --lz-display: "Bangers";
   --gi: #f47b20;
   --gi-dark: #b9470c;
   --navy: #12306b;
