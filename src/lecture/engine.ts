@@ -364,24 +364,36 @@ function soundEx(s: Save, g: string, focus: string | null, section: Section, bum
   return make[kind]() ?? complete(s, g, focus, section, bump) ?? ecoute(g, section) ?? hunt(s, g, focus, section);
 }
 
+/**
+ * A syllable exercise. Mostly "find the whole syllable" (« li » among « la », « lo », « mi »):
+ * reading syllables at a glance is the goal. Building it letter by letter (fusion: L + ? = « li »)
+ * comes now and then, only while the syllable is brand new.
+ */
 function sylEx(s: Save, id: string, section: Section, bump = 0): Ex {
   const { c, v } = parseSyl(id);
   const lvl = level(s, id) + bump;
-  const vows = readySounds(s).filter((x) => GRAPHEME[x].kind === "v" && x !== v && !GRAPHEME[c].noVowels?.includes(x));
-  const n = lvl <= 2 ? 2 : 3;
-  if (lvl <= 2) {
+  const fusion = (): Ex => {
+    const vows = readySounds(s).filter((x) => GRAPHEME[x].kind === "v" && x !== v && !GRAPHEME[c].noVowels?.includes(x));
     const near = (CONFUSE[v] ?? []).filter((x) => vows.includes(x));
-    const others = [...near, ...shuffle(vows.filter((x) => !near.includes(x)))].slice(0, n);
+    const others = [...near, ...shuffle(vows.filter((x) => !near.includes(x)))].slice(0, 2);
     return { t: "fusion", section, item: id, c, v, options: shuffle([v, ...others]) };
-  }
-  const all = availableSyllables(s).filter((x) => x !== id);
+  };
+  if (lvl <= 1 && Math.random() < 0.3) return fusion();
+
+  // Wrong answers that look alike: same consonant first (la / li), then same vowel (la / ma), then any.
+  const n = lvl <= 2 ? 2 : 3;
+  const sameC = syllablesWith(s, c).filter((x) => x !== id && parseSyl(x).c === c);
+  const sameV = syllablesWith(s, v).filter((x) => x !== id && parseSyl(x).v === v);
+  const any = availableSyllables(s).filter((x) => x !== id);
   const pick: string[] = [];
   const take = (xs: string[], k: number) => {
     for (const x of shuffle(xs)) if (pick.length < k && !pick.includes(x)) pick.push(x);
   };
-  if (lvl >= 4) take(all.filter((x) => parseSyl(x).v === v), Math.ceil(n / 2));
-  take(all.filter((x) => parseSyl(x).c === c), n);
-  take(all, n);
+  take(sameC, Math.ceil(n / 2));
+  take(sameV, n);
+  take(sameC, n);
+  take(any, n);
+  if (!pick.length) return fusion(); // nothing to compare with yet
   return { t: "syllabe", section, item: id, options: shuffle([id, ...pick]) };
 }
 
