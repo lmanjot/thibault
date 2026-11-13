@@ -381,7 +381,7 @@ function sylEx(s: Save, id: string, section: Section, bump = 0): Ex {
   if (lvl <= 1 && Math.random() < 0.3) return fusion();
 
   // Wrong answers that look alike: same consonant first (la / li), then same vowel (la / ma), then any.
-  const n = lvl <= 2 ? 2 : 3;
+  const n = 3; // 4 choices from the start (« nu » among na / nu / lu / ni)
   const sameC = syllablesWith(s, c).filter((x) => x !== id && parseSyl(x).c === c);
   const sameV = syllablesWith(s, v).filter((x) => x !== id && parseSyl(x).v === v);
   const any = availableSyllables(s).filter((x) => x !== id);
