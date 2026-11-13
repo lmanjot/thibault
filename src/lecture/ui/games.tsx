@@ -328,10 +328,20 @@ interface KameW {
 }
 
 const FOES = ["saibaman.png", "saibaman.png", "soldier.png"];
-const HANDS = { x: 0.2, y: 0.66 }; // where the beam leaves Goku's hands (share of the screen)
+// Where enemies appear and where the beam leaves Goku's hands (shares of the screen).
+// Landscape: Goku on the left, enemies on the right. Portrait (phones): Goku at the bottom,
+// enemies spread over the upper part of the screen.
+const KAME_LAYOUT = {
+  wide: { x: [0.4, 0.88], y: [0.32, 0.7], hands: { x: 0.2, y: 0.66 }, apart: 0.2 },
+  tall: { x: [0.16, 0.84], y: [0.17, 0.62], hands: { x: 0.3, y: 0.8 }, apart: 0.2 },
+};
 
 function Kame({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
   const pace = paceOf(level);
+  const [lay] = useState(() => (typeof window !== "undefined" && window.innerHeight > window.innerWidth ? KAME_LAYOUT.tall : KAME_LAYOUT.wide));
+  // Distance on screen (portrait screens are narrow: x counts for less).
+  const aspect = typeof window !== "undefined" ? window.innerWidth / window.innerHeight : 1.5;
+  const far = (a: { x: number; y: number }, x: number, y: number) => Math.hypot((a.x - x) * aspect, a.y - y) >= lay.apart;
   const { world, setWorld, phase, count } = useGame<KameW>(
     () => ({ time: 0, score: 0, foes: [], spawn: 0.3, shots: [], combo: 0, lastHit: -9, gone: [] }),
     (w, dt) => {
@@ -346,11 +356,11 @@ function Kame({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
       spawn -= dt;
       if (spawn <= 0 && foes.filter((f) => !f.hitAt).length < 3) {
         spawn = Math.max(0.45, 1 - w.time * 0.012) / pace;
-        let x = rand(0.4, 0.88);
-        let y = rand(0.32, 0.7);
-        for (let k = 0; k < 8 && foes.some((f) => Math.hypot(f.x - x, f.y - y) < 0.2); k++) {
-          x = rand(0.4, 0.88);
-          y = rand(0.32, 0.7);
+        let x = rand(lay.x[0], lay.x[1]);
+        let y = rand(lay.y[0], lay.y[1]);
+        for (let k = 0; k < 12 && !foes.every((f) => far(f, x, y)); k++) {
+          x = rand(lay.x[0], lay.x[1]);
+          y = rand(lay.y[0], lay.y[1]);
         }
         foes.push({ id: nextId++, x, y, born: w.time, life: Math.max(1.3, 2.4 - w.time * 0.015) / pace, sprite: FOES[Math.floor(Math.random() * FOES.length)] });
       }
@@ -416,7 +426,7 @@ function Kame({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
         </button>
       ))}
       {world.shots.map((s) => (
-        <Beam key={s.id} x0={HANDS.x} y0={HANDS.y} x1={s.x} y1={s.y} />
+        <Beam key={s.id} x0={lay.hands.x} y0={lay.hands.y} x1={s.x} y1={s.y} />
       ))}
       {world.shots.map((s) => (
         <span key={`b${s.id}`} className="lz-blast" style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }} aria-hidden>
@@ -479,12 +489,14 @@ interface BoulesW {
   hints: number; // right balls still to show with a glow
 }
 
-const WALL = 0.06; // ball radius, as a share of the width
+// Ball radius as a share of the screen width: balls are 120 px, or 24% of a phone's width.
+const wallFor = () => (typeof window === "undefined" ? 0.06 : Math.min(0.14, Math.max(0.05, Math.min(window.innerWidth * 0.24, 120, window.innerHeight * 0.16) / 2 / window.innerWidth + 0.01)));
 
 function Boules({ letters, onDone, level, seconds }: GameProps & { letters: string[] }) {
   const pace = paceOf(level);
   const pool = letters.length ? letters : ["a", "i", "o"];
   const others = pool.length > 1 ? pool : ["a", "i", "o", "u"];
+  const [WALL] = useState(wallFor);
   const { world, setWorld, phase, count } = useGame<BoulesW>(
     () => ({ time: 0, score: 0, target: pool[Math.floor(Math.random() * pool.length)], balls: [], spawn: 0.2, hints: 2 }),
     (w, dt) => {
@@ -507,7 +519,7 @@ function Boules({ letters, onDone, level, seconds }: GameProps & { letters: stri
         });
       spawn -= dt;
       if (spawn <= 0) {
-        spawn = rand(0.55, 0.85) / pace;
+        spawn = (rand(0.55, 0.85) / pace) * (WALL > 0.08 ? 1.4 : 1); // fewer at once on a narrow phone
         const isTarget = Math.random() < 0.45;
         const wrongs = others.filter((l) => l !== w.target);
         const letter = isTarget || !wrongs.length ? w.target : wrongs[Math.floor(Math.random() * wrongs.length)];
@@ -515,7 +527,7 @@ function Boules({ letters, onDone, level, seconds }: GameProps & { letters: stri
         if (hint) hints -= 1;
         balls.push({
           id: nextId++,
-          x: rand(0.15, 0.85),
+          x: rand(WALL, 1 - WALL),
           y: 1.1,
           vx: (Math.random() < 0.5 ? -1 : 1) * rand(0.06, 0.16) * pace,
           vy: (rand(0.11, 0.16) + w.time * 0.001) * pace,

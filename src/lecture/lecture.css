@@ -3240,3 +3240,523 @@
     animation: none;
   }
 }
+
+/* ——— Phones (portrait): the home screen is one centered column ———
+   title → power gauge → Goku (in the flow, never behind the buttons) → letters → buttons. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-home {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: max(14px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    text-align: center;
+    background-position: center;
+  }
+  .lz-home-shade {
+    background:
+      radial-gradient(ellipse at 50% 55%, rgba(255, 210, 63, 0.3), transparent 50%),
+      linear-gradient(180deg, rgba(10, 28, 64, 0.55), rgba(10, 28, 64, 0.1) 40%, rgba(10, 28, 64, 0.15) 60%, rgba(10, 28, 64, 0.65));
+  }
+  .lz-home-main {
+    display: contents; /* its parts join the column, around Goku */
+  }
+  .lz-brand {
+    order: 1;
+    position: relative;
+    font-size: clamp(48px, 15vw, 76px);
+  }
+  .lz-power {
+    order: 2;
+    position: relative;
+    justify-items: center;
+    width: min(340px, 100%);
+    gap: 6px;
+  }
+  .lz-formname {
+    font-size: 24px;
+  }
+  .lz-gauge {
+    width: 100%;
+    height: 14px;
+  }
+  .lz-hint-kid {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .lz-home-hero {
+    order: 3;
+    position: relative;
+    inset: auto;
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    opacity: 1;
+    padding: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .lz-home-hero .lz-goku-lg,
+  .lz-home-hero.has-companion .lz-goku-lg {
+    height: 100%;
+    max-height: 340px;
+    transform: none;
+  }
+  .lz-companion {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    order: -1;
+    height: 72%;
+    max-height: 240px;
+    max-width: 40%;
+    margin-right: -6%;
+  }
+  .lz-weekrow {
+    order: 4;
+    position: relative;
+    flex-wrap: nowrap;
+    justify-content: safe center;
+    gap: 10px;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 12px 16px 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .lz-weekrow::-webkit-scrollbar {
+    display: none;
+  }
+  .lz-weektile {
+    flex: none;
+    min-width: 64px;
+    padding: 6px 10px 8px;
+    border-radius: 18px;
+    gap: 4px;
+  }
+  .lz-weektile .lz-read {
+    font-size: 42px;
+  }
+  .lz-weektile.is-focus {
+    outline-width: 4px;
+  }
+  .lz-week-star {
+    width: 24px;
+    height: 24px;
+    top: -8px;
+    right: -6px;
+    font-size: 13px;
+  }
+  .lz-actions {
+    order: 5;
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    width: min(380px, 100%);
+  }
+  .lz-actions > .lz-cta:first-child {
+    grid-column: 1 / -1;
+    justify-content: center;
+    padding: 14px 20px;
+    font-size: 30px;
+  }
+  .lz-actions .lz-cta-shop {
+    grid-column: 2;
+    grid-row: 2;
+    padding: 10px 16px;
+    font-size: 24px;
+  }
+  .lz-actions .lz-cta-boss,
+  .lz-actions .lz-locked {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 15px;
+    line-height: 1.25;
+    text-align: left;
+  }
+  .lz-actions .lz-cta-boss {
+    font-size: 20px;
+  }
+  .lz-actions .lz-cta-face {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+/* ——— Phones (portrait): exercises fit the width, Goku cheers below them ——— */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-topbar {
+    gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 0;
+  }
+  .lz-topbar .lz-round.lz-small {
+    width: 42px;
+    height: 42px;
+  }
+  .lz-section {
+    font-size: 16px;
+    padding: 4px 10px;
+  }
+  .lz-stage {
+    min-height: 0;
+    padding: 10px 12px 6px;
+    place-items: center;
+  }
+  .lz-session:not(.is-boss) .lz-stage {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .lz-ex {
+    width: 100%;
+    max-width: 440px;
+    gap: 18px;
+  }
+  .lz-session:not(.is-boss) .lz-ex {
+    padding: 16px 12px 20px;
+    border-radius: 28px;
+  }
+  /* Goku stands under the exercise instead of behind it. */
+  .lz-session:not(.is-boss) .lz-coach {
+    display: flex;
+    position: relative;
+    left: auto;
+    order: 3;
+    flex: none;
+    justify-content: center;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .lz-session:not(.is-boss) .lz-coach .lz-goku-sm {
+    height: min(26vh, 230px);
+  }
+  .lz-speaker {
+    width: 64px;
+    height: 64px;
+  }
+  .lz-prompt {
+    gap: 14px;
+  }
+  .lz-pic {
+    width: 80px;
+    height: 80px;
+    font-size: 48px;
+  }
+  .lz-pic-big {
+    width: 96px;
+    height: 96px;
+    font-size: 58px;
+  }
+  .lz-ear {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+  }
+  .lz-ear-letter {
+    font-size: 64px;
+  }
+  .lz-ear-q {
+    width: 34px;
+    height: 34px;
+    font-size: 22px;
+    top: -10px;
+    right: -10px;
+  }
+  /* Picture and speaker on one row, the word with its gap on its own row below. */
+  .lz-complete-top {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px 18px;
+  }
+  .lz-complete-top .lz-wordline {
+    order: 3;
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: center;
+    padding: 4px 10px 8px;
+    border-radius: 22px;
+  }
+  .lz-word {
+    font-size: clamp(44px, 15vw, 66px);
+  }
+  .lz-gap {
+    border-width: 4px;
+    border-radius: 14px;
+  }
+  /* Letter choices: always one row, each tile sized to the screen. */
+  .lz-options {
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 8px;
+  }
+  .lz-options .lz-tile {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 84px;
+    height: 84px;
+    padding: 0;
+    border-radius: 20px;
+    font-size: 54px;
+    box-shadow: 0 6px 0 #c9bfa8, 0 10px 18px rgba(0, 0, 0, 0.12);
+  }
+  .lz-options .lz-tile.syl {
+    max-width: 110px;
+    font-size: 40px;
+  }
+  .lz-options.lz-yesno {
+    gap: 24px;
+  }
+  .lz-yn {
+    width: 120px;
+    height: 96px;
+    border-radius: 24px;
+  }
+  /* Fusion: consonant + slot side by side. */
+  .lz-fuse {
+    gap: 12px;
+  }
+  .lz-fuse .lz-tile,
+  .lz-slot {
+    min-width: 96px;
+    height: 104px;
+    border-radius: 22px;
+    font-size: 70px;
+  }
+  /* Letter hunt: 4 columns that share the width. */
+  .lz-hunt {
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .lz-hunt.n6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lz-hunt .lz-tile-sm {
+    min-width: 0;
+    height: 76px;
+    padding: 0;
+    border-radius: 18px;
+    font-size: 48px;
+  }
+  .lz-hunt-count {
+    gap: 8px;
+  }
+  .lz-hunt-count span {
+    width: 40px;
+    height: 40px;
+    font-size: 24px;
+    border-width: 3px;
+  }
+}
+
+/* ——— Phones (portrait): results, rewards and the bonus picker ——— */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-result,
+  .lz-transform,
+  .lz-bonus-pick {
+    gap: 14px;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .lz-panel,
+  .lz-reward {
+    width: 100%;
+    max-width: 380px;
+    padding: 22px 18px 24px;
+    border-radius: 28px;
+    gap: 14px;
+  }
+  .lz-panel .lz-cta,
+  .lz-reward .lz-cta {
+    white-space: nowrap;
+    padding: 12px 20px;
+    font-size: 26px;
+  }
+  .lz-row {
+    gap: 14px;
+  }
+  .lz-reward-story {
+    font-size: 17px;
+  }
+  .lz-reward-letters span {
+    min-width: 64px;
+    font-size: 48px;
+  }
+  .lz-transform .lz-goku-lg {
+    height: 34vh;
+  }
+}
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-bonus-games {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 400px;
+    gap: 12px;
+  }
+  .lz-gamecard {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 84px 1fr;
+    grid-template-rows: 1fr auto;
+    justify-items: start;
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 4px;
+    padding: 10px 14px;
+    border-radius: 22px;
+    text-align: left;
+  }
+  .lz-gamecard img {
+    grid-row: 1 / span 2;
+    width: 84px;
+    height: 84px;
+  }
+  .lz-gamecard-name {
+    align-self: center;
+    font-size: 24px;
+    line-height: 1.05;
+  }
+  .lz-gamecard-lock {
+    font-size: 13px;
+    padding: 3px 10px;
+  }
+  .lz-gamecard-tag {
+    top: 8px;
+    right: 10px;
+    font-size: 13px;
+  }
+  .lz-senzu-toggle {
+    font-size: 18px;
+    padding: 10px 14px;
+  }
+}
+
+/* Kaméhaméha on phones: a smaller Goku at the bottom, enemies sized to the width. */
+@media (orientation: portrait) {
+  .lz-kame-goku {
+    left: 50%;
+    translate: -70% 0;
+  }
+  .lz-kame-goku img {
+    height: min(28vh, 260px);
+  }
+  .lz-foe {
+    width: min(23vw, 140px);
+    height: min(15vh, 170px);
+  }
+}
+/* Nuage on phones: the 7-ball bar sits under the score and the timer. */
+@media (orientation: portrait) {
+  .lz-collect {
+    top: 78px;
+    gap: 3px;
+    padding: 4px 8px;
+  }
+  .lz-collect-slot .lz-dbsvg {
+    width: 34px;
+    height: 34px;
+  }
+}
+@media (orientation: portrait) and (max-width: 380px) {
+  .lz-collect-slot .lz-dbsvg {
+    width: 30px;
+    height: 30px;
+  }
+}
+/* Boules magiques on phones: balls sized to the width so they bounce inside the screen. */
+@media (orientation: portrait) {
+  .lz-magicball {
+    width: min(24vw, 120px, 16vh);
+    height: min(24vw, 120px, 16vh);
+  }
+  .lz-magicball-letter {
+    font-size: min(12vw, 60px);
+  }
+}
+/* Bulma's shop on phones: compact header, tabs in one sliding row. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-shop-head {
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .lz-shop-head .lz-title-sm {
+    flex: 1;
+    min-width: 0;
+    font-size: 26px;
+    line-height: 1;
+  }
+  .lz-shop-host {
+    height: 72px;
+    margin: -4px 0 -6px;
+  }
+  .lz-wallet {
+    flex: none;
+    font-size: 22px;
+    padding: 6px 12px;
+  }
+  .lz-shop-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -16px;
+    padding: 4px 16px 8px;
+  }
+  .lz-shop-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lz-shop-tabs > button {
+    flex: none;
+  }
+}
+/* Versus screen on phones: both fighters fit side by side. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-vs-row {
+    width: 100%;
+    justify-content: center;
+    gap: 2vw;
+  }
+  .lz-vs-row .lz-goku-lg,
+  .lz-boss-big {
+    height: min(34vh, 300px);
+    max-width: 42vw;
+  }
+  .lz-vs-row .lz-goku-lg .lz-goku-img,
+  .lz-boss-big img {
+    max-width: 42vw;
+    object-fit: contain;
+    object-position: bottom;
+  }
+  .lz-vs {
+    flex: none;
+    font-size: 40px;
+  }
+}
+/* Phones: exercise panels include their padding in their width, also in boss fights. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-ex {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .lz-session.is-boss .lz-ex {
+    padding: 14px 12px 18px;
+    border-radius: 26px;
+    gap: 14px;
+  }
+  .lz-session.is-boss .lz-options .lz-tile {
+    min-width: 0;
+    height: 80px;
+  }
+  .lz-session.is-boss .lz-hunt .lz-tile-sm {
+    min-width: 0;
+    height: 70px;
+  }
+  .lz-session.is-boss .lz-fuse .lz-tile,
+  .lz-session.is-boss .lz-slot {
+    min-width: 90px;
+    height: 96px;
+  }
+}

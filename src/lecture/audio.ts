@@ -2,7 +2,7 @@
 // Speech plays, in order of preference: the parent's own recording (for sounds), the stored
 // Goku clip (public/lecture/voice, generated once by scripts/gen-voice.mts), the device voice.
 
-import { soundSay, sylSay } from "./voice";
+import { LETTER_NAME, soundSay, sylSay } from "./voice";
 
 /** A piece of speech: a catalog line, or a sound/syllable that a parent recording can replace. */
 export type Part = string | { rec: string; fallback: string };
@@ -232,6 +232,9 @@ export function playKamehameha(): Promise<boolean> {
 // ——— What to say for each item ———
 
 export const soundPart = (g: string): Part => ({ rec: `g:${g}`, fallback: soundSay(g) });
+
+/** The letter's name ("esse"), or its sound when it has no name of its own (vowels, ou, ch…). */
+export const namePart = (g: string): Part => LETTER_NAME[g] ?? soundPart(g);
 
 export const sylPart = (c: string, v: string): Part => ({ rec: `s:${c}|${v}`, fallback: sylSay(c, v) });
 

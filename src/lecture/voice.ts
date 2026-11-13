@@ -71,6 +71,28 @@ export function soundSay(g: string): string {
   return gr.say ?? CONSONANT_SAY[g] ?? gr.display;
 }
 
+/**
+ * How a letter is named (the alphabet: "esse", not the sound "sss"), for the home screen.
+ * Vowels are named like their sound; two-letter sounds (ou, on, ch…) are not letters and keep their sound.
+ */
+export const LETTER_NAME: Record<string, string> = {
+  b: "bé",
+  c: "cé",
+  d: "dé",
+  f: "effe",
+  g: "gé",
+  j: "ji",
+  l: "elle",
+  m: "emme",
+  n: "enne",
+  p: "pé",
+  r: "erre",
+  s: "esse",
+  t: "té",
+  v: "vé",
+  z: "zède",
+};
+
 export function sylSay(c: string, v: string): string {
   if (v === "e" && SCHWA_SAY[c]) return SCHWA_SAY[c];
   if (v === "in") return GRAPHEME[c].display + "ain";
@@ -99,6 +121,7 @@ export function allClips(): Clip[] {
     add(f.story); // then what the new power does
   });
   for (const g of GRAPHEMES) add(soundSay(g.id), true);
+  Object.values(LETTER_NAME).forEach((n) => add(n, true));
   const vowels = GRAPHEMES.filter((g) => g.kind === "v");
   for (const c of GRAPHEMES.filter((g) => g.kind === "c"))
     for (const v of vowels) if (!c.noVowels?.includes(v.id)) add(sylSay(c.id, v.id), true);

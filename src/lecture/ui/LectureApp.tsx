@@ -22,7 +22,7 @@ import {
   type Ex,
   type Save,
 } from "../engine";
-import { loadRecordings, loadVoice, sfx, soundPart, speak, stopSpeech } from "../audio";
+import { loadRecordings, loadVoice, namePart, sfx, soundPart, speak, stopSpeech } from "../audio";
 import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
@@ -333,7 +333,7 @@ function Home({
                 onClick={() => {
                   sfx.tap();
                   onPick(g);
-                  speak([soundPart(g)]);
+                  speak([namePart(g)]);
                 }}
               >
                 {isCleared(save, g) ? <span className="lz-week-star is-done">✓</span> : week.includes(g) && <span className="lz-week-star">★</span>}
@@ -350,7 +350,7 @@ function Home({
                 onClick={() => {
                   sfx.tap();
                   onPick(g);
-                  speak([soundPart(g)]);
+                  speak([namePart(g)]);
                 }}
               >
                 <span className="lz-week-star is-new">+</span>
