@@ -14,6 +14,8 @@ export const MINI_GAMES = [
   { id: "nuage", name: "Nuage magique", img: "goku_kid_cloud.png", tip: "Attrape les 7 boules de cristal !" },
   { id: "kame", name: "Kaméhaméha", img: "saibaman.png", tip: "Touche les ennemis !" },
   { id: "bulles", name: "Boules magiques", img: "kikoha.png", tip: "Touche les boules avec la bonne lettre !" },
+  { id: "memoire", name: "Memory des amis", img: "bulma_kid.png", tip: "Trouve les paires d'amis !" },
+  { id: "route", name: "Route du Serpent", img: "goku_kid_staff.png", tip: "Saute par-dessus les rochers !" },
 ] as const;
 export type GameId = (typeof MINI_GAMES)[number]["id"];
 
@@ -613,6 +615,233 @@ function Boules({ letters, onDone, level, seconds }: GameProps & { letters: stri
   );
 }
 
+// ——— 4. Memory des amis: turn the cards, find the pairs of characters ———
+
+const FACES = [
+  "goku_kid.png",
+  "bulma_kid.png",
+  "krillin_kid.png",
+  "roshi.png",
+  "yamcha.png",
+  "piccolo_jr.png",
+  "vegeta_new.png",
+  "gohan.png",
+  "frieza_new.png",
+  "buu_fat.png",
+  "trunks.png",
+  "beerus.png",
+  "shenron.png",
+  "pilaf.png",
+];
+
+interface Card {
+  id: number;
+  face: string;
+  open: boolean;
+  found: boolean;
+}
+interface MemoW {
+  time: number;
+  score: number;
+  cards: Card[];
+  closeAt?: number; // when two different cards turn back
+  boards: number; // boards cleared
+}
+
+/** Pairs per board: 6, 8, then 10 at level 3. */
+const pairsFor = (level: number) => (level >= 3 ? 10 : level === 2 ? 8 : 6);
+
+function dealCards(level: number): Card[] {
+  const faces = [...FACES].sort(() => Math.random() - 0.5).slice(0, pairsFor(level));
+  const cards = [...faces, ...faces].map((face) => ({ id: nextId++, face, open: false, found: false }));
+  for (let i = cards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+  return cards;
+}
+
+function Memoire({ onDone, level, seconds }: GameProps) {
+  const { world, setWorld, phase, count } = useGame<MemoW>(
+    () => ({ time: 0, score: 0, cards: dealCards(level), boards: 0 }),
+    (w) => {
+      // Two different cards: turn them back after a moment.
+      if (w.closeAt !== undefined && w.time >= w.closeAt) {
+        return { ...w, closeAt: undefined, cards: w.cards.map((c) => (c.found ? c : { ...c, open: false })) };
+      }
+      // Board cleared: a bonus and a new board.
+      if (w.cards.every((c) => c.found)) {
+        sfx.power();
+        return { ...w, score: w.score + 3 * level, boards: w.boards + 1, cards: dealCards(level) };
+      }
+      return w;
+    },
+    seconds,
+  );
+
+  const flip = (id: number) => {
+    if (phase !== "play") return;
+    setWorld((w) => {
+      if (w.closeAt !== undefined) return w; // wait for the two cards to turn back
+      const card = w.cards.find((c) => c.id === id);
+      if (!card || card.open || card.found) return w;
+      sfx.tap();
+      const cards = w.cards.map((c) => (c.id === id ? { ...c, open: true } : c));
+      const open = cards.filter((c) => c.open && !c.found);
+      if (open.length < 2) return { ...w, cards };
+      if (open[0].face === open[1].face) {
+        sfx.good();
+        return { ...w, score: w.score + level, cards: cards.map((c) => (c.face === open[0].face ? { ...c, found: true } : c)) };
+      }
+      return { ...w, cards, closeAt: w.time + 0.9 };
+    });
+  };
+
+  const n = world.cards.length;
+  const [tall] = useState(() => typeof window !== "undefined" && window.innerHeight > window.innerWidth);
+  const cols = tall ? (n <= 12 ? 3 : 4) : n <= 12 ? 4 : n <= 16 ? 4 : 5;
+  const rows = Math.ceil(n / cols);
+
+  return (
+    <div className="lz-game lz-game-memo" style={{ backgroundImage: `url(${ASSET("bg_papaya.png")})` }}>
+      <Hud score={world.score} time={world.time} icon="★" seconds={seconds} />
+      <div className="lz-memo" style={{ ["--cols" as string]: cols, ["--rows" as string]: rows }}>
+        {world.cards.map((c) => (
+          <button
+            key={c.id}
+            className={`lz-memo-card ${c.open || c.found ? "is-open" : ""} ${c.found ? "is-found" : ""}`}
+            onClick={() => flip(c.id)}
+            aria-label={c.open || c.found ? c.face.replace(".png", "") : "Carte"}
+          >
+            <span className="lz-memo-back" aria-hidden>
+              <DragonBall stars={4} size={44} />
+            </span>
+            <span className="lz-memo-face" aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ASSET(c.face)} alt="" draggable={false} />
+            </span>
+          </button>
+        ))}
+      </div>
+      <Overlay phase={phase} count={count} score={world.score} game="memoire" onDone={onDone} />
+    </div>
+  );
+}
+
+// ——— 5. Route du Serpent: run, tap to jump over rocks, catch the dragon balls ———
+
+interface Thing {
+  id: number;
+  x: number; // share of the width
+  kind: "rock" | "ball";
+  h: number; // height above the road (share of the height), for balls
+  stars: number;
+  done?: boolean;
+}
+interface RouteW {
+  time: number;
+  score: number;
+  y: number; // runner's height above the road
+  vy: number;
+  things: Thing[];
+  spawn: number;
+  dist: number; // for the scrolling background
+  hitAt: number;
+  pops: { id: number; x: number; y: number; t: number; text: string; good: boolean }[];
+}
+
+const RUNNER_X = 0.22;
+// A long, floaty jump: easy to time for a young child.
+const GRAVITY = 3.3;
+const JUMP = 1.65;
+
+function Route({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
+  const pace = paceOf(level);
+  const { world, setWorld, phase, count } = useGame<RouteW>(
+    () => ({ time: 0, score: 0, y: 0, vy: 0, things: [], spawn: 1, dist: 0, hitAt: -9, pops: [] }),
+    (w, dt) => {
+      const speed = (0.32 + w.time * 0.004) * pace; // screen widths per second
+      let { y, vy, spawn, score, hitAt } = w;
+      vy -= GRAVITY * dt;
+      y = Math.max(0, y + vy * dt);
+      if (y === 0) vy = 0;
+      const pops = w.pops.filter((p) => w.time - p.t < 0.7);
+      const things: Thing[] = [];
+      for (const t of w.things) {
+        const x = t.x - speed * dt;
+        if (x < -0.1) continue;
+        let done = t.done;
+        const near = Math.abs(x - RUNNER_X) < (t.kind === "rock" ? 0.035 : 0.06);
+        if (!done && near && t.kind === "rock" && y < 0.1 && w.time - hitAt > 0.8) {
+          // Bumped into a rock: a stumble, never a game over.
+          done = true;
+          hitAt = w.time;
+          score = Math.max(0, score - 1);
+          sfx.hit();
+          pops.push({ id: nextId++, x, y: 0.72, t: w.time, text: "−1", good: false });
+        } else if (!done && near && t.kind === "ball" && Math.abs(y - t.h) < 0.12) {
+          done = true;
+          score += 2 * level;
+          sfx.good();
+          pops.push({ id: nextId++, x, y: 0.72 - t.h, t: w.time, text: `+${2 * level}`, good: true });
+          continue; // caught: it disappears
+        } else if (!done && t.kind === "rock" && x < RUNNER_X - 0.06) {
+          done = true; // jumped over it
+          score += level;
+        }
+        things.push({ ...t, x, done });
+      }
+      spawn -= dt;
+      if (spawn <= 0) {
+        spawn = (rand(1.1, 1.8) - Math.min(0.4, w.time * 0.006)) / pace;
+        const ball = Math.random() < 0.4;
+        things.push({ id: nextId++, x: 1.08, kind: ball ? "ball" : "rock", h: ball ? rand(0.18, 0.34) : 0, stars: 1 + Math.floor(Math.random() * 7) });
+      }
+      return { ...w, y, vy, spawn, score, hitAt, things, pops, dist: w.dist + speed * dt };
+    },
+    seconds,
+  );
+
+  const jump = () => {
+    if (phase !== "play") return;
+    setWorld((w) => (w.y > 0.02 ? w : { ...w, vy: JUMP }));
+  };
+
+  const stumbling = world.time - world.hitAt < 0.8;
+
+  return (
+    <div
+      className="lz-game lz-game-route"
+      style={{ backgroundImage: `url(${ASSET("bg_road.png")})` }}
+      onPointerDown={jump}
+    >
+      <Hud score={world.score} time={world.time} icon="★" seconds={seconds} />
+      <div className="lz-road" style={{ backgroundPositionX: `${-world.dist * 900}px, 0` }} aria-hidden />
+      {world.things.map((t) =>
+        t.kind === "rock" ? (
+          <span key={t.id} className="lz-rock" style={{ left: `${t.x * 100}%` }} aria-hidden />
+        ) : (
+          <span key={t.id} className="lz-route-ball" style={{ left: `${t.x * 100}%`, bottom: `calc(22% + ${t.h * 100}%)` }} aria-hidden>
+            <DragonBall stars={t.stars} size={54} />
+          </span>
+        ),
+      )}
+      <div className={`lz-runner ${world.y > 0 ? "is-air" : ""} ${stumbling ? "is-stumble" : ""}`} style={{ left: `${RUNNER_X * 100}%`, bottom: `calc(22% + ${world.y * 100}%)` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={ASSET(goku)} alt="" draggable={false} />
+      </div>
+      {world.pops.map((p) => (
+        <span key={p.id} className={`lz-catch ${p.good ? "good" : "bad"}`} style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
+          {p.good && <span className="lz-sparks" aria-hidden />}
+          <span className="lz-pop-text">{p.text}</span>
+        </span>
+      ))}
+      {phase === "play" && world.time < 4 && <span className="lz-route-tip">Touche l&apos;écran pour sauter !</span>}
+      <Overlay phase={phase} count={count} score={world.score} game="route" onDone={onDone} />
+    </div>
+  );
+}
+
 export function MiniGame({
   id,
   letters,
@@ -633,5 +862,7 @@ export function MiniGame({
   const seconds = GAME_SECONDS + extra;
   if (id === "nuage") return <Nuage onDone={onDone} level={level} seconds={seconds} />;
   if (id === "kame") return <Kame onDone={onDone} level={level} seconds={seconds} goku={goku} beam={beam} />;
+  if (id === "memoire") return <Memoire onDone={onDone} level={level} seconds={seconds} />;
+  if (id === "route") return <Route onDone={onDone} level={level} seconds={seconds} goku={goku} />;
   return <Boules letters={letters} onDone={onDone} level={level} seconds={seconds} />;
 }

@@ -33,7 +33,7 @@ export interface Progress {
   owned?: string[]; // shop items bought
   equip?: { companion?: string; scene?: string; aura?: string; fighter?: string }; // fighter: a friend who fights instead of Goku
   senzu?: number; // beans in stock (+15 s on a mini-game)
-  levels?: Partial<Record<"nuage" | "kame" | "bulles", number>>; // mini-game level chosen
+  levels?: Partial<Record<"nuage" | "kame" | "bulles" | "memoire" | "route", number>>; // mini-game level chosen
   fights?: Fight[]; // bosses waiting to be fought, oldest first
   beaten?: string[]; // names of the bosses beaten, so the story moves on
   practices?: number; // revision fights chosen from the home screen (rematches)
