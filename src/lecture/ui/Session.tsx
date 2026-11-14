@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ASSET, type Boss, type Form } from "../content";
+import { ASSET, attackFor, type Attack, type Boss, type Form } from "../content";
 import { itemOf, type Ex } from "../engine";
 import { zeniFor } from "../shop";
 import { playKamehameha, prefetch, prefetchKamehameha, sfx, speak, stopSpeech } from "../audio";
@@ -45,6 +45,7 @@ export function Session({
   exercises,
   form,
   fighter,
+  step = 0,
   boss,
   onExit,
   onDone,
@@ -52,6 +53,7 @@ export function Session({
   exercises: Ex[];
   form: Form;
   fighter?: { id?: string; name: string; img: string };
+  step?: number; // Goku's step in the story (his moves depend on it)
   boss?: Boss;
   onExit: () => void;
   onDone: (r: SessionResult) => void;
@@ -59,6 +61,8 @@ export function Session({
   const [queue, setQueue] = useState(() => exercises.map((ex, i) => ({ ex, key: i, tries: 0 })));
   const [pos, setPos] = useState(0);
   const [fx, setFx] = useState<"" | "beam" | "final" | "hit">("");
+  // The fighter's move: its colour for every hit, and its name, shape and cry for the final blow.
+  const [attack, setAttack] = useState<Attack>(() => attackFor(fighter?.id, step));
   const result = useRef<SessionResult>({ ok: 0, total: 0, answers: [], zeni: 0 });
   const scoredTotal = exercises.length;
   const [hits, setHits] = useState(0);
@@ -129,13 +133,23 @@ export function Session({
   }
 
   function finalBlow() {
+    const move = attackFor(fighter?.id, step); // Goku alternates between his moves
+    setAttack(move);
     setFx("final");
-    playKamehameha().then((ok) => {
-      if (!ok) {
-        sfx.beam(true);
-        speak([L.kamehameha]);
-      }
-    });
+    if (!move.say) {
+      playKamehameha().then((ok) => {
+        if (!ok) {
+          sfx.beam(true);
+          speak([L.kamehameha]);
+        }
+      });
+    } else {
+      // Same timing as the Kamehameha: charge, shout the move's name, fire at 4.2 s, land at 5.6 s.
+      stopSpeech();
+      sfx.charge();
+      setTimeout(() => speak([move.say!]), 2600);
+      setTimeout(() => sfx.blast(), 4200);
+    }
     setTimeout(() => sfx.boom(), FINAL_IMPACT_MS);
   }
 
@@ -173,11 +187,12 @@ export function Session({
             <Goku form={form} size="md" state={fx === "hit" ? "hit" : ""} as={fighter} />
           </div>
           {(fx === "beam" || fx === "final") && (
-            <div className={`lz-kame ${fx === "final" ? "is-final" : ""}`} aria-hidden>
+            <div className={`lz-kame atk-${attack.color} ${fx === "final" ? `is-final shape-${attack.shape ?? "beam"}` : ""}`} aria-hidden>
               <span className="lz-kame-charge" />
               <span className="lz-kame-beam" />
               <span className="lz-kame-impact" />
               {fx === "final" && <span className="lz-kame-ring" />}
+              {fx === "final" && <span className="lz-atk-name">{attack.name} !</span>}
             </div>
           )}
           <div className={`lz-boss fx-${boss.fx ?? "none"} ${fx === "beam" ? "is-hit" : fx === "final" ? "is-final-hit" : ""} ${fx === "hit" ? "is-attack" : ""}`}>

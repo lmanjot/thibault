@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ASSET, bossFor, formFor, GRAPHEME, rematchFor, type Boss } from "../content";
+import { ASSET, attackFor, bossFor, formFor, GRAPHEME, rematchFor, type Boss } from "../content";
 import {
   nextFight,
   practiceFight,
@@ -66,8 +66,19 @@ function Game({ fontClass }: { fontClass: string }) {
     loadVoice();
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
+    // --vh = 1% of the height really visible. Tablet and phone browsers count "100vh" without their
+    // toolbar, which cut off the bottom of the screen; every size in lecture.css uses --vh instead.
+    const vv = window.visualViewport;
+    const setVh = () => document.documentElement.style.setProperty("--vh", `${(vv?.height ?? window.innerHeight) / 100}px`);
+    setVh();
+    vv?.addEventListener("resize", setVh);
+    window.addEventListener("resize", setVh);
+    window.addEventListener("orientationchange", setVh);
     return () => {
       document.documentElement.style.overflow = prev;
+      vv?.removeEventListener("resize", setVh);
+      window.removeEventListener("resize", setVh);
+      window.removeEventListener("orientationchange", setVh);
       stopSpeech();
     };
   }, []);
@@ -230,6 +241,7 @@ function Game({ fontClass }: { fontClass: string }) {
           exercises={screen.exercises}
           form={form}
           fighter={fighter}
+          step={formStep(save)}
           boss={screen.boss}
           onExit={() => setScreen({ s: "home" })}
           onDone={(r) => finish(r, screen.boss, screen.fight)}
@@ -559,5 +571,5 @@ function Bonus({
         </div>
       </div>
     );
-  return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={fighter.img} onDone={onDone} />;
+  return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
 }

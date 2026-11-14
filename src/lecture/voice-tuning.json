@@ -42,5 +42,8 @@
   "o": {
     "say": "ooo",
     "speed": 0.8
+  },
+  "Galick gun !": {
+    "say": "Galique gunne !"
   }
 }

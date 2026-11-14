@@ -356,7 +356,7 @@ const KAME_LAYOUT = {
   tall: { x: [0.16, 0.84], y: [0.17, 0.62], hands: { x: 0.3, y: 0.8 }, apart: 0.2 },
 };
 
-function Kame({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
+function Kame({ onDone, level, seconds, goku, beam }: GameProps & { goku: string; beam: string }) {
   const pace = paceOf(level);
   const [lay] = useState(() => (typeof window !== "undefined" && window.innerHeight > window.innerWidth ? KAME_LAYOUT.tall : KAME_LAYOUT.wide));
   // Distance on screen (portrait screens are narrow: x counts for less).
@@ -414,7 +414,7 @@ function Kame({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
   const shaking = world.time - world.lastHit < 0.18;
 
   return (
-    <div className={`lz-game lz-game-kame ${shaking ? "is-shake" : ""}`} style={{ backgroundImage: `url(${ASSET("bg_desert.png")})` }}>
+    <div className={`lz-game lz-game-kame atk-${beam} ${shaking ? "is-shake" : ""}`} style={{ backgroundImage: `url(${ASSET("bg_desert.png")})` }}>
       <div className="lz-kame-sky" aria-hidden />
       <Hud score={world.score} time={world.time} icon="★" seconds={seconds} />
       {world.combo >= 2 && (
@@ -613,9 +613,25 @@ function Boules({ letters, onDone, level, seconds }: GameProps & { letters: stri
   );
 }
 
-export function MiniGame({ id, letters, level = 1, extra = 0, goku = "goku.png", onDone }: { id: GameId; letters: string[]; level?: number; extra?: number; goku?: string; onDone: () => void }) {
+export function MiniGame({
+  id,
+  letters,
+  level = 1,
+  extra = 0,
+  goku = "goku.png",
+  beam = "blue",
+  onDone,
+}: {
+  id: GameId;
+  letters: string[];
+  level?: number;
+  extra?: number;
+  goku?: string;
+  beam?: string;
+  onDone: () => void;
+}) {
   const seconds = GAME_SECONDS + extra;
   if (id === "nuage") return <Nuage onDone={onDone} level={level} seconds={seconds} />;
-  if (id === "kame") return <Kame onDone={onDone} level={level} seconds={seconds} goku={goku} />;
+  if (id === "kame") return <Kame onDone={onDone} level={level} seconds={seconds} goku={goku} beam={beam} />;
   return <Boules letters={letters} onDone={onDone} level={level} seconds={seconds} />;
 }

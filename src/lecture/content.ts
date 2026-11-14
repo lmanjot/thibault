@@ -313,6 +313,83 @@ export const FORMS: Form[] = [
   { name: "Shenron exauce ton vœu !", sprite: "goku_ui.png", fx: "ui", items: ["shenron"], balls: 7, price: 300, story: "Le grand dragon Shenron apparaît dans le ciel ! Il peut exaucer un vœu. Bravo, tu es un vrai champion !" },
 ];
 
+// ——— Special attacks: the finishing blow against a boss, by fighter and by Goku's form ———
+
+export type AttackColor = "blue" | "gold" | "red" | "purple" | "pink" | "green" | "silver";
+
+export interface Attack {
+  name: string; // shown on screen
+  say?: string; // shouted by the voice; none = Goku's recorded Kamehameha cry
+  color: AttackColor;
+  shape?: "beam" | "spiral" | "ball" | "disc"; // a beam, a twisting beam, a ball or a disc thrown at the boss
+}
+
+const kame = (color: AttackColor): Attack => ({ name: "Kaméhaméha", color });
+
+/** Friends bought in Bulma's shop fight with their own move. */
+export const FRIEND_ATTACKS: Record<string, Attack> = {
+  "c-bulma": { name: "Pistolet laser", say: "Pistolet laser !", color: "pink" },
+  "c-yamcha": { name: "Sokidan", say: "Sokidan !", color: "gold", shape: "ball" },
+  "c-roshi": kame("blue"),
+  "c-krillin": { name: "Kienzan", say: "Kienzan !", color: "gold", shape: "disc" },
+  "c-gohan": { name: "Masenko", say: "Masenko !", color: "gold" },
+  "c-piccolo": { name: "Makankōsappō", say: "Makankossapo !", color: "purple", shape: "spiral" },
+  "c-vegeta": { name: "Galick Gun", say: "Galick gun !", color: "purple" },
+  "c-trunks": { name: "Burning Attack", say: "Burning attaque !", color: "gold", shape: "ball" },
+  "c-vegeta-ssj": { name: "Final Flash", say: "Final flash !", color: "gold" },
+  "c-c18": { name: "Rafale d'énergie", say: "Rafale d'énergie !", color: "blue", shape: "disc" },
+  "c-boo": { name: "Rayon chocolat", say: "Rayon chocolat !", color: "pink" },
+  "c-whis": { name: "Bâton divin", say: "Bâton divin !", color: "silver" },
+  "c-vegeta-god": { name: "Big Bang Attack", say: "Big bang attaque !", color: "red", shape: "ball" },
+  "c-beerus": { name: "Hakai", say: "Hakaï !", color: "purple", shape: "ball" },
+  "c-vegeta-blue": { name: "Final Flash", say: "Final flash !", color: "blue" },
+  "c-granola": { name: "Tir du sniper", say: "Tir du sniper !", color: "green" },
+};
+
+/**
+ * Goku's moves at this step of the story: the Kamehameha (his real cry), coloured by his form,
+ * alternating with the move of that form once he has it (Kaioken, Genkidama, Super Kaméhaméha…).
+ */
+export function gokuAttacks(step: number): Attack[] {
+  const form = FORMS[Math.min(step, FORMS.length - 1)];
+  const genki = step >= FORMS.findIndex((f) => f.items.includes("genki"));
+  const genkidama: Attack = { name: "Genkidama", say: "Genkidama !", color: "blue", shape: "ball" };
+  switch (form.fx) {
+    case "kaioken":
+    case "kaioken2":
+      return [kame("red"), { name: "Kaioken", say: "Kaioken !", color: "red" }, ...(genki ? [genkidama] : [])];
+    case "ssj":
+    case "ssj2":
+      return [kame("gold"), { name: "Super Kaméhaméha", say: "Super Kaméhaméha !", color: "gold" }, genkidama];
+    case "ssj3":
+      return [kame("gold"), { name: "Coup du dragon", say: "Coup du dragon !", color: "gold", shape: "spiral" }, genkidama];
+    case "god":
+      return [kame("red"), { name: "Super Kaméhaméha", say: "Super Kaméhaméha !", color: "red" }, genkidama];
+    case "blue":
+      return [kame("blue"), { name: "Super Kaméhaméha", say: "Super Kaméhaméha !", color: "blue" }, genkidama];
+    case "ui":
+      return [kame("silver"), { name: "Super Kaméhaméha", say: "Super Kaméhaméha !", color: "silver" }, genkidama];
+    default:
+      return genki ? [kame("blue"), genkidama] : [kame("blue")];
+  }
+}
+
+/** The finishing move for this fighter (a friend's id, or none for Goku); Goku's alternate. */
+export function attackFor(fighterId: string | undefined, step: number): Attack {
+  if (fighterId && FRIEND_ATTACKS[fighterId]) return FRIEND_ATTACKS[fighterId];
+  const moves = gokuAttacks(step);
+  return moves[Math.floor(Math.random() * moves.length)];
+}
+
+/** Every line the voice must be able to shout (for the clip catalog). */
+export const ATTACK_LINES = [
+  ...Object.values(FRIEND_ATTACKS).map((a) => a.say),
+  "Genkidama !",
+  "Kaioken !",
+  "Super Kaméhaméha !",
+  "Coup du dragon !",
+].filter((s): s is string => !!s);
+
 /** Goku's look at step `step` of the ladder, and the next step to buy. */
 export function formFor(cleared: number): { form: Form; index: number; next?: Form } {
   const index = Math.min(cleared, FORMS.length - 1);

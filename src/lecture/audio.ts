@@ -376,6 +376,17 @@ export const sfx = {
     tone(90, 0.62 * k, 0.5 * k, "sine", big ? 0.3 : 0.22, 38);
     noise(0.62 * k, 0.35 * k, big ? 0.18 : 0.12, 600, 120);
   },
+  /** A long rising charge (about 4 s) for a finishing move. */
+  charge() {
+    tone(110, 0, 4, "sawtooth", 0.025, 330);
+    tone(220, 0.2, 3.8, "triangle", 0.03, 880);
+    noise(0, 4, 0.035, 500, 2600);
+  },
+  /** The move fires: a rushing blast. */
+  blast() {
+    noise(0, 1.3, 0.12, 2600, 400);
+    tone(150, 0, 1.2, "sawtooth", 0.03, 70);
+  },
   /** Deep explosion when the final blast lands. */
   boom() {
     tone(80, 0, 0.9, "sine", 0.16, 30);

@@ -2,7 +2,7 @@
 // Every spoken line is built from these short clips, generated once by
 // scripts/gen-voice.mts and stored in public/lecture/voice/ (no live text-to-speech).
 
-import { BOSSES, FORMS, GRAPHEME, GRAPHEMES, WORDS } from "./content";
+import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, WORDS } from "./content";
 
 /** Fixed lines, in Goku's voice. */
 export const L = {
@@ -125,6 +125,7 @@ export function allClips(): Clip[] {
     add(f.name); // announced with excitement on the reward screen
     add(f.story); // then what the new power does
   });
+  ATTACK_LINES.forEach((t) => add(t)); // shouted as a boss's finishing blow
   for (const g of GRAPHEMES) add(soundSay(g.id), true);
   Object.values(LETTER_NAME).forEach((n) => add(n, true));
   const vowels = GRAPHEMES.filter((g) => g.kind === "v");
