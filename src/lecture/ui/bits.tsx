@@ -2,7 +2,25 @@
 
 import { ASSET, type Form } from "../content";
 
-export function Goku({ form, size = "lg", state }: { form: Form; size?: "sm" | "md" | "lg"; state?: "hit" | "cheer" | "" }) {
+export function Goku({
+  form,
+  size = "lg",
+  state,
+  as,
+}: {
+  form: Form;
+  size?: "sm" | "md" | "lg";
+  state?: "hit" | "cheer" | "";
+  as?: { id?: string; name: string; img: string }; // a friend fighting instead of Goku
+}) {
+  if (as?.id)
+    return (
+      <div className={`lz-goku lz-goku-${size} fx-base is-friend ${state ? `is-${state}` : ""}`}>
+        <div className="lz-aura" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="lz-goku-img" src={ASSET(as.img)} alt={as.name} draggable={false} />
+      </div>
+    );
   const has = (i: string) => form.items.includes(i as Form["items"][number]);
   return (
     <div className={`lz-goku lz-goku-${size} fx-${form.fx} ${form.kid ? "is-kid" : ""} ${state ? `is-${state}` : ""}`}>
@@ -209,5 +227,35 @@ export function Zeni({ size = 22 }: { size?: number }) {
     <span className="lz-coin" style={{ width: size, height: size, fontSize: size * 0.6 }} aria-label="zénis">
       Z
     </span>
+  );
+}
+
+/** Choose who fights: Goku or a friend bought in Bulma's shop. */
+export function FighterPicker({
+  options,
+  current,
+  onPick,
+}: {
+  options: { id?: string; name: string; img: string }[];
+  current?: string;
+  onPick: (id?: string) => void;
+}) {
+  if (options.length < 2) return null;
+  return (
+    <div className="lz-fighters" role="radiogroup" aria-label="Combattant">
+      {options.map((f) => (
+        <button
+          key={f.id ?? "goku"}
+          role="radio"
+          aria-checked={f.id === current}
+          aria-label={f.name}
+          className={`lz-fighter-pick ${f.id === current ? "is-on" : ""}`}
+          onClick={() => onPick(f.id)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ASSET(f.img)} alt="" draggable={false} />
+        </button>
+      ))}
+    </div>
   );
 }

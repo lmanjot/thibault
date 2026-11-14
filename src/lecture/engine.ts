@@ -31,7 +31,7 @@ export interface Progress {
   form?: number; // Goku's step on the transformation ladder (bought in the shop)
   zeni?: number; // coins earned by reading
   owned?: string[]; // shop items bought
-  equip?: { companion?: string; scene?: string; aura?: string };
+  equip?: { companion?: string; scene?: string; aura?: string; fighter?: string }; // fighter: a friend who fights instead of Goku
   senzu?: number; // beans in stock (+15 s on a mini-game)
   levels?: Partial<Record<"nuage" | "kame" | "bulles", number>>; // mini-game level chosen
   fights?: Fight[]; // bosses waiting to be fought, oldest first

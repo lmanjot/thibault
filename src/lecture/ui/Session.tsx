@@ -44,12 +44,14 @@ const SECTION_LABEL: Record<string, string> = {
 export function Session({
   exercises,
   form,
+  fighter,
   boss,
   onExit,
   onDone,
 }: {
   exercises: Ex[];
   form: Form;
+  fighter?: { id?: string; name: string; img: string };
   boss?: Boss;
   onExit: () => void;
   onDone: (r: SessionResult) => void;
@@ -168,7 +170,7 @@ export function Session({
       {boss && (
         <div className="lz-arena">
           <div className={`lz-fighter ${fx === "hit" ? "is-hit" : ""}`}>
-            <Goku form={form} size="md" state={fx === "hit" ? "hit" : ""} />
+            <Goku form={form} size="md" state={fx === "hit" ? "hit" : ""} as={fighter} />
           </div>
           {(fx === "beam" || fx === "final") && (
             <div className={`lz-kame ${fx === "final" ? "is-final" : ""}`} aria-hidden>

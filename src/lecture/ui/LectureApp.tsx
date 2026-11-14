@@ -28,10 +28,10 @@ import { pullNewer, pushSave } from "../sync";
 import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
-import { Goku, Icon, Pips, Stars, Zeni } from "./bits";
+import { FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
 import { MINI_GAMES, MiniGame, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { equipped, formStep, GAME_UNLOCK, gameLevel, gameOpen, ITEM, LETTER_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { chooseFighter, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, ITEM, LETTER_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
@@ -102,6 +102,13 @@ function Game({ fontClass }: { fontClass: string }) {
   }, []);
 
   const { form } = formFor(formStep(save));
+  const fighter = fighterOf(save, form);
+  const pickFighter = (id?: string) => {
+    const s = structuredClone(save);
+    chooseFighter(s, id);
+    update(s);
+    sfx.tap();
+  };
   const fontMode = save.settings.font === "cursive" ? "font-cursive" : "font-script";
   const aura = equipped(save, "aura");
 
@@ -188,7 +195,7 @@ function Game({ fontClass }: { fontClass: string }) {
       {screen.s === "versus" && (
         <div className="lz-versus" style={{ backgroundImage: `url(${ASSET(screen.boss.bg)})` }}>
           <div className="lz-vs-row">
-            <Goku form={form} size="lg" />
+            <Goku form={form} size="lg" as={fighter} />
             <span className="lz-vs">VS</span>
             <div className={`lz-boss lz-boss-big fx-${screen.boss.fx ?? "none"}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -203,6 +210,7 @@ function Game({ fontClass }: { fontClass: string }) {
                 : `Boss de la lettre ${GRAPHEME[screen.fight.letter ?? ""]?.display ?? ""}`}
           </p>
           <h2 className="lz-title-sm">{screen.boss.name}</h2>
+          <FighterPicker options={fighters(save, form)} current={fighter.id} onPick={pickFighter} />
           <div className="lz-row">
             <button className="lz-round" onClick={() => setScreen({ s: "home" })} aria-label="Retour">
               <Icon name="back" />
@@ -221,6 +229,7 @@ function Game({ fontClass }: { fontClass: string }) {
         <Session
           exercises={screen.exercises}
           form={form}
+          fighter={fighter}
           boss={screen.boss}
           onExit={() => setScreen({ s: "home" })}
           onDone={(r) => finish(r, screen.boss, screen.fight)}
@@ -284,6 +293,8 @@ function Game({ fontClass }: { fontClass: string }) {
           game={screen.game}
           extra={screen.extra ?? 0}
           letters={save.settings.classSounds.filter((g) => GRAPHEME[g] && level(save, gid(g)) >= 1)}
+          fighter={fighter}
+          onFighter={pickFighter}
           onPick={(g, senzu) => {
             if (senzu) {
               const s = structuredClone(save);
@@ -488,6 +499,8 @@ function Bonus({
   game,
   extra,
   letters,
+  fighter,
+  onFighter,
   onPick,
   onDone,
 }: {
@@ -495,6 +508,8 @@ function Bonus({
   game?: GameId;
   extra: number;
   letters: string[];
+  fighter: { id?: string; name: string; img: string };
+  onFighter: (id?: string) => void;
   onPick: (g: GameId, senzu: boolean) => void;
   onDone: () => void;
 }) {
@@ -531,6 +546,7 @@ function Bonus({
             );
           })}
         </div>
+        <FighterPicker options={fighters(save, formFor(formStep(save)).form)} current={fighter.id} onPick={onFighter} />
         <div className="lz-row">
           <button className="lz-round" onClick={onDone} aria-label="Retour">
             <Icon name="back" />
@@ -543,5 +559,5 @@ function Bonus({
         </div>
       </div>
     );
-  return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={formFor(formStep(save)).form.sprite} onDone={onDone} />;
+  return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={fighter.img} onDone={onDone} />;
 }

@@ -346,7 +346,7 @@ export const BOSS_ERAS: { from: number; letter: Boss[]; revision: Boss[] }[] = [
     ],
     revision: [
       { name: "Tao Pai Pai", sprite: "taopaipai.png", bg: "bg_desert.png" },
-      { name: "Piccolo Daimaô", sprite: "piccolo.png", bg: "bg_desert.png", fx: "dark" },
+      { name: "Piccolo Daimaô", sprite: "piccolo_jr.png", bg: "bg_desert.png", fx: "dark" },
     ],
   },
   {

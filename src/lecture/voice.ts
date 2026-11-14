@@ -50,7 +50,7 @@ const SCHWA_SAY: Record<string, string> = { r: "reu", f: "feu", v: "veu", ch: "c
 /**
  * Consonant sounds as pronounced (stretched when possible), never the letter's name.
  * The voice cannot hold a bare L or R ("llll" came out as « non », "rrrr" as « rare »),
- * so those two are said with a light « e », as in class: « lleu », « reu ».
+ * so those are said with a light « e », as in class: « lleu », « reu », « je ».
  */
 const CONSONANT_SAY: Record<string, string> = {
   l: "lleu",
@@ -61,7 +61,7 @@ const CONSONANT_SAY: Record<string, string> = {
   ch: "chhhh",
   v: "vvvv",
   n: "nnnn",
-  j: "jjjj",
+  j: "je", // "jjjj" came out as « ch » (« chut »)
   z: "zzzz",
   p: "pe",
   t: "te",

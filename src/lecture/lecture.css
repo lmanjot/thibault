@@ -3853,3 +3853,39 @@
 .lz-sync-msg {
   color: #b9470c;
 }
+
+/* Choose who fights: Goku or a friend bought in the shop */
+.lz-fighters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: min(560px, 100%);
+}
+.lz-fighter-pick {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 4px 0 rgba(18, 48, 107, 0.35);
+  opacity: 0.75;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.lz-fighter-pick img {
+  width: 100%;
+  height: 160%;
+  object-fit: cover;
+  object-position: top;
+}
+.lz-fighter-pick.is-on {
+  opacity: 1;
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px var(--ki), 0 0 18px rgba(255, 210, 63, 0.8);
+}
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-fighter-pick {
+    width: 52px;
+    height: 52px;
+  }
+}

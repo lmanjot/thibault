@@ -211,7 +211,7 @@ function sayText(text: string): Promise<void> {
 let current: HTMLAudioElement | null = null;
 
 /** Plays a clip; resolves false if it could not be played (missing file, decode error). */
-function playUrl(url: string, rate = 1): Promise<boolean> {
+function playUrl(url: string, rate = 1, volume = 1): Promise<boolean> {
   // Never wait here (phones only allow sound right after a tap): play the in-memory copy if it is
   // there, else straight from the network while it is being kept for next time.
   if (!memory.has(url)) keep(url);
@@ -219,6 +219,7 @@ function playUrl(url: string, rate = 1): Promise<boolean> {
     const a = audioFor(url);
     a.preservesPitch = true; // slower, not deeper
     a.playbackRate = rate;
+    a.volume = volume;
     current = a;
     let done = false;
     const finish = (ok: boolean) => {
@@ -276,9 +277,12 @@ export function prefetchKamehameha() {
 }
 
 /** Plays Goku's Kamehameha cry; resolves false if it could not be played. */
+/** The recorded cry is much louder than the voice: played at 40% so it doesn't blast. */
+const KAME_VOLUME = 0.4;
+
 export function playKamehameha(): Promise<boolean> {
   stopSpeech();
-  return playUrl(KAME_URL);
+  return playUrl(KAME_URL, 1, KAME_VOLUME);
 }
 
 // ——— What to say for each item ———
@@ -374,8 +378,8 @@ export const sfx = {
   },
   /** Deep explosion when the final blast lands. */
   boom() {
-    tone(80, 0, 0.9, "sine", 0.32, 30);
-    noise(0, 0.8, 0.22, 900, 90);
+    tone(80, 0, 0.9, "sine", 0.16, 30);
+    noise(0, 0.8, 0.1, 900, 90);
   },
   hit() {
     tone(120, 0, 0.3, "square", 0.1, 50);

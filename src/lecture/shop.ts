@@ -13,7 +13,7 @@
 //   and the big items take a couple of weeks, so there is always a near goal and a far goal.
 // - Senzu beans (+15 s on a mini-game) are cheap, but capped so they don't replace reading.
 
-import { FORMS } from "./content";
+import { FORMS, type Form } from "./content";
 import type { Ex, Save } from "./engine";
 
 /** Zénis for a right answer, by exercise difficulty. */
@@ -62,8 +62,8 @@ export const ITEMS: ShopItem[] = [
   { id: "c-roshi", kind: "companion", name: "Tortue Géniale", price: 80, img: "roshi.png", era: ERA.kid },
   { id: "c-krillin", kind: "companion", name: "Krilin", price: 60, img: "krillin.png", imgKid: "krillin_kid.png", era: ERA.kid },
   { id: "c-gohan", kind: "companion", name: "Gohan", price: 120, img: "gohan.png", era: ERA.grown },
-  { id: "c-piccolo", kind: "companion", name: "Piccolo", price: 150, img: "piccolo.png", era: ERA.grown },
-  { id: "c-vegeta", kind: "companion", name: "Vegeta", price: 250, img: "vegeta.png", era: ERA.saiyans },
+  { id: "c-piccolo", kind: "companion", name: "Piccolo", price: 150, img: "piccolo_jr.png", era: ERA.grown },
+  { id: "c-vegeta", kind: "companion", name: "Vegeta", price: 250, img: "vegeta_new.png", era: ERA.saiyans },
   { id: "c-trunks", kind: "companion", name: "Trunks", price: 300, img: "trunks.png", era: ERA.ssj },
   { id: "c-vegeta-ssj", kind: "companion", name: "Vegeta Super Saiyan", price: 280, img: "vegeta_ssj.png", era: ERA.ssj },
   { id: "c-c18", kind: "companion", name: "C-18", price: 300, img: "c18.png", era: ERA.cell },
@@ -153,5 +153,30 @@ export const equipped = (s: Save, kind: "companion" | "scene" | "aura") => {
   const id = s.progress.equip?.[kind];
   return id ? ITEM[id] : undefined;
 };
+
+/** Who fights the bosses and plays Kaméhaméha: Goku (as he is now), or a friend bought in the shop. */
+export interface Fighter {
+  id?: string; // undefined = Goku
+  name: string;
+  img: string;
+}
+
+export function fighters(s: Save, form: Form): Fighter[] {
+  const friends = ITEMS.filter((i) => i.kind === "companion" && i.img && owns(s, i.id)).map((i) => ({
+    id: i.id,
+    name: i.name,
+    img: (form.kid && i.imgKid) || i.img!,
+  }));
+  return [{ name: "Goku", img: form.sprite }, ...friends];
+}
+
+export function fighterOf(s: Save, form: Form): Fighter {
+  const all = fighters(s, form);
+  return all.find((f) => f.id && f.id === s.progress.equip?.fighter) ?? all[0];
+}
+
+export function chooseFighter(s: Save, id?: string) {
+  s.progress.equip = { ...(s.progress.equip ?? {}), fighter: id };
+}
 
 export const gameLevel = (s: Save, g: GameKey) => s.progress.levels?.[g] ?? 1;
