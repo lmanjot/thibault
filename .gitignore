@@ -29,3 +29,6 @@ next-env.d.ts
 
 # HubSpot
 hubspot.config.yml
+
+# Lecture Z online saves in local development
+/.lecture-sync/

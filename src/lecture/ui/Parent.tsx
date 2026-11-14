@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { GRAPHEME, GRAPHEMES } from "../content";
 import { availableSyllables, gid, level, newSave, today, type Save } from "../engine";
 import { hasRecording, loadRecordings, saveRecording, speak, soundPart } from "../audio";
 import { Icon, Pips } from "./bits";
 import { VoiceLines } from "./VoiceLines";
+import { adoptCode, createCode, fetchCode, formatCode, onSyncChange, stopSync, syncState } from "../sync";
 
 const REC_MS = 1800;
 
@@ -68,6 +69,8 @@ export function Parent({ save, onChange, onClose }: { save: Save; onChange: (s: 
             <Icon name="close" size={22} />
           </button>
         </header>
+
+        <SyncPanel save={save} onChange={onChange} />
 
         <section>
           <h3>Lettres connues</h3>
@@ -192,5 +195,99 @@ export function Parent({ save, onChange, onClose }: { save: Save; onChange: (s: 
         </section>
       </div>
     </div>
+  );
+}
+
+/** Continue on another device: one code, then the progress follows by itself. */
+function SyncPanel({ save, onChange }: { save: Save; onChange: (s: Save) => void }) {
+  const sync = useSyncExternalStore(onSyncChange, syncState, () => null);
+  const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function create() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await createCode(save);
+    } catch {
+      setMsg("Pas de connexion : réessayez dans un moment.");
+    }
+    setBusy(false);
+  }
+
+  async function join() {
+    const code = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (code.length !== 6) return setMsg("Le code a 6 caractères, par exemple K7P-4QX.");
+    setBusy(true);
+    setMsg(null);
+    try {
+      const remote = await fetchCode(code);
+      if (!remote) setMsg("Ce code n'existe pas. Vérifiez les lettres et les chiffres.");
+      else if (confirm("Remplacer la progression de cet appareil par celle du code ?")) {
+        adoptCode(code, remote.updatedAt);
+        onChange(remote);
+        setTyped("");
+      }
+    } catch {
+      setMsg("Pas de connexion : réessayez dans un moment.");
+    }
+    setBusy(false);
+  }
+
+  return (
+    <section>
+      <h3>Continuer sur un autre appareil</h3>
+      {sync ? (
+        <>
+          <p className="lz-hint">
+            Sur l&apos;autre téléphone ou tablette, ouvrez le jeu, Espace parent, puis « J&apos;ai un code » avec ce code. La progression
+            se met ensuite à jour toute seule sur les deux.
+          </p>
+          <div className="lz-sync">
+            <span className="lz-sync-code">{formatCode(sync.code)}</span>
+            <span className={`lz-sync-status ${sync.error ? "is-off" : ""}`}>
+              {sync.error ? "Hors ligne : envoi au prochain changement" : "Synchronisé"}
+            </span>
+          </div>
+          <button
+            className="lz-btn"
+            onClick={() => {
+              if (confirm("Ne plus synchroniser cet appareil ? Sa progression reste ici.")) stopSync();
+            }}
+          >
+            Ne plus synchroniser cet appareil
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="lz-hint">
+            Créez un code sur cet appareil, puis tapez-le sur l&apos;autre : la progression (lettres, pouvoirs, zénis, achats) sera la
+            même partout.
+          </p>
+          <div className="lz-row lz-sync-actions">
+            <button className="lz-btn" onClick={create} disabled={busy}>
+              Créer un code
+            </button>
+          </div>
+          <div className="lz-row lz-sync-actions">
+            <input
+              className="lz-sync-input"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="J'ai un code : K7P-4QX"
+              maxLength={8}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <button className="lz-btn" onClick={join} disabled={busy || !typed.trim()}>
+              Utiliser
+            </button>
+          </div>
+        </>
+      )}
+      {msg && <p className="lz-hint lz-sync-msg">{msg}</p>}
+    </section>
   );
 }

@@ -54,6 +54,7 @@ export interface Save {
   v: 1;
   settings: Settings;
   progress: Progress;
+  updatedAt?: number; // last change (ms), so devices sharing a code keep the newest
 }
 
 const KEY = "lecture-z-v1";

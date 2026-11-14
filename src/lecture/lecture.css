@@ -3806,3 +3806,50 @@
   letter-spacing: 1px;
   color: var(--ki);
 }
+
+/* Online save code (parent space) */
+.lz-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.lz-sync-code {
+  padding: 8px 16px;
+  border-radius: 14px;
+  background: var(--navy);
+  color: #fff;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 30px;
+  letter-spacing: 3px;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.lz-sync-status {
+  color: var(--ok);
+  font-weight: 700;
+}
+.lz-sync-status.is-off {
+  color: #b9470c;
+}
+.lz-sync-actions {
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.lz-sync-input {
+  width: 190px;
+  padding: 10px 12px;
+  border: 2px solid #ddd5c4;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 18px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.lz-sync-msg {
+  color: #b9470c;
+}

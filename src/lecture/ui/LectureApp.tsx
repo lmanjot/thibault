@@ -24,6 +24,7 @@ import {
   type Save,
 } from "../engine";
 import { loadRecordings, loadVoice, namePart, sfx, soundPart, speak, stopSpeech } from "../audio";
+import { pullNewer, pushSave } from "../sync";
 import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
@@ -73,9 +74,32 @@ function Game({ fontClass }: { fontClass: string }) {
 
   function update(s: Save) {
     const copy = structuredClone(s);
+    copy.updatedAt = Date.now();
     storeSave(copy);
     setSave(copy);
+    pushSave(copy, adopt); // shared with the other devices using the same code
   }
+
+  /** Take a newer save from another device (only between games, never in the middle of one). */
+  function adopt(remote: Save) {
+    storeSave(remote);
+    setSave(remote);
+  }
+
+  // When the game opens or comes back to the screen, take the progress made on another device.
+  const screenRef = useRef(screen.s);
+  useEffect(() => {
+    screenRef.current = screen.s;
+  });
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== "visible" || screenRef.current !== "home") return;
+      pullNewer(loadSave()).then((remote) => remote && screenRef.current === "home" && adopt(remote));
+    };
+    check();
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, []);
 
   const { form } = formFor(formStep(save));
   const fontMode = save.settings.font === "cursive" ? "font-cursive" : "font-script";
