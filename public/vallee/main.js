@@ -38,9 +38,9 @@ function newState() {
     orders: [], creatures: {}, badges: {},
     stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0, perfectReviews: 0 },
     streak: 0, mastery: {}, objDone: {}, daily: {},
-    animals: [], barnSlots: 4, found: {}, stars: {},
+    animals: [], barnSlots: 4, found: {}, stars: {}, defis: {},
     pos: { ...START },
-    settings: { sound: true, grade: 8 },
+    settings: { sound: true, grade: 8, diff: 0 },
   };
 }
 function migrate(s) {
@@ -334,19 +334,22 @@ function effElapsed(p) { return (now() - p.at) * speedMult() + p.skip; }
 function progress(p) { return p.crop ? Math.min(1, effElapsed(p) / p.grow) : 0; }
 function remaining(p) { return Math.max(0, p.grow - effElapsed(p)) / speedMult(); }
 
+// Problem difficulty, 1 (easy) to 5. It climbs slowly with the player's level, 8H is a half step
+// ahead of 7H, the Options setting moves it by hand, and each theme adapts to recent answers.
+const DIFF_STEPS = [[-2, 'Très facile'], [-1, 'Facile'], [0, 'Normal'], [1, 'Difficile'], [2, 'Très difficile']];
 function baseD() {
   const L = S.lvl;
-  let d = L <= 2 ? 1 : L <= 5 ? 2 : L <= 9 ? 3 : L <= 14 ? 4 : 5;
-  if (S.settings.grade === 8) d += 1;
-  return d;
+  const d = L <= 3 ? 1 : L <= 6 ? 2 : L <= 10 ? 3 : L <= 15 ? 4 : 5;
+  return d + (S.settings.grade === 8 ? 0.5 : 0) + (S.settings.diff || 0);
 }
 const mKey = (cat) => (cat === 'add' || cat === 'mul' ? 'calc' : cat);
 function diffFor(cat, off = 0) {
   const m = S.mastery[mKey(cat)];
   let adj = 0;
-  if (m && m.r.length >= 4) {
-    const rate = m.r.filter(Boolean).length / m.r.length;
-    if (rate >= 0.84) adj = 1; else if (rate <= 0.4) adj = -1;
+  if (!m || m.n < 3) adj = -1; // warm-up: the first problems of a new theme are a bit easier
+  else if (m.r.length >= 6) {
+    const last = m.r.slice(-6), rate = last.filter(Boolean).length / last.length;
+    if (rate >= 0.84) adj = 1; else if (rate <= 0.34) adj = -1;
   }
   return clamp(Math.round(baseD() + off + adj), 1, 5);
 }
@@ -589,9 +592,22 @@ const PRAISE = ['Bravo !', 'Super !', 'Génial !', 'Excellent !', 'Parfait !', '
  */
 function askMath(opts) {
   return new Promise((resolve) => {
-    const p = opts.problem || makeProblem(opts.cat, opts.d || diffFor(opts.cat));
+    const dUsed = opts.d || diffFor(opts.cat || 'calc');
+    const p = opts.problem || makeProblem(opts.cat, dUsed);
     window.__lastP = p; // read by the test helpers in the console
     let tries = 0, input = '', locked = false;
+    const hintCost = 5 + 5 * dUsed;
+    const tip = h('div', { class: 'm-tip' });
+    const hintBtn = h('button', { class: 'm-hint', onclick: () => {
+      if (locked || hintBtn.disabled) return;
+      if (S.coins < hintCost) { sfx.bad(); toast(`Il te faut ${hintCost} pièces pour un indice.`, 'red'); return; }
+      S.coins -= hintCost; updateHud(); sfx.coin();
+      const step = firstStep(p);
+      tip.innerHTML = '';
+      tip.append(h('b', null, 'Indice : '), h('span', null, p.hint));
+      if (step) tip.append(h('div', { class: 'm-step' }, 'Pour commencer : ' + step));
+      hintBtn.disabled = true; hintBtn.textContent = 'Indice acheté';
+    } }, 'Indice · ', coinImg('coin sm'), ` ${hintCost}`);
     const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
     const ansVal = h('span', { class: 'm-val' });
     const ansRow = p.choices ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
@@ -601,7 +617,7 @@ function askMath(opts) {
       h('span', { class: 'm-cat' }, CATS[p.cat] || 'Calcul'),
       h('span', { class: 'm-title' }, opts.title || ''),
       S.streak >= 2 ? h('span', { class: 'm-streak' }, `Série ×${S.streak}`) : null);
-    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, ansRow, fb, pad);
+    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, h('div', { class: 'm-hintrow' }, hintBtn), tip, ansRow, fb, pad);
     function paint() { ansVal.textContent = input || '?'; ansVal.classList.toggle('empty', !input); }
     function key(k) {
       if (locked) return;
@@ -689,6 +705,15 @@ function askMath(opts) {
 }
 
 let activeMath = null;
+/** The first step of the worked solution, as long as it does not give the answer away. */
+function firstStep(p) {
+  if (p.choices || !p.ex) return null;
+  const parts = p.ex.split(/(?<=\d|[a-zé²])\. |, puis | ; |\. Pour /);
+  let s = parts[0];
+  if (parts.length < 2) { const eq = p.ex.split(' = '); if (eq.length < 3) return null; s = eq.slice(0, 2).join(' = '); }
+  const ans = fmt(p.a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(^|[^\\d,])' + ans + '([^\\d,]|$)').test(s) ? null : s;
+}
 /**
  * Several problems in a row for one action. steps: list of categories (or { cat, d }).
  * needAll: stop at the first miss. Returns { ok, n, firsts, quit, all }.
@@ -1335,9 +1360,11 @@ async function onFountain() {
 }
 async function onOwl() {
   const who = 'Maître Hibou';
-  const opts = ['Réviser un thème (gagne des récompenses)', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
+  const nStars = Object.values(S.defis).reduce((t, v) => t + v, 0);
+  const opts = [`Défis de l’Hibou (${nStars}/${DEFIS.length * 3} étoiles)`, 'Réviser un thème (gagne des récompenses)', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
   const k = await choose('Hou hou ! Que veux-tu faire, jeune calculateur ?', opts, who);
   const o = opts[k];
+  if (o && o.startsWith('Défis de')) return defiLadder();
   if (o && o.startsWith('Réviser')) {
     let cat = null;
     const P = panel('Réviser avec Maître Hibou', (body) => {
@@ -1371,6 +1398,69 @@ async function onOwl() {
     } else if (score !== null) await say(`${score}/5. Pas mal ! Tu pourras retenter demain. Continue à t’entraîner !`, who);
   } else if (o === 'Mes progrès') return carnetPanel('progres');
 }
+// ---- Challenge ladder: 30 challenges of 5 problems, each a bit harder, with 1 to 3 stars.
+const DEFI_PACKS = [
+  ['Le potager', ['calc', 'calc', 'frac']], ['Le marché', ['argent', 'recette', 'calc']], ['Le moulin', ['masse', 'conv', 'calc']],
+  ['La boulangerie', ['duree', 'recette', 'enigme']], ['Le pressoir', ['contenance', 'conv']], ['La ferme', ['animaux', 'enigme']],
+  ['Le chantier', ['geo', 'longueur', 'calc']], ['Les énigmes', ['enigme']], ['Les fractions', ['frac', 'frac', 'calc']],
+  ['Le grand mélange', ['calc', 'frac', 'conv', 'masse', 'contenance', 'duree', 'argent', 'geo', 'animaux', 'enigme']],
+];
+const DEFIS = Array.from({ length: 30 }, (_, i) => ({ n: i + 1, name: DEFI_PACKS[i % DEFI_PACKS.length][0], cats: DEFI_PACKS[i % DEFI_PACKS.length][1], level: 1 + Math.floor(i / 6) }));
+const defiD = (df) => clamp(Math.round(df.level + (S.settings.grade === 8 ? 0.5 : 0) + (S.settings.diff || 0)), 1, 5);
+const starsTxt = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
+async function defiLadder() {
+  let chosen = null;
+  const P = panel('Défis de l’Hibou', (body) => {
+    body.append(h('div', { class: 'note owl-rewards' },
+      h('b', null, '30 défis de 5 problèmes, de plus en plus durs.'),
+      h('span', null, '• 3 bonnes réponses = 1 étoile et le défi suivant s’ouvre'),
+      h('span', null, '• 4 = 2 étoiles · 5 = 3 étoiles'),
+      h('span', null, '• chaque nouvelle étoile rapporte des pièces, 3 étoiles = un cadeau'),
+      h('span', null, '• tu peux rejouer un défi pour gagner plus d’étoiles')));
+    const grid = h('div', { class: 'defis' });
+    for (const df of DEFIS) {
+      const st = S.defis[df.n] || 0, open = df.n === 1 || (S.defis[df.n - 1] || 0) >= 1;
+      grid.append(h('button', { class: 'defi' + (open ? '' : ' locked') + (st === 3 ? ' gold' : ''), disabled: !open, onclick: () => { chosen = df; P.close(); } },
+        h('b', null, `Défi ${df.n}`), h('small', null, df.name), h('span', { class: 'dstars' }, open ? starsTxt(st) : 'Fermé')));
+    }
+    body.append(grid);
+  });
+  await P.done;
+  if (!chosen) return;
+  const df = chosen, d = defiD(df);
+  let score = 0, won = 0;
+  for (let i = 0; i < 5; i++) {
+    const cat = df.cats[i % df.cats.length] === 'enigme' || Math.random() < 0.15 ? (Math.random() < 0.5 ? 'enigme' : df.cats[i % df.cats.length]) : df.cats[i % df.cats.length];
+    const r = await askMath({ cat, d, title: `Défi ${df.n} · ${df.name} · ${i + 1}/5` });
+    if (r.quit) { if (i === 0) return defiLadder(); break; }
+    if (r.ok && r.first) { score++; const g = 4 + 2 * d; won += g; addCoins(g); }
+    else if (r.ok) { won += 1; addCoins(1); }
+  }
+  const stars = score >= 5 ? 3 : score === 4 ? 2 : score === 3 ? 1 : 0;
+  const before = S.defis[df.n] || 0;
+  const lines = [`${score}/5 bonnes réponses · ${starsTxt(stars)}`, `+${won} pièces pendant le défi`];
+  const icons = [A.coinURL()];
+  addXP(score * 5);
+  if (stars > before) {
+    S.defis[df.n] = stars;
+    const bonus = (stars - before) * (20 + 5 * df.n);
+    S.coins += bonus;
+    lines.push(`${stars - before} nouvelle${stars - before > 1 ? 's' : ''} étoile${stars - before > 1 ? 's' : ''} : +${bonus} pièces`);
+    if (stars === 3) {
+      const pool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
+      const seed = pick(pool.slice(-3));
+      addItem('graine:' + seed, 3); addItem('engrais', 1);
+      lines.push(`Cadeau 3 étoiles : 3 ${CROPS[seed].seedName.toLowerCase()} et 1 engrais`);
+      icons.push(A.iconURL('graine:' + seed), A.iconURL('engrais'));
+    }
+    if (before === 0 && stars >= 1 && df.n < DEFIS.length) lines.push(`Le défi ${df.n + 1} est ouvert !`);
+  } else if (stars === 0) lines.push('Il faut 3 bonnes réponses pour gagner une étoile. Réessaie !');
+  sfx.coin();
+  afterChange();
+  await celebrate({ title: stars ? `Défi ${df.n} : ${starsTxt(stars)}` : `Défi ${df.n}`, lines, icons });
+  return defiLadder();
+}
+
 async function series(cat, n, off, title, mixed) {
   let score = 0, won = 0;
   const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme', 'enigme'];
@@ -1614,10 +1704,17 @@ async function optionsPanel() {
       h('div', { class: 'opt' }, h('b', null, 'Classe'), h('div', null,
         h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, '7H'), ' ',
         h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, '8H'))),
+      h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté des calculs'),
+        h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
+        h('small', null, `Niveau actuel des calculs : ${clamp(Math.round(baseD()), 1, 5)} sur 5. Il monte doucement avec ton niveau et s’adapte à tes réussites dans chaque thème.`)),
       h('div', { class: 'opt' }, h('b', null, 'Prénom'), h('input', { class: 'name', value: S.name, maxlength: 14, onchange: (e) => { S.name = e.target.value.trim() || 'Thibault'; save(); } })),
       syncSection(api),
       h('button', { class: 'btn ghost danger', onclick: async () => {
-        if (await confirm('Effacer toute la partie et recommencer ? On ne peut pas revenir en arrière.', 'Oui, tout effacer', 'Non')) { localStorage.removeItem(SAVE_KEY); location.reload(); }
+        if (await confirm('Effacer toute la partie et recommencer ? On ne peut pas revenir en arrière.', 'Oui, tout effacer', 'Non')) {
+          // stop saving first: otherwise the page re-saves (or the save code pulls the game back) while reloading
+          started = false; clearTimeout(saveTimer); stopSync();
+          localStorage.removeItem(SAVE_KEY); location.reload();
+        }
       } }, 'Recommencer une nouvelle partie'));
   }).done;
 }
@@ -1989,7 +2086,9 @@ function buildTouch() {
   const b = h('button', { class: 'bbtn', 'aria-label': 'B' }, 'B');
   a.addEventListener('pointerdown', (e) => { e.preventDefault(); pressA(); });
   b.addEventListener('pointerdown', (e) => { e.preventDefault(); pressB(); });
-  return h('div', { class: 'tctl' }, pad, h('div', { class: 'ab' }, b, a));
+  // The cross is gone: walking is done by sliding a finger anywhere (setupSwipeStick). Only A and B stay.
+  void pad;
+  return h('div', { class: 'tctl' }, h('div', { class: 'ab' }, b, a));
 }
 
 // Touch anywhere on the game screen and slide: the finger's starting point becomes a floating stick.
@@ -2015,7 +2114,7 @@ function setupSwipeStick() {
   cv.addEventListener('pointermove', (e) => {
     if (e.pointerId !== id) return;
     let dx = e.clientX - ox, dy = e.clientY - oy;
-    const dist = Math.hypot(dx, dy), FOLLOW = 50, SHOW = 40, DEAD = 12;
+    const dist = Math.hypot(dx, dy), FOLLOW = 50, SHOW = 26, DEAD = 12;
     if (dist > FOLLOW) { ox = e.clientX - (dx / dist) * FOLLOW; oy = e.clientY - (dy / dist) * FOLLOW; dx = e.clientX - ox; dy = e.clientY - oy; place(); }
     const k = Math.min(1, SHOW / Math.max(1, Math.hypot(dx, dy)));
     knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;

@@ -248,5 +248,6 @@ export const BADGES = [
   { id: 'eleveur', name: 'Badge Éleveur', desc: 'Avoir 6 animaux à la ferme', c: (s) => (s.animals || []).length >= 6, color: '#c8803c' },
   { id: 'inventeur', name: 'Badge Inventeur', desc: 'Découvrir 4 recettes secrètes', c: (s) => Object.keys(s.found || {}).length >= 4, color: '#a060e0' },
   { id: 'hibou', name: 'Badge Hibou', desc: 'Réussir 5 révisions sans faute avec Maître Hibou', c: (s) => (s.stats.perfectReviews || 0) >= 5, color: '#a0703c' },
+  { id: 'champion', name: 'Badge Champion', desc: 'Obtenir 3 étoiles à 10 défis de l’Hibou', c: (s) => Object.values(s.defis || {}).filter((v) => v >= 3).length >= 10, color: '#3c9ae0' },
   { id: 'legende', name: 'Badge Légende', desc: 'Récolter un Fruit d’or', c: (s) => (s.stats.harvested.doree || 0) >= 1, color: '#ffd700' },
 ];

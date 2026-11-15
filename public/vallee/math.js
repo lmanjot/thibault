@@ -143,15 +143,21 @@ function frac(d) {
     const n = 4 * R(2, 10); return P('frac', `Le quart de ${n} = @`, n / 4, '', `Le quart, c’est diviser par 4 : ${n} ÷ 4 = ${n / 4}`);
   }
   if (d === 2) {
-    const b = pick([2, 3, 4, 5, 10]), n = b * R(2, 12);
+    // unit fractions of small numbers: 1/3 de 15
+    const b = pick([2, 3, 4, 5, 10]), n = b * R(2, b === 10 ? 6 : 9);
     return P('frac', `[1/${b}] de ${n} = @`, n / b, '', `[1/${b}] de ${n}, c’est ${n} ÷ ${b} = ${n / b}`);
   }
   if (d === 3) {
-    const b = pick([3, 4, 5, 6, 8, 10]), a = R(2, b - 1), n = b * R(2, 12);
+    // simple fractions with small denominators: 2/3 de 12, 3/4 de 20
+    const b = pick([3, 4, 5]), a = R(2, b - 1), n = b * R(2, 8);
     return P('frac', `[${a}/${b}] de ${n} = @`, (n / b) * a, '', `${n} ÷ ${b} = ${n / b}, puis ${n / b} × ${a} = ${(n / b) * a}`);
   }
   if (d === 4) {
-    const k = R(1, 3);
+    const k = R(0, 3);
+    if (k === 0) {
+      const b = pick([6, 8, 10]), a = R(2, b - 1), n = b * R(2, 10);
+      return P('frac', `[${a}/${b}] de ${n} = @`, (n / b) * a, '', `${n} ÷ ${b} = ${n / b}, puis ${n / b} × ${a} = ${(n / b) * a}`);
+    }
     if (k === 1) {
       const [a, b] = pick([[1, 2], [1, 4], [3, 4], [1, 5], [2, 5], [1, 10], [3, 10], [7, 10], [1, 100], [4, 5]]);
       return P('frac', `[${a}/${b}] = @ (en nombre à virgule)`, a / b, '', `${a} ÷ ${b} = ${fmt(a / b)}`, 'Une fraction, c’est une division : le haut ÷ le bas.');
