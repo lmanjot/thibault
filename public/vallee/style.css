@@ -77,7 +77,7 @@ img { image-rendering: pixelated; }
 }
 .menu-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
 @media (max-width: 820px) {
-  .objective { top: auto; bottom: calc(10px + var(--tb)); left: 8px; right: 8px; transform: none; max-width: none; font-size: 14px; }
+  .objective { top: auto; bottom: max(8px, env(safe-area-inset-bottom)); left: 8px; right: 8px; transform: none; max-width: none; font-size: 14px; }
   .hud-box { min-width: 150px; padding: 6px 10px; }
 }
 
@@ -478,3 +478,13 @@ button.row:hover { background: #f1f4ff; }
 .pex { grid-column: 1 / -1; font-family: var(--read); font-size: 15px; background: #eef4ff; border-radius: 8px; padding: 6px 10px; }
 .pex i { color: var(--leaf-d); font-style: normal; font-weight: 700; }
 @media (max-width: 560px) { .prow { grid-template-columns: 1fr auto; } .pstat { grid-column: 1 / -1; } }
+
+/* Small screens: the objective bar sits at the very bottom, so the A/B buttons (and the boxes above them) move up. */
+@media (max-width: 820px) {
+  .is-touch { --tb: 192px; }
+  .is-touch .ab { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 62px); }
+}
+@media (max-width: 820px) and (orientation: landscape) and (max-height: 600px) {
+  .is-touch { --tb: 0px; }
+  .is-touch .dialog, .is-touch .toast { margin-bottom: 62px; }
+}
