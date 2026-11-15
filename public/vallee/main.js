@@ -1,0 +1,1735 @@
+// La Vallée des Graines — main game: state, world loop, input, UI, farming, shop, crafting, battles.
+import { W, H, SOLID, TALL, buildWorld, zoneAt, plotPos, START, NPCS } from './world.js';
+import {
+  CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
+  GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES,
+} from './data.js';
+import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS } from './math.js';
+import * as A from './art.js';
+import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
+
+const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const now = () => Date.now();
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const itemName = (id) => (ITEMS[id] ? ITEMS[id].name : id);
+const plural = (word, n) => (n < 2 || /[sxz]$/.test(word) ? word : word.endsWith('al') ? word.slice(0, -2) + 'aux' : word + 's');
+const qtyName = (id, n) => `${n} ${plural(itemName(id).toLowerCase(), n)}`;
+function fmtTime(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60), r = s % 60;
+  return r ? `${m} min ${String(r).padStart(2, '0')} s` : `${m} min`;
+}
+
+// ============================================================ State
+const SAVE_KEY = 'vallee-graines-v1';
+function newState() {
+  return {
+    v: 1, name: 'Thibault', coins: 25, xp: 0, lvl: 1,
+    inv: { 'graine:radis': 4 },
+    plots: Array.from({ length: 18 }, (_, i) => ({ u: i < 4, crop: null, at: 0, grow: 0, skip: 0, fert: false, wet: 0 })),
+    plotBuys: 0,
+    tools: { arrosoir: 0, bottes: false, hache: false, pioche: false, panier: false, epouvantail: false, arroseur: false, canne: false },
+    hat: 'rouge', hats: ['rouge'],
+    built: {}, flags: {}, chests: {}, res: {},
+    orders: [], creatures: {}, badges: {},
+    stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0 },
+    streak: 0, mastery: {}, obj: 0, daily: {},
+    pos: { ...START },
+    settings: { sound: true, grade: 8 },
+  };
+}
+function migrate(s) {
+  const d = newState();
+  for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
+  for (const grp of ['stats', 'tools', 'settings']) for (const k of Object.keys(d[grp])) if (s[grp][k] === undefined) s[grp][k] = d[grp][k];
+  return s;
+}
+function loadSave() { try { const raw = localStorage.getItem(SAVE_KEY); if (raw) return migrate(JSON.parse(raw)); } catch { /* no storage */ } return null; }
+let S = newState(); // placeholder until a game starts (the title screen draws the world with it)
+let started = false;
+let saveTimer = 0;
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400); }
+// Only real progress (not walking around) counts as a change worth sending to the online save.
+const progressSig = (s) => { const { pos, updatedAt, ...rest } = s; return JSON.stringify(rest); };
+let lastSig = '';
+function saveNow() {
+  if (!started) return;
+  S.pos = { x: pl.x, y: pl.y, dir: pl.dir };
+  const sig = progressSig(S);
+  const changed = sig !== lastSig;
+  if (changed) { lastSig = sig; S.updatedAt = now(); }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
+  if (changed) pushSave(S, adoptRemote);
+}
+addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveNow();
+  else if (started) pullNewer(S).then((r) => r && adoptRemote(r));
+});
+
+// A newer game from another device replaces this one (as soon as no window is open).
+let pendingRemote = null;
+function adoptRemote(remote) {
+  if (!remote || remote.v !== 1) return;
+  pendingRemote = remote;
+  applyPendingRemote();
+}
+function applyPendingRemote() {
+  if (!pendingRemote || layers.length || busy || pl.moving) return;
+  const remote = pendingRemote;
+  pendingRemote = null;
+  if ((remote.updatedAt || 0) <= (S.updatedAt || 0)) return;
+  S = migrate(remote);
+  lastSig = progressSig(S);
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
+  pl.x = S.pos.x; pl.y = S.pos.y; pl.dir = S.pos.dir || 'down'; pl.px = pl.x * 16; pl.py = pl.y * 16;
+  applyWorldFlags(); ensureOrders(); updateHud(); updateObjective();
+  toast('Partie mise à jour depuis un autre appareil', 'blue');
+}
+
+// ============================================================ Sound
+let AC = null;
+function tone(f, d = 0.08, type = 'square', v = 0.04, when = 0, slide = 0) {
+  if (!S || !S.settings.sound) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const t0 = AC.currentTime + when, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (slide) o.frequency.linearRampToValueAtTime(Math.max(30, f + slide), t0 + d);
+    g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0 + d + 0.02);
+  } catch { /* audio blocked */ }
+}
+const sfx = {
+  blip: () => tone(700, 0.025, 'square', 0.012),
+  sel: () => tone(880, 0.05, 'square', 0.03),
+  ok: () => { tone(784, 0.08); tone(1047, 0.14, 'square', 0.04, 0.08); },
+  bad: () => { tone(240, 0.14, 'sawtooth', 0.03); tone(180, 0.2, 'sawtooth', 0.03, 0.12); },
+  coin: () => { tone(988, 0.06, 'square', 0.03); tone(1319, 0.12, 'square', 0.03, 0.06); },
+  level: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.14, 'square', 0.04, i * 0.09)),
+  bump: () => tone(90, 0.06, 'triangle', 0.06),
+  hit: () => { tone(420, 0.12, 'sawtooth', 0.05, 0, -300); tone(140, 0.1, 'square', 0.04, 0.08); },
+  water: () => { for (let i = 0; i < 5; i++) tone(1400 - i * 160, 0.05, 'sine', 0.03, i * 0.04); },
+  enc: () => [392, 494, 587, 784, 587, 784, 988].forEach((f, i) => tone(f, 0.09, 'square', 0.035, i * 0.07)),
+  harvest: () => [660, 880, 1100].forEach((f, i) => tone(f, 0.07, 'triangle', 0.05, i * 0.06)),
+};
+
+// ============================================================ Canvas
+// Touch devices (phones, tablets, touch laptops) get the on-screen pad, even with a mouse or keyboard attached.
+const root = document.documentElement;
+const markTouch = () => root.classList.add('is-touch');
+if (navigator.maxTouchPoints > 0 || matchMedia('(any-pointer: coarse)').matches) markTouch();
+addEventListener('touchstart', markTouch, { once: true, passive: true });
+const isTouch = () => root.classList.contains('is-touch');
+
+const cv = document.getElementById('world');
+const ctx = cv.getContext('2d');
+const ui = document.getElementById('ui');
+let SCALE = 3, VW = 320, VH = 240, DPR = 1;
+function resize() {
+  const dpr = (DPR = Math.min(window.devicePixelRatio || 1, 3));
+  const w = innerWidth, h = innerHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const portrait = h > w * 1.1;
+  const cols = portrait ? 11 : 16, rows = portrait ? 15 : h < 500 ? 8 : 10;
+  SCALE = Math.max(1, Math.floor(Math.min(cv.width / (16 * cols), cv.height / (16 * rows))));
+  VW = cv.width / SCALE; VH = cv.height / SCALE;
+}
+addEventListener('resize', resize);
+addEventListener('orientationchange', () => setTimeout(resize, 250));
+if (window.visualViewport) visualViewport.addEventListener('resize', resize);
+resize();
+
+// ============================================================ World
+const world = buildWorld();
+const tiles = world.tiles;
+const objs = world.objs;
+const objById = Object.fromEntries(objs.map((o) => [o.id, o]));
+let objAt = new Map();
+function applyWorldFlags() {
+  objById.bigrock.gone = !!S.flags.rock;
+  objById.brokenbridge.gone = !!S.flags.bridge;
+  Object.assign(objById.guardian, S.flags.guardian ? { x: 45, y: 11 } : { x: 44, y: 12 });
+  objAt = new Map();
+  for (const o of objs) {
+    if (o.gone) continue;
+    for (let dy = 0; dy < o.h; dy++) for (let dx = 0; dx < o.w; dx++) objAt.set(o.x + dx + (o.y + dy) * W, o);
+  }
+}
+const tileAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 't' : tiles[x + y * W]);
+function walkable(x, y) {
+  if (SOLID.has(tileAt(x, y))) return false;
+  const o = objAt.get(x + y * W);
+  return !(o && o.solid);
+}
+const respawning = (o) => S.res[o.id] && S.res[o.id] > now();
+
+// ============================================================ Player
+const pl = { x: START.x, y: START.y, px: START.x * 16, py: START.y * 16, dir: 'down', moving: false, fx: 0, fy: 0, tx: 0, ty: 0, t: 0, frame: 0, anim: 0, steps: 0 };
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const held = [];
+let mode = 'title'; // title | world
+const layers = [];
+const npcDir = {};
+
+function playerLook() {
+  return { hat: HATS[S.hat]?.color || '#e03c3c', hair: '#6a3a1a', shirt: '#3870d8', pants: '#384868', pack: '#e0a030' };
+}
+
+function updatePlayer(dt) {
+  if (pl.moving) {
+    const stepMs = S.tools.bottes ? 120 : 180;
+    pl.t += (dt * 1000) / stepMs;
+    pl.anim += dt;
+    if (pl.t >= 1) {
+      pl.t = 1; pl.moving = false; pl.x = pl.tx; pl.y = pl.ty;
+      pl.steps++;
+      onStep();
+    }
+    pl.px = Math.round((pl.fx + (pl.tx - pl.fx) * pl.t) * 16);
+    pl.py = Math.round((pl.fy + (pl.ty - pl.fy) * pl.t) * 16);
+    pl.frame = pl.moving ? (Math.floor(pl.anim * (S.tools.bottes ? 9 : 6)) % 2) + 1 : 0;
+  }
+  if (!pl.moving && !layers.length && mode === 'world' && !busy) {
+    const d = held[held.length - 1];
+    if (d) {
+      pl.dir = d;
+      const [dx, dy] = DIRS[d];
+      const nx = pl.x + dx, ny = pl.y + dy;
+      if (walkable(nx, ny)) {
+        pl.moving = true; pl.t = 0; pl.fx = pl.x; pl.fy = pl.y; pl.tx = nx; pl.ty = ny;
+      } else if (!pl.bumpT || now() - pl.bumpT > 400) { pl.bumpT = now(); sfx.bump(); }
+    } else pl.frame = 0;
+  }
+}
+let stepsSinceEnc = 0;
+function onStep() {
+  save();
+  stepsSinceEnc++;
+  if (TALL.has(tileAt(pl.x, pl.y)) && stepsSinceEnc >= 4 && Math.random() < 0.13) {
+    stepsSinceEnc = 0;
+    held.length = 0;
+    startBattle(zoneAt(pl.x, pl.y));
+  }
+}
+
+// ============================================================ Systems
+const has = (id, n = 1) => (S.inv[id] || 0) >= n;
+function addItem(id, n = 1) { S.inv[id] = (S.inv[id] || 0) + n; if (S.inv[id] <= 0) delete S.inv[id]; }
+function addCoins(n) { if (!n) return; S.coins += n; if (n > 0) { floatHud('+' + n, 'coin'); sfx.coin(); } updateHud(); }
+function addXP(n) {
+  if (!n) return;
+  S.xp += n;
+  floatHud(`+${n} XP`, 'xp');
+  while (S.lvl < MAX_LVL && S.xp >= xpNeed(S.lvl)) { S.xp -= xpNeed(S.lvl); S.lvl++; levelUp(S.lvl); }
+  updateHud();
+}
+function afterChange() { checkObjectives(); checkBadges(); updateHud(); save(); }
+
+function speedMult() {
+  let m = 1;
+  if (S.tools.epouvantail) m *= 1.2;
+  if (S.tools.arroseur) m *= 1.3;
+  if (S.built.serre) m *= 1.5;
+  return m;
+}
+function effElapsed(p) { return (now() - p.at) * speedMult() + p.skip; }
+function progress(p) { return p.crop ? Math.min(1, effElapsed(p) / p.grow) : 0; }
+function remaining(p) { return Math.max(0, p.grow - effElapsed(p)) / speedMult(); }
+
+function baseD() {
+  const L = S.lvl;
+  let d = L <= 2 ? 1 : L <= 5 ? 2 : L <= 9 ? 3 : L <= 14 ? 4 : 5;
+  if (S.settings.grade === 8) d += 1;
+  return d;
+}
+const mKey = (cat) => (cat === 'add' || cat === 'mul' ? 'calc' : cat);
+function diffFor(cat, off = 0) {
+  const m = S.mastery[mKey(cat)];
+  let adj = 0;
+  if (m && m.r.length >= 4) {
+    const rate = m.r.filter(Boolean).length / m.r.length;
+    if (rate >= 0.84) adj = 1; else if (rate <= 0.4) adj = -1;
+  }
+  return clamp(Math.round(baseD() + off + adj), 1, 5);
+}
+function record(cat, ok) {
+  const k = mKey(cat);
+  const m = (S.mastery[k] = S.mastery[k] || { ok: 0, n: 0, r: [] });
+  m.n++; if (ok) m.ok++;
+  m.r.push(ok ? 1 : 0); if (m.r.length > 8) m.r.shift();
+}
+
+function unlocksAt(L) {
+  const out = [];
+  for (const [id, c] of Object.entries(CROPS)) if (!c.rare && c.lvl === L) out.push({ icon: A.iconURL('graine:' + id), text: `Nouvelles graines : ${c.name}` });
+  for (const [id, b] of Object.entries(BUILDINGS)) if (b.lvl === L) out.push({ icon: null, text: `Tu peux construire : ${b.name}` });
+  for (const [bid, list] of Object.entries(RECIPES)) for (const r of list) if (r.lvl === L && r.lvl !== BUILDINGS[bid].lvl) out.push({ icon: A.iconURL(r.out), text: `Nouvelle recette : ${itemName(r.out)} (${BUILDINGS[bid].name})` });
+  for (const tl of TOOLS) if (tl.lvl === L) out.push({ icon: null, text: `À la boutique : ${tl.name}` });
+  for (const g of GATES) if (g.lvl === L) out.push({ icon: null, text: g.text });
+  for (const hh of Object.values(HATS)) if (hh.lvl === L && hh.price) out.push({ icon: null, text: `Nouveau style : ${hh.name}` });
+  return out;
+}
+function nextUnlock(L) {
+  for (let l = L + 1; l <= MAX_LVL; l++) { const u = unlocksAt(l); if (u.length) return `Niveau ${l} : ${u[0].text}`; }
+  return null;
+}
+function levelUp(L) {
+  sfx.level();
+  const u = unlocksAt(L);
+  const lines = u.map((x) => x.text);
+  const prevTitle = titleFor(L - 1), t = titleFor(L);
+  if (t !== prevTitle) lines.unshift(`Nouveau titre : ${t} !`);
+  const nx = nextUnlock(L);
+  celebrate({ title: `Niveau ${L} !`, lines: lines.length ? lines : ['Tu deviens plus fort !'], icons: u.map((x) => x.icon).filter(Boolean), foot: nx ? `Prochain : ${nx}` : null, kind: 'level' });
+}
+function checkObjectives() {
+  let guard = 0;
+  while (S.obj < OBJECTIVES.length - 1 && OBJECTIVES[S.obj].c(S) && guard++ < 30) {
+    const o = OBJECTIVES[S.obj];
+    S.obj++;
+    if (o.r.coins || o.r.xp) {
+      toast(`Objectif réussi ! +${o.r.coins} pièces`, 'gold');
+      S.coins += o.r.coins; addXP(o.r.xp);
+      sfx.coin();
+    }
+  }
+  updateObjective();
+}
+function checkBadges() {
+  BADGES.forEach((b, i) => {
+    if (!S.badges[b.id] && b.c(S)) {
+      S.badges[b.id] = now();
+      S.coins += 50;
+      celebrate({ title: 'Nouveau badge !', lines: [b.name, b.desc, '+50 pièces'], iconsBig: [A.badgeURL(i, b.color, true)], kind: 'badge' });
+    }
+  });
+}
+
+// ============================================================ UI helpers
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === false || v == null) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(3)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+}
+const icon = (id, cls = 'ic') => h('img', { class: cls, src: A.iconURL(id), alt: '' });
+const coinImg = (cls = 'coin') => h('img', { class: cls, src: A.coinURL(), alt: '' });
+let busy = false;
+function pushLayer(el, handlers = {}) {
+  held.length = 0;
+  ui.append(el);
+  const L = { el, ...handlers };
+  layers.push(L);
+  return L;
+}
+function popLayer(L) { L.el.remove(); const i = layers.indexOf(L); if (i >= 0) layers.splice(i, 1); }
+
+// ---- HUD
+const hud = h('div', { class: 'hud' });
+const objBar = h('div', { class: 'objective' });
+const menuBtn = h('button', { class: 'menu-btn', onclick: () => pressB(), 'aria-label': 'Menu' }, 'MENU');
+function updateHud() {
+  if (!S) return;
+  const need = xpNeed(S.lvl);
+  hud.innerHTML = '';
+  hud.append(
+    h('div', { class: 'hud-box win' },
+      h('div', { class: 'hud-lvl' }, h('span', { class: 'lv' }, 'Niv. ', h('b', null, S.lvl)), h('span', { class: 'ttl' }, titleFor(S.lvl))),
+      h('div', { class: 'xpbar' }, h('i', { style: `width:${S.lvl >= MAX_LVL ? 100 : Math.round((S.xp / need) * 100)}%` })),
+      h('div', { class: 'hud-row' }, coinImg(), h('b', { class: 'coins' }, fmt(S.coins)),
+        S.streak >= 2 ? h('span', { class: 'streak' }, `Série ×${S.streak}`) : null),
+    ),
+  );
+}
+function updateObjective() {
+  if (!S) return;
+  const o = OBJECTIVES[S.obj];
+  objBar.innerHTML = '';
+  objBar.append(h('span', { class: 'obj-tag' }, 'Objectif'), h('span', null, o.t));
+}
+function floatHud(text, kind) {
+  const el = h('div', { class: 'float ' + kind }, text);
+  ui.append(el);
+  setTimeout(() => el.remove(), 1400);
+}
+let toastY = 0;
+function toast(text, kind = '', icons = []) {
+  const el = h('div', { class: 'toast win ' + kind, style: `--off:${toastY}px` }, icons.map((i) => h('img', { class: 'ic', src: i })), h('span', null, text));
+  toastY += 54;
+  ui.append(el);
+  setTimeout(() => { el.classList.add('out'); }, 2600);
+  setTimeout(() => { el.remove(); toastY = Math.max(0, toastY - 54); }, 3000);
+}
+
+// ---- Dialog box (typewriter)
+function say(lines, who) {
+  if (!Array.isArray(lines)) lines = [lines];
+  return new Promise((resolve) => {
+    const name = h('div', { class: 'dlg-name' });
+    const text = h('div', { class: 'dlg-text' });
+    const more = h('div', { class: 'dlg-more' }, '▼');
+    const box = h('div', { class: 'dialog win' }, name, text, more);
+    const wrap = h('div', { class: 'layer dlg-layer' }, box);
+    let i = 0, typing = false, full = '', shown = 0, timer = 0;
+    function show() {
+      const ln = lines[i];
+      const w = typeof ln === 'object' ? ln.who : who;
+      full = typeof ln === 'object' ? ln.text : ln;
+      name.textContent = w || ''; name.style.display = w ? '' : 'none';
+      shown = 0; typing = true; more.style.visibility = 'hidden';
+      clearInterval(timer);
+      timer = setInterval(() => {
+        shown += 2;
+        text.textContent = full.slice(0, shown);
+        if (shown % 4 === 0) sfx.blip();
+        if (shown >= full.length) { clearInterval(timer); typing = false; more.style.visibility = 'visible'; }
+      }, 28);
+    }
+    function adv() {
+      if (typing) { clearInterval(timer); text.textContent = full; typing = false; more.style.visibility = 'visible'; return; }
+      i++;
+      if (i >= lines.length) { clearInterval(timer); popLayer(L); resolve(); } else show();
+    }
+    const L = pushLayer(wrap, { onA: adv, onB: adv, onKey: (e) => { if ([' ', 'Enter', 'e', 'E', 'Escape'].includes(e.key)) { adv(); return true; } return false; } });
+    wrap.addEventListener('pointerdown', (e) => { e.preventDefault(); adv(); });
+    show();
+  });
+}
+function choose(question, options, who) {
+  return new Promise((resolve) => {
+    let sel = 0;
+    const name = h('div', { class: 'dlg-name', style: who ? '' : 'display:none' }, who || '');
+    const text = h('div', { class: 'dlg-text' }, question);
+    const list = h('div', { class: 'choices win' });
+    const btns = options.map((o, i) => h('button', { class: 'choice', onclick: () => done(i) }, o));
+    list.append(...btns);
+    const box = h('div', { class: 'dialog win' }, name, text);
+    const wrap = h('div', { class: 'layer dlg-layer' }, list, box);
+    function paint() { btns.forEach((b, i) => b.classList.toggle('sel', i === sel)); }
+    function done(i) { sfx.sel(); popLayer(L); resolve(i); }
+    const L = pushLayer(wrap, {
+      onA: () => done(sel), onB: () => done(options.length - 1),
+      onKey: (e) => {
+        if (e.key === 'ArrowDown' || e.key === 's') { sel = (sel + 1) % options.length; paint(); sfx.blip(); return true; }
+        if (e.key === 'ArrowUp' || e.key === 'w') { sel = (sel + options.length - 1) % options.length; paint(); sfx.blip(); return true; }
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'e') { done(sel); return true; }
+        if (e.key === 'Escape') { done(options.length - 1); return true; }
+        const n = Number(e.key); if (n >= 1 && n <= options.length) { done(n - 1); return true; }
+        return false;
+      },
+    });
+    btns.forEach((b, i) => b.addEventListener('pointerenter', () => { sel = i; paint(); }));
+    paint();
+  });
+}
+async function confirm(question, yes = 'Oui', no = 'Non', who) { return (await choose(question, [yes, no], who)) === 0; }
+
+// ---- Panels (windows)
+function panel(title, build, opts = {}) {
+  let resolveDone;
+  const done = new Promise((r) => (resolveDone = r));
+  const body = h('div', { class: 'pbody' });
+  const tabsEl = h('div', { class: 'ptabs' });
+  const close = () => { popLayer(L); resolveDone(); };
+  const win = h('div', { class: 'panel win' + (opts.cls ? ' ' + opts.cls : '') },
+    h('div', { class: 'phead' }, h('h2', null, title), h('button', { class: 'x', onclick: close, 'aria-label': 'Fermer' }, '✕')),
+    tabsEl, body);
+  const wrap = h('div', { class: 'layer modal' }, win);
+  wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap) close(); });
+  const L = pushLayer(wrap, { onB: close, onKey: (e) => { if (e.key === 'Escape') { close(); return true; } return false; } });
+  let tab = opts.tab || (opts.tabs ? opts.tabs[0][0] : null);
+  const api = {
+    body, close, done,
+    refresh() {
+      body.innerHTML = '';
+      if (opts.tabs) {
+        tabsEl.innerHTML = '';
+        for (const [k, label] of opts.tabs) tabsEl.append(h('button', { class: 'ptab' + (k === tab ? ' on' : ''), onclick: () => { tab = k; sfx.sel(); api.refresh(); } }, label));
+      }
+      build(body, api, tab);
+      updateHud();
+    },
+  };
+  api.refresh();
+  return api;
+}
+
+// ---- Celebration popups (queued)
+let popChain = Promise.resolve();
+function celebrate(o) {
+  popChain = popChain.then(() => new Promise((resolve) => {
+    const conf = h('div', { class: 'confetti' });
+    for (let i = 0; i < 26; i++) conf.append(h('i', { style: `left:${Math.random() * 100}%;animation-delay:${Math.random() * 0.6}s;background:${pick(['#f8d030', '#f05060', '#58c048', '#5898f8', '#ffffff'])}` }));
+    const card = h('div', { class: 'celebrate win ' + (o.kind || '') },
+      h('div', { class: 'cel-title' }, o.title),
+      o.iconsBig ? h('div', { class: 'cel-icons big' }, o.iconsBig.map((s) => h('img', { src: s }))) : null,
+      o.icons && o.icons.length ? h('div', { class: 'cel-icons' }, o.icons.map((s) => h('img', { src: s }))) : null,
+      h('div', { class: 'cel-lines' }, (o.lines || []).map((l) => h('p', null, l))),
+      o.foot ? h('div', { class: 'cel-foot' }, o.foot) : null,
+      h('button', { class: 'btn big', onclick: () => fin() }, o.btn || 'Super !'));
+    const wrap = h('div', { class: 'layer modal top' }, conf, card);
+    let closed = false;
+    const fin = () => { if (closed) return; closed = true; popLayer(L); resolve(); };
+    const L = pushLayer(wrap, { onA: fin, onB: fin, onKey: (e) => { if (['Enter', ' ', 'Escape'].includes(e.key)) { fin(); return true; } return false; } });
+  }));
+  return popChain;
+}
+
+// ============================================================ Math UI
+const PRAISE = ['Bravo !', 'Super !', 'Génial !', 'Excellent !', 'Parfait !', 'Bien joué !', 'Trop fort !', 'Champion !'];
+/**
+ * Ask one problem. Returns { ok, first, quit }.
+ * opts: cat, d, title, problem, mount (element for battles), noQuit
+ */
+function askMath(opts) {
+  return new Promise((resolve) => {
+    const p = opts.problem || makeProblem(opts.cat, opts.d || diffFor(opts.cat));
+    window.__lastP = p; // read by the test helpers in the console
+    let tries = 0, input = '', locked = false;
+    const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
+    const ansVal = h('span', { class: 'm-val' });
+    const ansRow = p.choices ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
+    const fb = h('div', { class: 'm-fb' });
+    const pad = h('div', { class: p.choices ? 'm-choices' : 'm-pad' });
+    const head = h('div', { class: 'm-head' },
+      h('span', { class: 'm-cat' }, CATS[p.cat] || 'Calcul'),
+      h('span', { class: 'm-title' }, opts.title || ''),
+      S.streak >= 2 ? h('span', { class: 'm-streak' }, `Série ×${S.streak}`) : null);
+    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, ansRow, fb, pad);
+    function paint() { ansVal.textContent = input || '?'; ansVal.classList.toggle('empty', !input); }
+    function key(k) {
+      if (locked) return;
+      if (k === '⌫') input = input.slice(0, -1);
+      else if (k === ',') { if (!input.includes(',')) input += input ? ',' : '0,'; }
+      else if (input.length < 9) input += k;
+      sfx.blip(); paint();
+    }
+    function finish(res) {
+      document.removeEventListener('keydown', onDocKey, true);
+      if (L) popLayer(L); else box.remove();
+      resolve(res);
+    }
+    function submit(val) {
+      if (locked) return;
+      if (!p.choices && !input) return;
+      const ok = checkAnswer(p, p.choices ? val : input);
+      tries++;
+      if (tries === 1) record(p.cat, ok);
+      if (ok) {
+        locked = true;
+        S.stats.correct++;
+        if (tries === 1) { S.streak++; S.stats.maxStreak = Math.max(S.stats.maxStreak, S.streak); }
+        if (MEASURE_CATS.includes(p.cat)) S.stats.measureOK++;
+        sfx.ok();
+        box.classList.add('good');
+        const bonus = tries === 1 ? 3 + (S.streak >= 5 ? 2 : 0) : 1;
+        fb.innerHTML = '';
+        fb.append(h('b', { class: 'ok' }, pick(PRAISE)));
+        if (tries === 1 && S.streak >= 3) fb.append(h('span', { class: 'm-streakmsg' }, ` Série de ${S.streak} !`));
+        addXP(bonus);
+        setTimeout(() => finish({ ok: true, first: tries === 1 }), opts.mount ? 900 : 1000);
+      } else if (tries === 1) {
+        S.stats.wrong++; S.streak = 0; updateHud();
+        sfx.bad();
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+        fb.innerHTML = '';
+        fb.append(h('b', { class: 'no' }, 'Presque ! '), h('span', null, 'Indice : ' + p.hint));
+        input = ''; paint();
+        if (p.choices) [...pad.children].forEach((b) => { if (b.dataset.v === val) b.disabled = true; });
+      } else {
+        locked = true;
+        sfx.bad();
+        fb.innerHTML = '';
+        const shown = p.choices ? p.a : `${fmt(p.a)}${p.u ? ' ' + p.u : ''}`;
+        fb.append(h('div', { class: 'sol' }, h('b', null, `La réponse était ${shown}.`), h('div', null, p.ex)));
+        pad.innerHTML = '';
+        pad.className = 'm-choices';
+        pad.append(h('button', { class: 'btn big', onclick: () => finish({ ok: false, first: false }) }, 'J’ai compris'));
+        save();
+      }
+      save();
+    }
+    if (p.choices) {
+      p.choices.forEach((c, i) => pad.append(h('button', { class: 'm-choice', 'data-v': c, onclick: () => submit(c) }, h('small', null, i + 1), c)));
+    } else {
+      for (const k of ['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0', '⌫']) pad.append(h('button', { class: 'k' + (k === '⌫' ? ' del' : ''), onclick: () => key(k) }, k));
+      pad.append(h('button', { class: 'k ok', onclick: () => submit() }, 'OK'));
+    }
+    if (!opts.noQuit) box.append(h('button', { class: 'm-quit', onclick: () => { if (!locked) finish({ ok: false, quit: true }); } }, 'Plus tard'));
+    function onDocKey(e) {
+      if (locked && e.key === 'Enter' && pad.querySelector('.btn')) { pad.querySelector('.btn').click(); e.preventDefault(); e.stopPropagation(); return; }
+      if (p.choices) {
+        const n = Number(e.key);
+        if (n >= 1 && n <= p.choices.length) { const b = pad.children[n - 1]; if (!b.disabled) submit(p.choices[n - 1]); e.preventDefault(); e.stopPropagation(); }
+        return;
+      }
+      if (/^[0-9]$/.test(e.key)) key(e.key);
+      else if (e.key === ',' || e.key === '.') key(',');
+      else if (e.key === 'Backspace') key('⌫');
+      else if (e.key === 'Enter') submit();
+      else return;
+      e.preventDefault(); e.stopPropagation();
+    }
+    document.addEventListener('keydown', onDocKey, true);
+    let L = null;
+    if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }
+    else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true });
+    paint();
+  });
+}
+
+// ============================================================ Interactions
+async function interact() {
+  const [dx, dy] = DIRS[pl.dir];
+  const tx = pl.x + dx, ty = pl.y + dy;
+  let o = objAt.get(tx + ty * W);
+  if (!o) { const here = objAt.get(pl.x + pl.y * W); if (here && here.type === 'plot') o = here; }
+  if (!o) return;
+  busy = true;
+  try { await handle(o); } finally { busy = false; afterChange(); }
+}
+async function handle(o) {
+  switch (o.type) {
+    case 'plot': return onPlot(o.plot);
+    case 'house': return say(['Ta maison. Tout est sauvegardé automatiquement.', `Tu as ${Object.keys(S.creatures).length} amis créatures et ${Object.keys(S.badges).length} badges.`]);
+    case 'caisse': return sellPanel('Caisse de vente');
+    case 'mailbox': return onMailbox();
+    case 'npc': return onNpc(o);
+    case 'chest': return onChest(o);
+    case 'sign': return say(o.text.split('\n'));
+    case 'shop': return shopPanel();
+    case 'bld': return onBuilding(o.bld);
+    case 'board': return ordersPanel();
+    case 'fountain': return onFountain();
+    case 'owl': return onOwl();
+    case 'bigrock': return onBigRock();
+    case 'brokenbridge': return onBridge();
+    case 'guardian': return onGuardian();
+    case 'ancient': return onAncient();
+    case 'tree': return onTree(o);
+    case 'rock': return onRock(o);
+    case 'crystal': return onCrystal(o);
+    case 'forage': return onForage(o);
+    case 'fishspot': return onFish();
+    default: return null;
+  }
+}
+
+// ---- Garden
+async function onPlot(i) {
+  const p = S.plots[i];
+  if (!p.u) return say('Cette parcelle est en friche. Tu peux l’acheter à la Boutique du village (onglet Outils).');
+  if (!p.crop) return plantMenu(i);
+  if (progress(p) >= 1) return harvestAll();
+  return waterMenu(i);
+}
+function seedList() { return Object.keys(S.inv).filter((k) => k.startsWith('graine:') && S.inv[k] > 0); }
+async function plantMenu(i) {
+  const seeds = seedList();
+  if (!seeds.length) return say(['Tu n’as plus de graines !', 'Va en acheter à la Boutique, en haut du village. Tu peux aussi en trouver dans les coffres et en battant des créatures.']);
+  let chosen = null, fert = false;
+  const P = panel('Que veux-tu planter ?', (body) => {
+    if (has('engrais')) {
+      body.append(h('label', { class: 'fert' }, h('input', { type: 'checkbox', checked: fert, onchange: (e) => (fert = e.target.checked) }), icon('engrais'), ` Ajouter de l’engrais (récolte ×2) — tu en as ${S.inv.engrais}`));
+    }
+    const list = h('div', { class: 'list' });
+    seeds.sort((a, b) => (CROPS[a.slice(7)].grow - CROPS[b.slice(7)].grow)).forEach((sid) => {
+      const c = CROPS[sid.slice(7)];
+      list.append(h('button', { class: 'row', onclick: () => { chosen = sid.slice(7); P.close(); } },
+        icon(sid), h('div', { class: 'row-main' }, h('b', null, c.seedName), h('small', null, `Pousse en ${fmtTime(c.grow * 1000 / speedMult())} · récolte ${c.yield[0]}-${c.yield[1]} ${c.name.toLowerCase()} · ${c.sell} pièces chacun`)),
+        h('span', { class: 'qty' }, '×' + S.inv[sid])));
+    });
+    body.append(list);
+  });
+  await P.done;
+  if (!chosen) return;
+  plant(i, chosen, fert);
+  const empties = S.plots.map((pp, j) => (pp.u && !pp.crop ? j : -1)).filter((j) => j >= 0);
+  const left = S.inv['graine:' + chosen] || 0;
+  if (empties.length && left) {
+    const n = Math.min(empties.length, left);
+    if (await confirm(`Il te reste ${left} × ${CROPS[chosen].seedName.toLowerCase()}. En planter dans ${n} autre${n > 1 ? 's' : ''} parcelle${n > 1 ? 's' : ''} vide${n > 1 ? 's' : ''} ?`, 'Oui, planter', 'Non')) {
+      for (const j of empties.slice(0, n)) plant(j, chosen, false);
+    }
+  }
+  sfx.harvest();
+  if (S.stats.planted <= 4) await say('C’est planté ! Pour faire pousser plus vite, parle à ta plante et arrose-la en réussissant un calcul.');
+}
+function plant(i, crop, fert) {
+  const p = S.plots[i];
+  Object.assign(p, { crop, at: now(), grow: CROPS[crop].grow * 1000, skip: 0, fert: !!fert, wet: 0 });
+  addItem('graine:' + crop, -1);
+  if (fert) addItem('engrais', -1);
+  S.stats.planted++;
+}
+function waterCat() {
+  const r = Math.random();
+  if (S.lvl >= 4 && r < 0.2) return 'conv';
+  if (S.lvl >= 3 && r < 0.4) return 'frac';
+  return 'calc';
+}
+function water(i, frac) {
+  const p = S.plots[i];
+  if (!p.crop) return 0;
+  const rem = Math.max(0, p.grow - effElapsed(p));
+  p.skip += rem * frac;
+  p.wet = now();
+  return rem * frac / speedMult();
+}
+async function waterMenu(i) {
+  const p = S.plots[i], c = CROPS[p.crop];
+  const growing = S.plots.filter((pp) => pp.crop && progress(pp) < 1).length;
+  const opts = ['Arroser cette plante', growing > 1 ? `Arroser tout le potager (${growing} plantes, calcul plus dur)` : null, 'Plus tard'].filter(Boolean);
+  const k = await choose(`${c.name} : prêt dans ${fmtTime(remaining(p))}. Arroser ? Il faut réussir un calcul !`, opts);
+  const frac = WATER_FRAC[S.tools.arrosoir];
+  if (opts[k] === 'Arroser cette plante') {
+    for (;;) {
+      const cat = waterCat();
+      const r = await askMath({ cat, title: `Arroser : ${c.name}` });
+      if (r.quit) return;
+      if (r.ok) {
+        const gained = water(i, r.first ? frac : frac * 0.6);
+        S.stats.watered++;
+        sfx.water();
+        toast(`Ça pousse ! −${fmtTime(gained)}`, 'blue');
+        afterChange();
+      }
+      if (progress(p) >= 1) { await say(`${c.name} : c’est prêt à récolter ! Parle encore à la plante pour la cueillir.`); return; }
+      if (!(await confirm(`Encore ${fmtTime(remaining(p))}. Arroser encore ?`, 'Oui, encore', 'Non merci'))) return;
+    }
+  } else if (opts[k] && opts[k].startsWith('Arroser tout')) {
+    const r = await askMath({ cat: waterCat(), d: diffFor('calc', 1), title: 'Arroser tout le potager' });
+    if (r.ok) {
+      let n = 0;
+      S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.first ? 0.7 : 0.45)); n++; } });
+      S.stats.watered++;
+      sfx.water();
+      toast(`${n} plantes arrosées !`, 'blue');
+    }
+  }
+}
+async function harvestAll() {
+  const got = {};
+  let xp = 0, n = 0;
+  S.plots.forEach((p) => {
+    if (!p.crop || progress(p) < 1) return;
+    const c = CROPS[p.crop];
+    let q = R(c.yield[0], c.yield[1]) + (S.tools.panier ? 1 : 0);
+    if (p.fert) q *= 2;
+    got[p.crop] = (got[p.crop] || 0) + q;
+    S.stats.harvested[p.crop] = (S.stats.harvested[p.crop] || 0) + q;
+    if (Math.random() < (c.rare ? 0.2 : 0.35)) got['graine:' + p.crop] = (got['graine:' + p.crop] || 0) + 1;
+    xp += c.xp; n++;
+    Object.assign(p, { crop: null, at: 0, grow: 0, skip: 0, fert: false, wet: 0 });
+  });
+  if (!n) return;
+  for (const [id, q] of Object.entries(got)) addItem(id, q);
+  S.stats.harvests += n;
+  sfx.harvest();
+  addXP(xp);
+  const parts = Object.entries(got).map(([id, q]) => `${q} ${itemName(id)}`);
+  toast(`Récolte : ${parts.join(', ')}`, 'green', Object.keys(got).map((id) => A.iconURL(id)));
+  if (got.doree) await celebrate({ title: 'Fruit d’or !', lines: ['Tu as récolté le fruit le plus rare de la vallée !', 'Il vaut 1200 pièces.'], iconsBig: [A.iconURL('doree', 5)] });
+  if (S.stats.harvests === n) await say(['Ta première récolte ! Bravo !', 'Vends tes légumes dans la caisse en bois devant ta maison.'], 'Mamie Rose');
+}
+
+// ---- Selling
+function sellPrice(id) {
+  const base = ITEMS[id].sell || 0;
+  return featured() === id ? base * 2 : base;
+}
+function featured() {
+  const pool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
+  const d = today();
+  let hsh = 0; for (const ch of d) hsh = (hsh * 31 + ch.charCodeAt(0)) | 0;
+  return pool[Math.abs(hsh) % pool.length];
+}
+function sellBody(body, P) {
+  const f = featured();
+  body.append(h('div', { class: 'note' }, icon(f), ` Article du jour : `, h('b', null, itemName(f)), ' — prix ×2 !'));
+  const ids = Object.keys(S.inv).filter((id) => ITEMS[id] && ITEMS[id].kind !== 'seed' && ITEMS[id].sell > 0 && S.inv[id] > 0);
+  if (!ids.length) { body.append(h('p', { class: 'empty' }, 'Tu n’as rien à vendre pour l’instant. Récolte des légumes ou fabrique des produits !')); return; }
+  const list = h('div', { class: 'list' });
+  const order = { crop: 0, product: 1, resource: 2 };
+  ids.sort((a, b) => order[ITEMS[a].kind] - order[ITEMS[b].kind] || ITEMS[b].sell - ITEMS[a].sell);
+  for (const id of ids) {
+    const q = S.inv[id], pr = sellPrice(id);
+    const keep = (id === 'bois' || id === 'pierre' || id === 'cristal') ? h('small', { class: 'warn' }, ' (utile pour construire)') : null;
+    list.append(h('div', { class: 'row' }, icon(id),
+      h('div', { class: 'row-main' }, h('b', null, itemName(id), keep), h('small', null, `${pr} pièces chacun${id === f ? ' (×2 aujourd’hui)' : ''}`)),
+      h('span', { class: 'qty' }, '×' + q),
+      h('button', { class: 'btn sm', onclick: () => { doSell(id, 1); P.refresh(); } }, 'Vendre 1'),
+      q > 1 ? h('button', { class: 'btn sm alt', onclick: () => { doSell(id, q); P.refresh(); } }, `Tout (${fmt(pr * q)})`) : null));
+  }
+  body.append(list);
+}
+function doSell(id, q) {
+  const pr = sellPrice(id);
+  addItem(id, -q);
+  addCoins(pr * q);
+  S.stats.sold += q;
+  afterChange();
+}
+async function sellPanel(title) { await panel(title, (b, P) => sellBody(b, P)).done; }
+
+// ---- Shop
+const toolOwned = (t) => (t.id === 'arrosoir' ? S.tools.arrosoir >= t.tier : !!S.tools[t.id]);
+function buy(price) {
+  if (S.coins < price) { sfx.bad(); toast('Pas assez de pièces…', 'red'); return false; }
+  S.coins -= price; sfx.coin(); return true;
+}
+async function shopPanel() {
+  const P = panel('Boutique de Bourgeon', (body, api, tab) => {
+    if (tab === 'graines') {
+      const list = h('div', { class: 'list' });
+      Object.entries(CROPS).filter(([, c]) => !c.rare).forEach(([id, c]) => {
+        const locked = c.lvl > S.lvl;
+        list.append(h('div', { class: 'row' + (locked ? ' locked' : '') }, icon('graine:' + id),
+          h('div', { class: 'row-main' }, h('b', null, c.seedName), h('small', null, locked ? `Débloqué au niveau ${c.lvl}` : `Pousse en ${fmtTime(c.grow * 1000)} · se vend ${c.sell} pièces · tu en as ${S.inv['graine:' + id] || 0}`)),
+          locked ? h('span', { class: 'lock' }, `Niv. ${c.lvl}`) : [
+            h('button', { class: 'btn sm', onclick: () => { if (buy(c.price)) { addItem('graine:' + id, 1); S.stats.bought++; afterChange(); api.refresh(); } } }, coinImg('coin sm'), ` ${c.price}`),
+            h('button', { class: 'btn sm alt', onclick: () => { if (buy(c.price * 5)) { addItem('graine:' + id, 5); S.stats.bought += 5; afterChange(); api.refresh(); } } }, `×5 · ${c.price * 5}`),
+          ]));
+      });
+      body.append(list);
+    } else if (tab === 'outils') {
+      const list = h('div', { class: 'list' });
+      const nb = PLOT_BUYS[S.plotBuys];
+      if (nb) {
+        const locked = nb.lvl > S.lvl;
+        list.append(h('div', { class: 'row' + (locked ? ' locked' : '') }, icon('tool:plots'),
+          h('div', { class: 'row-main' }, h('b', null, '2 parcelles de plus'), h('small', null, `Tu as ${4 + S.plotBuys * 2} parcelles sur 18.`)),
+          locked ? h('span', { class: 'lock' }, `Niv. ${nb.lvl}`) : h('button', { class: 'btn sm', onclick: () => {
+            if (buy(nb.price)) { S.plotBuys++; for (let i = 0; i < 4 + S.plotBuys * 2; i++) S.plots[i].u = true; toast('Nouvelles parcelles dans le potager !', 'green'); afterChange(); api.refresh(); }
+          } }, coinImg('coin sm'), ` ${nb.price}`)));
+      }
+      const eLocked = S.lvl < 5;
+      list.append(h('div', { class: 'row' + (eLocked ? ' locked' : '') }, icon('engrais'),
+        h('div', { class: 'row-main' }, h('b', null, 'Engrais'), h('small', null, `Double la récolte d’une plante. Tu en as ${S.inv.engrais || 0}.`)),
+        eLocked ? h('span', { class: 'lock' }, 'Niv. 5') : h('button', { class: 'btn sm', onclick: () => { if (buy(30)) { addItem('engrais', 1); afterChange(); api.refresh(); } } }, coinImg('coin sm'), ' 30')));
+      for (const t of TOOLS) {
+        const owned = toolOwned(t);
+        const needPrev = t.id === 'arrosoir' && S.tools.arrosoir < t.tier - 1;
+        const locked = t.lvl > S.lvl;
+        list.append(h('div', { class: 'row' + (locked ? ' locked' : '') + (owned ? ' owned' : '') }, icon('tool:' + t.id + (t.tier || '')),
+          h('div', { class: 'row-main' }, h('b', null, t.name), h('small', null, t.desc)),
+          owned ? h('span', { class: 'tick' }, 'Acheté') : locked ? h('span', { class: 'lock' }, `Niv. ${t.lvl}`) : needPrev ? h('span', { class: 'lock' }, 'Arrosoir d’avant') :
+            h('button', { class: 'btn sm', onclick: () => {
+              if (buy(t.price)) {
+                if (t.id === 'arrosoir') S.tools.arrosoir = t.tier; else S.tools[t.id] = true;
+                celebrate({ title: t.name, lines: [t.desc] });
+                afterChange(); api.refresh();
+              }
+            } }, coinImg('coin sm'), ` ${fmt(t.price)}`)));
+      }
+      body.append(list);
+    } else if (tab === 'style') {
+      const list = h('div', { class: 'list grid2' });
+      for (const [id, hh] of Object.entries(HATS)) {
+        const own = S.hats.includes(id), locked = hh.lvl > S.lvl;
+        const sw = A.canvas(16, 19), g = sw.getContext('2d'); A.drawPerson(g, 0, 3, 'down', 0, { ...playerLook(), hat: hh.color });
+        const prev = A.canvas(48, 57), pg = prev.getContext('2d'); pg.imageSmoothingEnabled = false; pg.drawImage(sw, 0, 0, 48, 57);
+        list.append(h('div', { class: 'hat' + (S.hat === id ? ' on' : '') + (locked ? ' locked' : '') }, h('img', { src: prev.toDataURL(), class: 'hatimg' }), h('b', null, hh.name),
+          S.hat === id ? h('span', { class: 'tick' }, 'Portée') : own ? h('button', { class: 'btn sm', onclick: () => { S.hat = id; sfx.sel(); save(); api.refresh(); } }, 'Mettre') :
+            locked ? h('span', { class: 'lock' }, `Niv. ${hh.lvl}`) : h('button', { class: 'btn sm', onclick: () => { if (buy(hh.price)) { S.hats.push(id); S.hat = id; afterChange(); api.refresh(); } } }, coinImg('coin sm'), ` ${fmt(hh.price)}`)));
+      }
+      body.append(list);
+    } else sellBody(body, api);
+  }, { tabs: [['graines', 'Graines'], ['outils', 'Outils'], ['style', 'Style'], ['vendre', 'Vendre']] });
+  await P.done;
+}
+
+// ---- Buildings & crafting
+async function onBuilding(id) {
+  const B = BUILDINGS[id];
+  if (!S.built[id]) {
+    if (S.lvl < B.lvl) return say([`Un chantier : ici, on pourra construire ${B.name === 'Moulin' ? 'le' : 'la'} ${B.name}.`, `${B.desc} Il faut être niveau ${B.lvl}.`]);
+    const cost = Object.entries(B.cost).map(([k, v]) => (k === 'coins' ? `${fmt(v)} pièces` : qtyName(k, v))).join(', ');
+    if (!(await confirm(`Construire : ${B.name} ? Il faut ${cost}.`, 'Construire', 'Plus tard'))) return;
+    const missing = Object.entries(B.cost).filter(([k, v]) => (k === 'coins' ? S.coins < v : !has(k, v)))
+      .map(([k, v]) => (k === 'coins' ? `${fmt(v - S.coins)} pièces` : qtyName(k, v - (S.inv[k] || 0))));
+    if (missing.length) return say([`Il te manque encore : ${missing.join(', ')}.`, id === 'serre' ? 'Les cristaux se trouvent dans la montagne.' : 'Le bois et les pierres se trouvent dans la forêt, à l’ouest de la ferme.']);
+    await say('Le chef de chantier vérifie le plan avec toi. Réussis ce calcul pour lancer la construction !');
+    const r = await askMath({ cat: 'geo', title: `Construire : ${B.name}` });
+    if (!r.ok) return say('Le chef de chantier dit : pas grave, on réessaie quand tu veux !');
+    for (const [k, v] of Object.entries(B.cost)) { if (k === 'coins') S.coins -= v; else addItem(k, -v); }
+    S.built[id] = true;
+    addXP(30);
+    await celebrate({ title: `${B.name} construit${id === 'moulin' ? '' : 'e'} !`, lines: [B.desc] });
+    return;
+  }
+  if (id === 'serre') return say(['La Serre magique fait pousser toutes tes plantes 50 % plus vite.', 'Même quand tu n’es pas là !']);
+  return craftPanel(id);
+}
+async function craftPanel(id) {
+  const B = BUILDINGS[id];
+  let job = null;
+  const P = panel(B.name, (body) => {
+    body.append(h('p', { class: 'note' }, 'Chaque fabrication demande de résoudre un problème. Si tu te trompes, tu gardes tes ingrédients.'));
+    const list = h('div', { class: 'list' });
+    for (const r of RECIPES[id]) {
+      const locked = r.lvl > S.lvl;
+      const ok = !locked && Object.entries(r.in).every(([k, v]) => has(k, v));
+      list.append(h('div', { class: 'row recipe' + (locked ? ' locked' : '') },
+        h('div', { class: 'ingr' }, Object.entries(r.in).map(([k, v]) => h('span', { class: 'ing' + (has(k, v) ? '' : ' miss') }, icon(k), `${S.inv[k] || 0}/${v}`))),
+        h('span', { class: 'arrow' }, '→'), icon(r.out),
+        h('div', { class: 'row-main' }, h('b', null, itemName(r.out)), h('small', null, `Se vend ${ITEMS[r.out].sell} pièces · tu en as ${S.inv[r.out] || 0}`)),
+        locked ? h('span', { class: 'lock' }, `Niv. ${r.lvl}`) : h('button', { class: 'btn sm', disabled: !ok, onclick: () => { job = r; P.close(); } }, 'Fabriquer')));
+    }
+    body.append(list);
+  });
+  await P.done;
+  if (!job) return;
+  const r = await askMath({ cat: job.theme, title: `${B.name} : ${itemName(job.out)}` });
+  if (r.ok) {
+    for (const [k, v] of Object.entries(job.in)) addItem(k, -v);
+    addItem(job.out, 1);
+    S.stats.made[job.out] = (S.stats.made[job.out] || 0) + 1;
+    addXP(6 + Math.round(ITEMS[job.out].sell / 25));
+    sfx.harvest();
+    toast(`+1 ${itemName(job.out)}`, 'green', [A.iconURL(job.out)]);
+    afterChange();
+  }
+  if (!r.quit) return craftPanel(id);
+}
+
+// ---- Orders board
+function orderPool() {
+  const pool = [];
+  for (const [id, c] of Object.entries(CROPS)) if (!c.rare && c.lvl <= S.lvl) pool.push([id, 2, 6]);
+  for (const [bid, list] of Object.entries(RECIPES)) if (S.built[bid]) for (const r of list) if (r.lvl <= S.lvl) pool.push([r.out, 1, 2]);
+  return pool;
+}
+function newOrder() {
+  const pool = orderPool();
+  const n = pool.length > 2 && Math.random() < 0.45 ? 2 : 1;
+  const items = {};
+  for (let i = 0; i < n; i++) { const [id, a, b] = pick(pool); items[id] = (items[id] || 0) + R(a, b); }
+  const value = Object.entries(items).reduce((s, [id, q]) => s + ITEMS[id].sell * q, 0);
+  return { who: pick(CUSTOMERS), items, coins: Math.round(value * 1.6 + 10), xp: Math.round(10 + value / 5), at: 0 };
+}
+function ensureOrders() {
+  if (!S.orders || S.orders.length !== 3) S.orders = [newOrder(), newOrder(), null];
+  S.orders = S.orders.map((o) => (o === null || (o && o.wait && o.wait <= now()) ? newOrder() : o));
+}
+async function ordersPanel() {
+  ensureOrders();
+  const P = panel('Tableau des commandes', (body, api) => {
+    ensureOrders();
+    body.append(h('p', { class: 'note' }, 'Les habitants de la vallée commandent tes récoltes. Livre-les pour gagner beaucoup de pièces !'));
+    const list = h('div', { class: 'orders' });
+    S.orders.forEach((o, i) => {
+      if (o.wait) { list.append(h('div', { class: 'order wait win' }, h('b', null, 'Nouvelle commande…'), h('small', null, `dans ${fmtTime(o.wait - now())}`))); return; }
+      const can = Object.entries(o.items).every(([k, v]) => has(k, v));
+      list.append(h('div', { class: 'order win' },
+        h('div', { class: 'who' }, o.who),
+        h('div', { class: 'need' }, Object.entries(o.items).map(([k, v]) => h('span', { class: 'ing' + (has(k, v) ? '' : ' miss') }, icon(k), `${Math.min(S.inv[k] || 0, v)}/${v} ${itemName(k)}`))),
+        h('div', { class: 'reward' }, coinImg('coin sm'), ` ${o.coins}  ·  ${o.xp} XP`),
+        h('div', { class: 'acts' },
+          h('button', { class: 'btn sm', disabled: !can, onclick: () => {
+            for (const [k, v] of Object.entries(o.items)) addItem(k, -v);
+            S.coins += o.coins; sfx.coin(); addXP(o.xp);
+            S.stats.orders++;
+            S.orders[i] = { wait: now() + 45000 };
+            toast(`Merci ! ${o.who} te donne ${o.coins} pièces.`, 'gold');
+            afterChange(); api.refresh();
+          } }, 'Livrer'),
+          h('button', { class: 'btn sm ghost', onclick: () => { S.orders[i] = { wait: now() + 30000 }; save(); api.refresh(); } }, 'Changer'))));
+    });
+    body.append(list);
+  });
+  const timer = setInterval(() => { if (S.orders.some((o) => o && o.wait)) P.refresh(); }, 1000);
+  await P.done;
+  clearInterval(timer);
+}
+
+// ---- Village people & places
+const TIPS = {
+  lea: ['Les créatures des hautes herbes adorent les calculs ! Bats-les pour devenir leur ami.', 'Le tableau des commandes paie beaucoup plus que la caisse de vente.', 'Maître Hibou, près de la fontaine, t’aide à réviser ce que tu veux.', 'Chaque jour, regarde ta boîte aux lettres : il y a souvent un cadeau !'],
+  tim: ['Le Moulin transforme le blé en farine. Avec la farine, on fait du pain !', 'Une série de bonnes réponses te donne plus d’XP. Ne lâche rien !', 'Plus une graine est rare, plus elle rapporte. Les graines dorées valent une fortune…', 'Les bottes de course de la boutique, c’est génial pour explorer.'],
+  garde: ['Les arbres repoussent après quelques minutes. Coupe-les en réussissant des additions.', 'Les pierres se cassent avec des multiplications et des divisions.', 'On raconte qu’un Vieil Arbre dort au nord de la forêt…', 'Il y a des coffres cachés dans les clairières. Ils s’ouvrent avec des fractions !'],
+  sage: ['Le Cristallon est la créature la plus rare. Il vit ici, dans les hautes herbes enneigées.', 'Les cristaux servent à construire la Serre magique, et le Vieil Arbre les adore.', 'Plus tu montes, plus les problèmes sont durs… et plus les trésors sont beaux.'],
+};
+const tipIdx = {};
+async function onNpc(o) {
+  const n = NPCS[o.npc];
+  const toward = { up: 'down', down: 'up', left: 'right', right: 'left' }[pl.dir];
+  npcDir[o.id] = toward;
+  if (o.npc === 'mamie') return onMamie();
+  if (o.npc === 'pecheur') {
+    if (!S.tools.canne) {
+      S.tools.canne = true;
+      await say(['Salut ! Tu veux pêcher ? Tiens, prends ma vieille canne à pêche.', 'Va au bout du ponton et lance ta ligne. Les poissons aiment les conversions : kg, g, L, cL…'], n.name);
+      await celebrate({ title: 'Canne à pêche', lines: ['Tu peux pêcher au bout du ponton !'] });
+      return;
+    }
+    return say([pick(['Les gros poissons mordent quand tu réponds juste du premier coup !', 'La carpe dorée est très rare. Elle vaut une fortune !', 'Le brochet et la truite se vendent bien au village.'])], n.name);
+  }
+  const list = TIPS[o.npc] || ['Bonjour !'];
+  tipIdx[o.npc] = ((tipIdx[o.npc] ?? -1) + 1) % list.length;
+  await say(list[tipIdx[o.npc]], n.name);
+}
+const MAMIE_HELP = {
+  1: 'Va dans le potager derrière la barrière, mets-toi devant une parcelle et appuie sur A pour planter.',
+  2: 'Parle à une plante qui pousse pour l’arroser. Un calcul juste = elle pousse plus vite !',
+  3: 'Quand la plante est mûre, elle brille. Appuie sur A devant elle pour récolter.',
+  4: 'La caisse en bois devant la maison achète tes légumes.',
+  5: 'La Boutique est tout en haut du village, au nord. Suis le chemin !',
+  6: 'Le tableau des commandes est au milieu du village, près de la fontaine.',
+  7: 'Le gros rocher est à l’ouest de la ferme. Gagne de l’XP pour atteindre le niveau 3 : récolte, arrose, livre des commandes !',
+  8: 'Dans la forêt, mets-toi devant un petit arbre ou une pierre grise et appuie sur A.',
+  9: 'Marche dans les hautes herbes : une créature finira par apparaître !',
+};
+async function onMamie() {
+  const who = 'Mamie Rose';
+  if (!S.flags.intro) {
+    await say([
+      `Bonjour ${S.name} ! Bienvenue dans ta nouvelle ferme, dans la Vallée des Graines.`,
+      'Je te donne 4 graines de radis pour commencer. Plante-les dans le potager, juste derrière la barrière.',
+      'Le secret de la vallée : les plantes poussent beaucoup plus vite quand on les arrose en réussissant des calculs !',
+      'Récolte, vends, achète de meilleures graines… Un jour, tu feras de la farine, du pain, et peut-être même des Fruits d’or !',
+      'Utilise les flèches pour marcher et A (ou Espace) pour parler et agir. Le bouton MENU ouvre ton sac et ton carnet.',
+    ], who);
+    S.flags.intro = true;
+    afterChange();
+    return;
+  }
+  const tip = MAMIE_HELP[S.obj];
+  await say([tip ? `Ton objectif : ${OBJECTIVES[S.obj].t}. ${tip}` : pick(['Tu deviens un vrai fermier ! Je suis fière de toi.', 'N’oublie pas : une série de bonnes réponses rapporte plus d’XP.', 'As-tu exploré le lac et la montagne ? Il paraît qu’il y a des trésors !'])], who);
+}
+async function onMailbox() {
+  if (S.daily.mail === today()) return say('La boîte aux lettres est vide. Reviens demain pour un nouveau cadeau !');
+  await say('Il y a un colis dans la boîte aux lettres ! Il est fermé par un cadenas à calcul.');
+  const cat = pick(['calc', 'frac', 'conv', 'masse', 'argent', 'geo', 'duree']);
+  const r = await askMath({ cat, title: 'Cadeau du jour' });
+  if (r.quit) return;
+  S.daily.mail = today();
+  const seedPool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
+  const seed = pick(seedPool.slice(-3));
+  const coins = (r.ok ? 30 : 15) + S.lvl * (r.ok ? 8 : 4);
+  const q = r.ok ? 4 : 2;
+  addItem('graine:' + seed, q);
+  S.coins += coins;
+  if (r.ok && S.lvl >= 5) addItem('engrais', 1);
+  sfx.coin();
+  await celebrate({ title: 'Cadeau du jour', lines: [`${coins} pièces`, `${q} ${CROPS[seed].seedName.toLowerCase()}`, r.ok && S.lvl >= 5 ? '1 engrais' : null].filter(Boolean), icons: [A.coinURL(), A.iconURL('graine:' + seed)] });
+}
+async function onFountain() {
+  if (S.daily.wish === today()) return say('L’eau de la fontaine scintille. Reviens demain faire un vœu !');
+  S.daily.wish = today();
+  const c = R(5, 15) + S.lvl * 2;
+  S.coins += c; sfx.coin();
+  return say(`Tu fais un vœu… et tu trouves ${c} pièces au fond de la fontaine !`);
+}
+async function onOwl() {
+  const who = 'Maître Hibou';
+  const opts = ['Réviser un thème', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
+  const k = await choose('Hou hou ! Que veux-tu faire, jeune calculateur ?', opts, who);
+  const o = opts[k];
+  if (o === 'Réviser un thème') {
+    let cat = null;
+    const P = panel('Réviser avec Maître Hibou', (body) => {
+      body.append(h('p', { class: 'note' }, '5 questions sur le thème choisi. Chaque bonne réponse rapporte des pièces.'));
+      const grid = h('div', { class: 'cats' });
+      for (const [k2, label] of Object.entries(CATS)) {
+        const m = S.mastery[k2];
+        grid.append(h('button', { class: 'catbtn', onclick: () => { cat = k2; P.close(); } }, h('b', null, label), h('small', null, m ? `${Math.round((m.ok / m.n) * 100)} % réussi` : 'Pas encore essayé')));
+      }
+      body.append(grid);
+    });
+    await P.done;
+    if (cat) await series(cat, 5, 0, `Révision : ${CATS[cat]}`, false);
+  } else if (o && o.startsWith('Défi')) {
+    await say('Le défi du jour : 5 problèmes un peu plus durs. Réussis-en au moins 4 pour une belle récompense !', who);
+    const score = await series(null, 5, 1, 'Défi du jour', true);
+    if (score !== null) S.daily.hibou = today();
+    if (score >= 4) {
+      const c = 80 + S.lvl * 10;
+      S.coins += c; addItem('engrais', 2); addXP(50);
+      await celebrate({ title: 'Défi réussi !', lines: [`${score}/5 bonnes réponses`, `+${c} pièces, +2 engrais, +50 XP`], icons: [A.coinURL(), A.iconURL('engrais')] });
+    } else if (score !== null) await say(`${score}/5. Pas mal ! Tu pourras retenter demain. Continue à t’entraîner !`, who);
+  } else if (o === 'Mes progrès') return carnetPanel('progres');
+}
+async function series(cat, n, off, title, mixed) {
+  let score = 0;
+  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo'];
+  for (let i = 0; i < n; i++) {
+    const c = mixed ? pick(pool) : cat;
+    const r = await askMath({ cat: c, d: diffFor(c, off), title: `${title} · ${i + 1}/${n}` });
+    if (r.quit) return i === 0 ? null : score;
+    if (r.ok && r.first) { score++; S.coins += 3 + diffFor(c); }
+    else if (r.ok) S.coins += 1;
+    updateHud();
+  }
+  if (!mixed) {
+    addXP(score * 2);
+    await celebrate({ title: `${score}/${n}`, lines: [score === n ? 'Parfait ! Tu maîtrises ce thème.' : score >= 3 ? 'Très bien ! Encore un peu d’entraînement.' : 'Courage ! Chaque erreur t’aide à apprendre.'] });
+  }
+  return score;
+}
+
+// ---- Gates
+async function onBigRock() {
+  if (S.lvl < 3) return say(['Un énorme rocher bloque le chemin de la forêt.', 'Reviens au niveau 3 : tu seras assez fort pour le casser ! (Tu es niveau ' + S.lvl + '.)']);
+  if (!(await confirm('Un énorme rocher… Tu es assez fort pour le casser ! Il faut réussir 2 calculs de suite.', 'Casser le rocher', 'Plus tard'))) return;
+  for (let i = 0; i < 2; i++) {
+    const r = await askMath({ cat: 'mul', title: `Casser le rocher · ${i + 1}/2` });
+    if (!r.ok) return say('Le rocher tient bon. Réessaie, tu vas y arriver !');
+    sfx.hit();
+  }
+  S.flags.rock = true; applyWorldFlags();
+  addXP(20);
+  await celebrate({ title: 'Le chemin est ouvert !', lines: ['La Forêt des Murmures t’attend à l’ouest.', 'Tu y trouveras du bois, des pierres, des coffres… et des créatures !'] });
+}
+async function onBridge() {
+  if (S.lvl < 6) return say(['Le pont du lac est cassé.', 'Au niveau 6, tu pourras le réparer avec 10 bois et 5 pierres. (Tu es niveau ' + S.lvl + '.)']);
+  if (!has('bois', 10) || !has('pierre', 5)) return say([`Pour réparer le pont, il faut 10 bois et 5 pierres.`, `Tu as ${S.inv.bois || 0} bois et ${S.inv.pierre || 0} pierres. La forêt en est pleine !`]);
+  if (!(await confirm('Réparer le pont avec 10 bois et 5 pierres ? Il faut calculer les planches !', 'Réparer', 'Plus tard'))) return;
+  const r = await askMath({ cat: 'longueur', title: 'Réparer le pont' });
+  if (!r.ok) return say('Les planches ne sont pas bien coupées… Réessaie !');
+  addItem('bois', -10); addItem('pierre', -5);
+  S.flags.bridge = true; applyWorldFlags();
+  addXP(30);
+  await celebrate({ title: 'Le pont est réparé !', lines: ['Le Lac Miroir est ouvert.', 'Tom le pêcheur t’attend près du ponton.'] });
+}
+async function onGuardian() {
+  const who = 'Gardien du Mont';
+  npcDir.guardian = 'left';
+  if (S.flags.guardian) return say(pick(['Les cristaux brillent près des rochers. Bonne chance là-haut !', 'Les créatures de la montagne sont coriaces. Garde ta série !']), who);
+  if (S.lvl < 10) return say(['Halte ! Le Mont Givré est dangereux.', `Seuls les calculateurs de niveau 10 peuvent passer. Tu es niveau ${S.lvl}. Reviens plus tard !`], who);
+  if (!(await confirm('Tu veux passer ? Réussis 3 problèmes difficiles de suite !', 'J’accepte le défi', 'Plus tard', who))) return;
+  const cats = ['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo'])];
+  for (let i = 0; i < 3; i++) {
+    const r = await askMath({ cat: cats[i], d: diffFor(cats[i], 1), title: `Défi du gardien · ${i + 1}/3` });
+    if (!r.ok) return say('Pas encore… Entraîne-toi et reviens me voir !', who);
+  }
+  S.flags.guardian = true; applyWorldFlags();
+  addXP(60);
+  await say('Impressionnant ! Tu peux passer. Le Mont Givré est à toi.', who);
+}
+async function onAncient() {
+  const who = 'Vieil Arbre';
+  if (S.lvl < 14) return say(['Un arbre immense dort ici. Il ronfle doucement…', 'Peut-être se réveillera-t-il quand tu seras niveau 14.']);
+  const first = !S.flags.arbre;
+  const need = first ? 3 : 2;
+  if (!first && S.daily.arbre === today()) return say('Hmmm… Je t’ai déjà donné une graine aujourd’hui. Reviens demain, petit jardinier.', who);
+  if (!has('cristal', need)) return say([first ? 'Hmmm… Un jeune jardinier ! Apporte-moi 3 cristaux de la montagne…' : 'Apporte-moi 2 cristaux…', '…et je te donnerai une Graine dorée.'], who);
+  if (!(await confirm(`Donner ${need} cristaux au Vieil Arbre ? Il te posera ${first ? 3 : 1} énigme${first ? 's' : ''}.`, 'Donner', 'Plus tard', who))) return;
+  for (let i = 0; i < (first ? 3 : 1); i++) {
+    const c = pick(['frac', 'masse', 'contenance', 'duree', 'argent', 'geo', 'recette']);
+    const r = await askMath({ cat: c, d: diffFor(c, 1), title: `Énigme du Vieil Arbre · ${i + 1}` });
+    if (!r.ok) return say('Hmmm… pas tout à fait. Garde tes cristaux et reviens quand tu veux.', who);
+  }
+  addItem('cristal', -need);
+  addItem('graine:doree', 1);
+  S.flags.arbre = true; S.daily.arbre = today();
+  await celebrate({ title: 'Graine dorée !', lines: ['Plante-la dans ton potager.', 'Elle donnera un Fruit d’or qui vaut 1200 pièces !'], iconsBig: [A.iconURL('graine:doree', 5)] });
+}
+
+// ---- Resources
+async function onTree(o) {
+  if (respawning(o)) return say(`Une souche. L’arbre repousse… (encore ${fmtTime(S.res[o.id] - now())})`);
+  const r = await askMath({ cat: 'add', title: 'Couper du bois' });
+  if (!r.ok) return;
+  const n = 2 + (S.tools.hache ? 1 : 0) + (r.first ? 0 : -1);
+  addItem('bois', n); S.stats.bois += n;
+  S.res[o.id] = now() + 180000;
+  sfx.hit(); addXP(3);
+  toast(`+${n} bois`, 'green', [A.iconURL('bois')]);
+}
+async function onRock(o) {
+  if (respawning(o)) return say('Il ne reste que des cailloux. Une nouvelle pierre apparaîtra bientôt.');
+  const r = await askMath({ cat: 'mul', title: 'Casser la pierre' });
+  if (!r.ok) return;
+  const n = 2 + (S.tools.pioche ? 1 : 0) + (r.first ? 0 : -1);
+  addItem('pierre', n); S.stats.pierre += n;
+  S.res[o.id] = now() + 200000;
+  sfx.hit(); addXP(3);
+  toast(`+${n} pierres`, 'green', [A.iconURL('pierre')]);
+}
+async function onCrystal(o) {
+  if (respawning(o)) return say(`Le cristal repousse lentement… (encore ${fmtTime(S.res[o.id] - now())})`);
+  const cat = pick(['frac', 'conv', 'masse', 'contenance', 'geo']);
+  const r = await askMath({ cat, d: diffFor(cat, 1), title: 'Récolter un cristal' });
+  if (!r.ok) return;
+  addItem('cristal', 1); S.stats.cristal++;
+  S.res[o.id] = now() + 360000;
+  sfx.harvest(); addXP(10);
+  toast('+1 cristal !', 'blue', [A.iconURL('cristal')]);
+}
+async function onForage(o) {
+  if (respawning(o)) return say('Il n’y a plus rien ici. Reviens un peu plus tard.');
+  const n = R(1, 2);
+  addItem(o.kind, n);
+  S.res[o.id] = now() + 150000;
+  sfx.harvest();
+  toast(`+${qtyName(o.kind, n)}`, 'green', [A.iconURL(o.kind)]);
+}
+async function onChest(o) {
+  if (S.chests[o.chest]) return say('Le coffre est vide.');
+  await say('Un coffre ! Il est fermé par une serrure à fractions.');
+  const r = await askMath({ cat: 'frac', title: 'Ouvrir le coffre' });
+  if (!r.ok) return say(r.quit ? 'Tu reviendras plus tard.' : 'La serrure ne s’ouvre pas… Réessaie !');
+  const c = CHESTS[o.chest];
+  S.chests[o.chest] = true;
+  S.coins += c.coins;
+  for (const [k, v] of Object.entries(c.items)) addItem(k, v);
+  sfx.coin();
+  await celebrate({ title: 'Trésor !', lines: [`${c.coins} pièces`, ...Object.entries(c.items).map(([k, v]) => `${v} × ${itemName(k)}`)], icons: [A.coinURL(), ...Object.keys(c.items).map((k) => A.iconURL(k))] });
+}
+async function onFish() {
+  if (!S.tools.canne) return say('Il te faudrait une canne à pêche. Tom le pêcheur en a peut-être une ?');
+  const r = await askMath({ cat: 'conv', title: 'Pêcher' });
+  if (r.quit) return;
+  if (!r.ok) return say('Le poisson s’est échappé…');
+  const table = [['gardon', 40], ['perche', 30], ['truite', S.lvl >= 7 ? 18 : 0], ['brochet', S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && r.first ? 4 : 0]];
+  const tot = table.reduce((s, [, w]) => s + w, 0);
+  let x = Math.random() * tot, fish = 'gardon';
+  for (const [id, w] of table) { if ((x -= w) < 0) { fish = id; break; } }
+  addItem(fish, 1); S.stats.fish++;
+  addXP(5);
+  const kg = (R(3, 25) / 10).toFixed(1).replace('.', ',');
+  sfx.harvest();
+  toast(`Tu as pêché : ${itemName(fish)} (${kg} kg) !`, 'blue', [A.iconURL(fish)]);
+}
+
+// ============================================================ Menu, bag, carnet, options
+async function openMenu() {
+  if (busy) return;
+  busy = true;
+  try {
+    const k = await choose('Menu', ['Sac', 'Carnet', 'Options', 'Fermer']);
+    if (k === 0) await bagPanel();
+    else if (k === 1) await carnetPanel('badges');
+    else if (k === 2) await optionsPanel();
+  } finally { busy = false; }
+}
+async function bagPanel() {
+  await panel('Ton sac', (body) => {
+    const groups = [['seed', 'Graines'], ['crop', 'Récoltes'], ['product', 'Produits'], ['resource', 'Ressources']];
+    let any = false;
+    for (const [kind, label] of groups) {
+      const ids = Object.keys(S.inv).filter((id) => ITEMS[id] && ITEMS[id].kind === kind && S.inv[id] > 0);
+      if (!ids.length) continue;
+      any = true;
+      body.append(h('h3', null, label));
+      body.append(h('div', { class: 'bag' }, ids.map((id) => h('div', { class: 'slot', title: itemName(id) }, icon(id), h('span', { class: 'n' }, S.inv[id]), h('small', null, itemName(id))))));
+    }
+    if (!any) body.append(h('p', { class: 'empty' }, 'Ton sac est vide.'));
+    const tools = [];
+    if (S.tools.arrosoir) tools.push(TOOLS.find((t) => t.id === 'arrosoir' && t.tier === S.tools.arrosoir).name); else tools.push('Arrosoir simple');
+    for (const t of TOOLS) if (t.id !== 'arrosoir' && S.tools[t.id]) tools.push(t.name);
+    if (S.tools.canne) tools.push('Canne à pêche');
+    body.append(h('h3', null, 'Outils'), h('p', { class: 'tools' }, tools.join(' · ')));
+  }).done;
+}
+async function carnetPanel(tab) {
+  await panel('Carnet du jardinier', (body, api, t) => {
+    if (t === 'badges') {
+      body.append(h('div', { class: 'badges' }, BADGES.map((b, i) => h('div', { class: 'badge' + (S.badges[b.id] ? ' on' : '') }, h('img', { src: A.badgeURL(i, b.color, !!S.badges[b.id]) }), h('b', null, b.name), h('small', null, b.desc)))));
+    } else if (t === 'creatures') {
+      body.append(h('p', { class: 'note' }, `${Object.keys(S.creatures).length} / ${CREATURE_ORDER.length} amis. On les rencontre dans les hautes herbes.`));
+      const zones = { ferme: 'Ferme', foret: 'Forêt', lac: 'Lac', montagne: 'Montagne' };
+      body.append(h('div', { class: 'dex' }, CREATURE_ORDER.map((id) => {
+        const c = CREATURES[id], met = S.creatures[id];
+        return h('div', { class: 'mon' + (met ? ' on' : '') }, h('img', { src: A.creatureURL(id, 2, !met) }), h('b', null, met ? c.name : '???'), h('small', null, met ? `${zones[c.zone]} · battu ${met}×` : zones[c.zone]));
+      })));
+    } else {
+      const acc = S.stats.correct + S.stats.wrong ? Math.round((S.stats.correct / (S.stats.correct + S.stats.wrong)) * 100) : 0;
+      const nx = nextUnlock(S.lvl);
+      body.append(h('div', { class: 'stats' },
+        h('div', null, h('b', null, S.stats.correct), h('small', null, 'bonnes réponses')),
+        h('div', null, h('b', null, acc + ' %'), h('small', null, 'de réussite')),
+        h('div', null, h('b', null, S.stats.maxStreak), h('small', null, 'meilleure série')),
+        h('div', null, h('b', null, S.stats.harvests), h('small', null, 'récoltes'))));
+      if (nx) body.append(h('p', { class: 'note' }, 'Prochain déblocage — ' + nx));
+      body.append(h('h3', null, 'Par thème'));
+      const tbl = h('div', { class: 'mastery' });
+      for (const [k, label] of Object.entries(CATS)) {
+        const m = S.mastery[k];
+        const pct = m ? Math.round((m.ok / m.n) * 100) : 0;
+        const stars = !m ? 0 : m.n < 5 ? 1 : pct >= 85 ? 3 : pct >= 60 ? 2 : 1;
+        tbl.append(h('div', { class: 'mrow' }, h('span', { class: 'mlabel' }, label), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })), h('span', { class: 'mpct' }, m ? `${pct} % (${m.n})` : '—'), h('span', { class: 'stars' }, '★'.repeat(stars) + '☆'.repeat(3 - stars))));
+      }
+      body.append(tbl);
+      body.append(h('p', { class: 'small' }, `Niveau des problèmes : ${S.settings.grade}H. Les problèmes s’adaptent tout seuls : plus tu réussis un thème, plus il devient difficile.`));
+    }
+  }, { tabs: [['badges', 'Badges'], ['creatures', 'Créatures'], ['progres', 'Progrès']], tab }).done;
+}
+async function optionsPanel() {
+  await panel('Options', (body, api) => {
+    body.append(
+      h('div', { class: 'opt' }, h('b', null, 'Son'), h('button', { class: 'btn sm' + (S.settings.sound ? '' : ' ghost'), onclick: () => { S.settings.sound = !S.settings.sound; save(); api.refresh(); } }, S.settings.sound ? 'Activé' : 'Coupé')),
+      h('div', { class: 'opt' }, h('b', null, 'Classe'), h('div', null,
+        h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, '7H'), ' ',
+        h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, '8H'))),
+      h('div', { class: 'opt' }, h('b', null, 'Prénom'), h('input', { class: 'name', value: S.name, maxlength: 14, onchange: (e) => { S.name = e.target.value.trim() || 'Thibault'; save(); } })),
+      syncSection(api),
+      h('button', { class: 'btn ghost danger', onclick: async () => {
+        if (await confirm('Effacer toute la partie et recommencer ? On ne peut pas revenir en arrière.', 'Oui, tout effacer', 'Non')) { localStorage.removeItem(SAVE_KEY); location.reload(); }
+      } }, 'Recommencer une nouvelle partie'));
+  }).done;
+}
+
+// ---- Online save (code), like Lecture Z
+function syncSection(api) {
+  const s = syncState();
+  const box = h('div', { class: 'syncbox' }, h('h3', null, 'Sauvegarde transportable'));
+  if (s) {
+    box.append(
+      h('p', { class: 'small' }, 'Sur un autre appareil, ouvre le jeu, choisis « J’ai un code » et tape :'),
+      h('div', { class: 'synccode' }, formatCode(s.code)),
+      h('p', { class: 'syncstat' + (s.error ? ' off' : '') }, s.error ? 'Hors ligne : la partie sera envoyée au prochain changement.' : 'Synchronisé : tes progrès sont envoyés tout seuls.'),
+      h('button', { class: 'btn sm ghost', onclick: async () => {
+        if (await confirm('Ne plus synchroniser cet appareil ? La partie reste ici.', 'Oui', 'Non')) { stopSync(); api.refresh(); }
+      } }, 'Ne plus synchroniser cet appareil'));
+  } else {
+    box.append(
+      h('p', { class: 'small' }, 'Crée un code pour continuer ta partie sur une tablette, un téléphone ou un ordinateur.'),
+      h('div', { class: 'sync-acts' },
+        h('button', { class: 'btn sm', onclick: async (e) => {
+          e.currentTarget.disabled = true;
+          try {
+            saveNow();
+            const code = await createCode(S);
+            await celebrate({ title: 'Ton code', lines: [formatCode(code), 'Note-le bien ! Sur l’autre appareil, choisis « J’ai un code » et tape-le.'], kind: 'code' });
+          } catch { toast('Pas de connexion. Réessaie plus tard.', 'red'); }
+          api.refresh();
+        } }, 'Créer un code'),
+        h('button', { class: 'btn sm ghost', onclick: async () => {
+          const remote = await askCode(true);
+          if (!remote) { api.refresh(); return; }
+          api.close();
+          S.updatedAt = 0;
+          adoptRemote(remote);
+        } }, 'J’ai déjà un code')));
+  }
+  return box;
+}
+/** Ask for a code and fetch its game. Returns the save, or null. */
+function askCode(replacing) {
+  return new Promise((resolve) => {
+    let input, done = false;
+    const msg = h('p', { class: 'small codemsg' });
+    const go = async () => {
+      const code = cleanCode(input.value);
+      if (code.length !== 6) { msg.textContent = 'Le code a 6 lettres et chiffres, par exemple K7P-4QX.'; return; }
+      msg.textContent = 'Recherche…';
+      try {
+        const remote = await fetchCode(code);
+        if (!remote) { msg.textContent = 'Ce code n’existe pas. Vérifie les lettres.'; return; }
+        if (replacing && !(await confirm(`Remplacer la partie de cet appareil (niveau ${S.lvl}) par celle du code (niveau ${remote.lvl}) ?`, 'Oui, remplacer', 'Non'))) return;
+        adoptCode(code, remote.updatedAt);
+        done = true; P.close(); resolve(remote);
+      } catch { msg.textContent = 'Pas de connexion. Réessaie plus tard.'; }
+    };
+    const P = panel('J’ai un code', (body) => {
+      input = h('input', { class: 'codein', maxlength: 8, placeholder: 'K7P-4QX', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', onkeydown: (e) => { if (e.key === 'Enter') go(); } });
+      body.append(h('p', { class: 'small' }, 'Tape le code affiché dans les Options de ton autre appareil.'), input, h('button', { class: 'btn big', onclick: go }, 'Récupérer ma partie'), msg);
+      setTimeout(() => input.focus(), 50);
+    });
+    P.done.then(() => { if (!done) resolve(null); });
+  });
+}
+
+// ============================================================ Battles
+const ZONE_BG = {
+  ferme: ['#bfe8ff', '#8ed46e', '#5cb446'], foret: ['#a8d8a0', '#4a9a48', '#2e7a3a'],
+  lac: ['#b8e0ff', '#7ac8e8', '#58a8d8'], montagne: ['#dfe8f8', '#f0f6ff', '#b8cce8'],
+};
+function encounterFor(zone) {
+  let list = CREATURE_ORDER.filter((id) => CREATURES[id].zone === zone && !CREATURES[id].rare);
+  if (zone === 'montagne' && S.lvl >= 12 && Math.random() < 0.08) return 'cristallon';
+  if (!list.length) list = ['lapinou'];
+  return pick(list);
+}
+function battleCats(zone) {
+  return { ferme: ['calc', 'calc', 'mul'], foret: ['calc', 'frac', 'mul', 'add'], lac: ['conv', 'contenance', 'longueur', 'masse', 'calc'], montagne: ['frac', 'masse', 'duree', 'recette', 'argent', 'geo', 'conv'] }[zone];
+}
+async function startBattle(zone) {
+  if (busy) return;
+  busy = true;
+  try { await battle(zone, encounterFor(zone)); } finally { busy = false; afterChange(); }
+}
+async function battle(zone, id) {
+  const c = CREATURES[id];
+  sfx.enc();
+  const flash = h('div', { class: 'layer flash' });
+  const FL = pushLayer(flash, { onKey: () => true });
+  await sleep(700);
+  popLayer(FL);
+  const [sky, g1, g2] = ZONE_BG[zone];
+  const foeImg = h('img', { class: 'b-foe-img', src: A.creatureURL(id, 4) });
+  const hpBar = h('i');
+  const foeInfo = h('div', { class: 'b-info foe win' }, h('div', { class: 'b-name' }, c.name, c.rare ? h('span', { class: 'rare' }, ' ★ rare') : null), h('div', { class: 'b-hp' }, h('span', null, 'PV'), h('span', { class: 'hpbar' }, hpBar)));
+  const back = A.canvas(16, 19); A.drawPerson(back.getContext('2d'), 0, 3, 'up', 0, playerLook());
+  const meCv = A.canvas(96, 114); const mg = meCv.getContext('2d'); mg.imageSmoothingEnabled = false; mg.drawImage(back, 0, 0, 96, 114);
+  const hearts = h('span', { class: 'hearts' });
+  const meInfo = h('div', { class: 'b-info me win' }, h('div', { class: 'b-name' }, S.name, h('small', null, ` Niv. ${S.lvl}`)), h('div', { class: 'b-hp' }, h('span', null, 'Énergie'), hearts));
+  const field = h('div', { class: 'b-field', style: `--sky:${sky};--g1:${g1};--g2:${g2}` },
+    foeInfo, h('div', { class: 'b-foe' }, h('div', { class: 'b-plat' }), foeImg),
+    h('div', { class: 'b-me' }, h('div', { class: 'b-plat' }), meCv), meInfo);
+  const bottom = h('div', { class: 'b-bottom' });
+  const root = h('div', { class: 'layer battle' }, field, bottom);
+  const L = pushLayer(root, { onKey: () => false });
+  let hp = c.hp, energy = 3;
+  const paint = () => {
+    hpBar.style.width = `${(hp / c.hp) * 100}%`;
+    hpBar.className = hp / c.hp <= 0.34 ? 'low' : hp / c.hp <= 0.67 ? 'mid' : '';
+    hearts.innerHTML = '';
+    for (let i = 0; i < 3; i++) hearts.append(h('b', { class: i < energy ? 'on' : '' }, '♥'));
+  };
+  paint();
+  const msg = (text) => new Promise((resolve) => {
+    bottom.innerHTML = '';
+    const box = h('div', { class: 'dialog win inline' }, h('div', { class: 'dlg-text' }, text), h('div', { class: 'dlg-more' }, '▼'));
+    bottom.append(box);
+    const prev = { onA: L.onA, onKey: L.onKey };
+    const fin = () => { L.onA = prev.onA; L.onKey = prev.onKey; resolve(); };
+    L.onA = fin; L.onKey = (e) => { if ([' ', 'Enter', 'e'].includes(e.key)) { fin(); return true; } return false; };
+    box.addEventListener('pointerdown', fin, { once: true });
+  });
+  await msg(`Un ${c.name} sauvage apparaît !${S.creatures[id] ? '' : ' (Nouvelle créature !)'}`);
+  const go = await new Promise((resolve) => {
+    bottom.innerHTML = '';
+    const b1 = h('button', { class: 'btn big', onclick: () => resolve(true) }, 'DÉFIER');
+    const b2 = h('button', { class: 'btn big ghost', onclick: () => resolve(false) }, 'FUIR');
+    bottom.append(h('div', { class: 'b-menu win' }, h('p', null, `Que fait ${S.name} ?`), h('div', { class: 'b-acts' }, b1, b2)));
+    L.onKey = (e) => { if (e.key === 'Enter' || e.key === ' ') { resolve(true); return true; } if (e.key === 'Escape') { resolve(false); return true; } return false; };
+    L.onA = () => resolve(true); L.onB = () => resolve(false);
+  });
+  L.onB = null;
+  if (!go) { await msg('Tu prends la fuite… en toute sécurité !'); popLayer(L); return; }
+  const cats = battleCats(zone);
+  const off = c.rare ? 1 : 0;
+  while (hp > 0 && energy > 0) {
+    const cat = pick(cats);
+    const r = await askMath({ cat, d: diffFor(cat, off), title: `Attaque contre ${c.name}`, mount: bottom, noQuit: true });
+    if (r.ok) {
+      hp--; sfx.hit();
+      foeImg.classList.remove('hit'); void foeImg.offsetWidth; foeImg.classList.add('hit');
+      paint();
+      if (hp > 0) await msg(r.first ? `Super calcul ! ${c.name} perd des PV !` : `Touché ! ${c.name} vacille.`);
+    } else {
+      energy--;
+      root.classList.remove('shake'); void root.offsetWidth; root.classList.add('shake');
+      paint();
+      if (energy > 0) await msg(`${c.name} esquive et te fatigue un peu…`);
+    }
+  }
+  S.stats.battles++;
+  if (hp <= 0) {
+    foeImg.classList.add('won');
+    const first = !S.creatures[id];
+    S.creatures[id] = (S.creatures[id] || 0) + 1;
+    const coins = c.coins + (first ? c.coins : 0);
+    const got = [];
+    for (const [it, ch, q] of c.drops) if (Math.random() < ch) { addItem(it, q); got.push(`${q} × ${itemName(it)}`); }
+    S.coins += coins; addXP(c.xp + (first ? c.xp : 0));
+    await msg(`${c.name} est battu… et devient ton ami !`);
+    popLayer(L);
+    await celebrate({ title: first ? `Nouvel ami : ${c.name} !` : `${c.name} battu !`, lines: [`+${coins} pièces`, ...got], iconsBig: [A.creatureURL(id, 3)] });
+  } else {
+    await msg(`${c.name} s’enfuit dans les herbes… Tu feras mieux la prochaine fois !`);
+    addXP(2);
+    popLayer(L);
+  }
+}
+
+// ============================================================ Rendering
+let camX = 0, camY = 0;
+function objectiveTarget() {
+  const o = OBJECTIVES[S.obj];
+  if (!o || !o.target) return null;
+  if (o.target === 'plot') {
+    let idx = S.plots.findIndex((p) => p.crop && progress(p) >= 1);
+    if (idx < 0 && S.obj === 1) idx = S.plots.findIndex((p) => p.u && !p.crop);
+    if (idx < 0) idx = S.plots.findIndex((p) => p.crop);
+    if (idx < 0) idx = 0;
+    const pp = plotPos(idx); return { x: pp.x, y: pp.y };
+  }
+  if (o.target === 'forest') return S.stats.bois ? objById['rock@5,27'] : objById['tree@12,27'];
+  if (o.target === 'crystal') return objById['crystal@48,4'];
+  if (o.target === 'caisse') return objById['caisse@26,27'];
+  const t = objById[o.target];
+  if (t && !t.gone) return t;
+  return null;
+}
+function drawObject(o, X, Y, t) {
+  switch (o.type) {
+    case 'house': return A.drawHouse(ctx, X, Y);
+    case 'shop': return A.drawShop(ctx, X, Y, t);
+    case 'bld':
+      if (!S.built[o.bld]) return A.drawSite(ctx, X, Y, o.w, o.h, t);
+      return { moulin: A.drawMill, four: A.drawBakery, pressoir: A.drawPress, serre: A.drawGreenhouse }[o.bld](ctx, X, Y, t);
+    case 'caisse': return A.drawCrate(ctx, X, Y);
+    case 'mailbox': return A.drawMailbox(ctx, X, Y, S.daily.mail !== today());
+    case 'npc': {
+      const n = NPCS[o.npc];
+      return A.drawPerson(ctx, X, Y, npcDir[o.id] || n.dir, 0, n.look);
+    }
+    case 'guardian': return A.drawPerson(ctx, X, Y, npcDir.guardian || 'left', 0, NPCS.guardian.look);
+    case 'chest': return A.drawChest(ctx, X, Y, S.chests[o.chest]);
+    case 'plot': { const p = S.plots[o.plot]; return A.drawPlot(ctx, X, Y, p, progress(p), t, p.u); }
+    case 'sign': return A.drawSign(ctx, X, Y);
+    case 'board': return A.drawBoard(ctx, X, Y);
+    case 'fountain': return A.drawFountain(ctx, X, Y, t);
+    case 'owl': return A.drawOwl(ctx, X, Y, t);
+    case 'bigrock': return A.drawBigRock(ctx, X, Y);
+    case 'brokenbridge': return A.drawBrokenBridge(ctx, X, Y);
+    case 'ancient': return A.drawAncient(ctx, X, Y, t, S.lvl >= 14);
+    case 'tree': return A.drawChopTree(ctx, X, Y, respawning(o));
+    case 'rock': return A.drawRock(ctx, X, Y, respawning(o));
+    case 'forage': return A.drawBush(ctx, X, Y, o.kind, respawning(o));
+    case 'crystal': return A.drawCrystal(ctx, X, Y, t, respawning(o));
+    case 'fishspot': return A.drawFishSpot(ctx, X, Y, t);
+    default: return null;
+  }
+}
+const FLAT = new Set(['plot', 'fishspot']);
+function render(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#2a5a2a'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  let tx, ty;
+  if (mode === 'title') {
+    const k = t * 6;
+    tx = 30 * 16 + Math.sin(k / 60) * 200; ty = 24 * 16 + Math.cos(k / 80) * 120;
+  } else { tx = pl.px + 8; ty = pl.py + 8; }
+  camX = Math.round(clamp(tx - VW / 2, 0, Math.max(0, W * 16 - VW)));
+  camY = Math.round(clamp(ty - VH / 2, 0, Math.max(0, H * 16 - VH)));
+  if (W * 16 < VW) camX = Math.round((W * 16 - VW) / 2);
+  if (H * 16 < VH) camY = Math.round((H * 16 - VH) / 2);
+  const x0 = Math.max(0, Math.floor(camX / 16)), y0 = Math.max(0, Math.floor(camY / 16));
+  const x1 = Math.min(W - 1, Math.ceil((camX + VW) / 16)), y1 = Math.min(H - 1, Math.ceil((camY + VH) / 16));
+  const wf = Math.floor(t * 2.5) % 8;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const ch = tiles[x + y * W];
+    const v = Math.floor(A.hash(x, y) * 4);
+    const X = x * 16 - camX, Y = y * 16 - camY;
+    ctx.drawImage(A.tile(ch, v, wf), X, Y);
+    if (ch === 'w') {
+      ctx.fillStyle = 'rgba(230,245,255,0.75)';
+      const isW = (a, b) => { const c = tileAt(a, b); return c === 'w' || c === 'b' || c === 'k'; };
+      if (!isW(x, y - 1)) ctx.fillRect(X, Y, 16, 2);
+      if (!isW(x, y + 1)) ctx.fillRect(X, Y + 15, 16, 1);
+      if (!isW(x - 1, y)) ctx.fillRect(X, Y, 1, 16);
+      if (!isW(x + 1, y)) ctx.fillRect(X + 15, Y, 1, 16);
+    }
+  }
+  // objects + player, sorted by their bottom edge
+  const list = [];
+  for (const o of objs) {
+    if (o.gone) continue;
+    if (o.x + o.w < x0 - 2 || o.x > x1 + 1 || o.y + o.h < y0 - 1 || o.y > y1 + 3) continue;
+    list.push({ k: FLAT.has(o.type) ? o.y * 16 - 100 : (o.y + o.h) * 16, o });
+  }
+  if (mode === 'world') list.push({ k: pl.py + 16.5, player: true });
+  list.sort((a, b) => a.k - b.k);
+  for (const it of list) {
+    if (it.player) A.drawPerson(ctx, pl.px - camX, pl.py - camY, pl.dir, pl.frame, playerLook());
+    else drawObject(it.o, it.o.x * 16 - camX, it.o.y * 16 - camY, t);
+  }
+  if (mode === 'world') drawGuide(t);
+}
+function drawGuide(t) {
+  const tg = objectiveTarget();
+  if (!tg) return;
+  const w = tg.w || 1;
+  const cx = tg.x * 16 + (w * 16) / 2 - camX, cy = tg.y * 16 - camY;
+  const bob = Math.round(Math.sin(t * 5) * 2);
+  const onScreen = cx > 4 && cx < VW - 4 && cy > 4 && cy < VH - 4;
+  ctx.fillStyle = '#ffe14a'; ctx.strokeStyle = '#7a4a00'; ctx.lineWidth = 1;
+  if (onScreen) {
+    const y = cy - 12 + bob;
+    ctx.beginPath(); ctx.moveTo(cx - 5, y - 6); ctx.lineTo(cx + 5, y - 6); ctx.lineTo(cx, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    return;
+  }
+  const px = pl.px + 8 - camX, py = pl.py + 8 - camY;
+  const ang = Math.atan2(cy - py, cx - px);
+  const m = 22, css = DPR / SCALE; // css px → world px
+  const top = 130 * css, bottom = (isTouch() ? 230 : 70) * css;
+  const ex = clamp(px + Math.cos(ang) * 1000, m, VW - m), ey = clamp(py + Math.sin(ang) * 1000, top, VH - bottom);
+  ctx.save(); ctx.translate(Math.round(ex), Math.round(ey)); ctx.rotate(ang);
+  ctx.beginPath(); ctx.moveTo(9 + bob, 0); ctx.lineTo(-5 + bob, -7); ctx.lineTo(-2 + bob, 0); ctx.lineTo(-5 + bob, 7); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================ Input
+const KEYDIR = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', z: 'up', q: 'left', W: 'up', S: 'down', A: 'left', D: 'right' };
+function pressA() {
+  const top = layers[layers.length - 1];
+  if (top) { if (top.onA) top.onA(); return; }
+  if (mode === 'world' && !busy && !pl.moving) interact();
+}
+function pressB() {
+  const top = layers[layers.length - 1];
+  if (top) { if (top.onB) top.onB(); return; }
+  if (mode === 'world' && !busy) openMenu();
+}
+addEventListener('keydown', (e) => {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const top = layers[layers.length - 1];
+  if (top) {
+    if (top.onKey && top.onKey(e)) e.preventDefault();
+    return;
+  }
+  if (mode !== 'world') return;
+  const d = KEYDIR[e.key];
+  if (d) { if (!held.includes(d)) held.push(d); e.preventDefault(); return; }
+  if (e.repeat) return;
+  if (e.key === ' ' || e.key === 'Enter' || e.key === 'e' || e.key === 'E') { e.preventDefault(); pressA(); }
+  else if (e.key === 'Escape' || e.key === 'm' || e.key === 'M') { e.preventDefault(); pressB(); }
+});
+addEventListener('keyup', (e) => { const d = KEYDIR[e.key]; if (d) { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); } });
+addEventListener('blur', () => { held.length = 0; });
+
+function buildTouch() {
+  const pad = h('div', { class: 'dpad' });
+  for (const d of ['up', 'left', 'right', 'down']) pad.append(h('span', { class: 'dp ' + d }));
+  pad.append(h('span', { class: 'dp mid' }));
+  let active = null;
+  const setDir = (d) => {
+    if (active === d) return;
+    if (active) { const i = held.indexOf(active); if (i >= 0) held.splice(i, 1); }
+    active = d;
+    pad.dataset.dir = d || '';
+    if (d && !layers.length) held.push(d);
+  };
+  const fromEvent = (e) => {
+    const r = pad.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) < 10) return null;
+    return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  };
+  pad.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch { /* synthetic or already released pointer */ }
+    const d = fromEvent(e);
+    const top = layers[layers.length - 1];
+    if (top && top.onKey && d) top.onKey({ key: d === 'up' ? 'ArrowUp' : d === 'down' ? 'ArrowDown' : d === 'left' ? 'ArrowLeft' : 'ArrowRight', preventDefault() {} });
+    setDir(d);
+  });
+  pad.addEventListener('pointermove', (e) => { if (active !== undefined && e.buttons) setDir(fromEvent(e)); });
+  const end = () => setDir(null);
+  pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+  const a = h('button', { class: 'abtn', 'aria-label': 'A' }, 'A');
+  const b = h('button', { class: 'bbtn', 'aria-label': 'B' }, 'B');
+  a.addEventListener('pointerdown', (e) => { e.preventDefault(); pressA(); });
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); pressB(); });
+  return h('div', { class: 'tctl' }, pad, h('div', { class: 'ab' }, b, a));
+}
+
+// ============================================================ Loop & title
+let last = performance.now();
+let offlineChecked = false;
+function loop(ts) {
+  const dt = Math.min(0.05, (ts - last) / 1000);
+  last = ts;
+  if (mode === 'world') { updatePlayer(dt); if (pendingRemote) applyPendingRemote(); }
+  render(ts / 1000);
+  requestAnimationFrame(loop);
+}
+
+function titleScreen() {
+  const saved = loadSave();
+  S = saved || newState();
+  applyWorldFlags();
+  const logo = h('div', { class: 'logo' }, h('span', { class: 'l1' }, 'La Vallée'), h('span', { class: 'l2' }, 'des Graines'));
+  const sub = h('p', { class: 'tagline' }, 'Cultive, calcule, grandis.');
+  const btns = h('div', { class: 'title-btns' });
+  const scr = h('div', { class: 'layer title' }, logo, sub, btns, h('p', { class: 'title-foot' }, 'Révisions de maths 7H-8H · Flèches + A, ou l’écran tactile'));
+  const L = pushLayer(scr, {
+    onKey: (e) => { if (e.key === 'Enter' || e.key === ' ') { btns.querySelector('button')?.click(); return true; } return false; },
+    onA: () => btns.querySelector('button')?.click(),
+  });
+  let current = saved;
+  const begin = (state) => {
+    S = state;
+    started = true;
+    lastSig = progressSig(S);
+    if (!S.updatedAt) S.updatedAt = now();
+    popLayer(L);
+    startWorld();
+    saveNow();
+    if (syncState()) pullNewer(S).then((r) => r && adoptRemote(r));
+  };
+  const useCode = async () => {
+    const remote = await askCode(false);
+    if (!remote) return;
+    const st = migrate(remote);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(st)); } catch { /* private mode */ }
+    begin(st);
+  };
+  function mainButtons() {
+    btns.innerHTML = '';
+    if (current) {
+      btns.append(h('button', { class: 'btn big', onclick: () => begin(current) }, `Continuer (Niv. ${current.lvl})`));
+      btns.append(h('div', { class: 'row2' },
+        h('button', { class: 'btn ghost', onclick: async () => {
+          if (await confirm('Commencer une nouvelle partie ? L’ancienne sera effacée sur cet appareil.', 'Oui', 'Non')) { stopSync(); newGame(); }
+        } }, 'Nouvelle partie'),
+        syncState() ? null : h('button', { class: 'btn ghost', onclick: useCode }, 'J’ai un code')));
+    } else {
+      btns.append(h('button', { class: 'btn big', onclick: () => newGame() }, 'Nouvelle partie'));
+      btns.append(h('button', { class: 'btn ghost', onclick: useCode }, 'J’ai un code'));
+    }
+  }
+  mainButtons();
+  // A newer game saved on another device under this device's code: continue that one.
+  if (syncState()) pullNewer(saved).then((remote) => {
+    if (!remote || started) return;
+    current = migrate(remote);
+    S = current; applyWorldFlags();
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(current)); } catch { /* private mode */ }
+    mainButtons();
+  });
+  function newGame() {
+    btns.innerHTML = '';
+    btns.append(h('p', { class: 'ask' }, 'Tu es en quelle classe ?'),
+      h('div', { class: 'row2' },
+        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 7; begin(s); } }, '7H'),
+        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 8; begin(s); } }, '8H')));
+  }
+}
+function startWorld() {
+  mode = 'world';
+  pl.x = S.pos.x; pl.y = S.pos.y; pl.dir = S.pos.dir || 'down';
+  pl.px = pl.x * 16; pl.py = pl.y * 16;
+  applyWorldFlags();
+  if (!walkable(pl.x, pl.y) && !(objAt.get(pl.x + pl.y * W)?.type === 'plot')) { pl.x = START.x; pl.y = START.y; pl.px = pl.x * 16; pl.py = pl.y * 16; }
+  ui.append(hud, objBar, menuBtn, buildTouch());
+  ensureOrders();
+  updateHud(); updateObjective();
+  afterChange();
+  if (!S.flags.intro) setTimeout(() => toast('Va parler à Mamie Rose : la flèche jaune te montre où aller !', 'gold'), 600);
+  else if (!offlineChecked) {
+    offlineChecked = true;
+    const ripe = S.plots.filter((p) => p.crop && progress(p) >= 1).length;
+    if (ripe) setTimeout(() => toast(`${ripe} plante${ripe > 1 ? 's sont prêtes' : ' est prête'} à récolter !`, 'green'), 600);
+  }
+}
+
+titleScreen();
+requestAnimationFrame(loop);
+
+// debug helpers for testing in the console
+window.__vallee = {
+  get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow },
+  step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
+  world, pl, walkable, objById, objAt: () => objAt };
