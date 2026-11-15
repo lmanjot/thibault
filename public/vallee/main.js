@@ -1270,7 +1270,8 @@ async function onMamie() {
       'Je te donne 4 graines de radis pour commencer. Plante-les dans le potager, juste derrière la barrière.',
       'Le secret de la vallée : les plantes poussent beaucoup plus vite quand on les arrose en réussissant des calculs !',
       'Récolte, vends, achète de meilleures graines… Un jour, tu feras de la farine, du pain, et peut-être même des Fruits d’or !',
-      'Utilise les flèches pour marcher et A (ou Espace) pour parler et agir. Le bouton MENU ouvre ton sac et ton carnet.',
+      isTouch() ? 'Pour marcher, pose ton doigt n’importe où sur l’écran et fais-le glisser. Appuie sur A pour parler et agir. Le bouton MENU ouvre ton sac et ton carnet.'
+        : 'Utilise les flèches pour marcher et A (ou Espace) pour parler et agir. Le bouton MENU ouvre ton sac et ton carnet.',
     ], who);
     S.flags.intro = true;
     afterChange();
@@ -1920,6 +1921,42 @@ function buildTouch() {
   b.addEventListener('pointerdown', (e) => { e.preventDefault(); pressB(); });
   return h('div', { class: 'tctl' }, pad, h('div', { class: 'ab' }, b, a));
 }
+
+// Touch anywhere on the game screen and slide: the finger's starting point becomes a floating stick.
+// The centre follows the finger when it goes far, so turning around is quick.
+function setupSwipeStick() {
+  const knob = h('i');
+  const ring = h('div', { class: 'joy' }, knob);
+  let id = null, ox = 0, oy = 0, dir = null;
+  const set = (d) => {
+    if (dir) { const i = held.indexOf(dir); if (i >= 0) held.splice(i, 1); }
+    dir = d;
+    if (d && !layers.length) held.push(d);
+  };
+  const place = () => { ring.style.left = ox + 'px'; ring.style.top = oy + 'px'; };
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || id !== null || mode !== 'world' || layers.length) return;
+    e.preventDefault();
+    id = e.pointerId; ox = e.clientX; oy = e.clientY;
+    try { cv.setPointerCapture(id); } catch { /* synthetic pointer */ }
+    knob.style.transform = '';
+    place(); ui.append(ring);
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    let dx = e.clientX - ox, dy = e.clientY - oy;
+    const dist = Math.hypot(dx, dy), FOLLOW = 50, SHOW = 40, DEAD = 12;
+    if (dist > FOLLOW) { ox = e.clientX - (dx / dist) * FOLLOW; oy = e.clientY - (dy / dist) * FOLLOW; dx = e.clientX - ox; dy = e.clientY - oy; place(); }
+    const k = Math.min(1, SHOW / Math.max(1, Math.hypot(dx, dy)));
+    knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    if (layers.length) { set(null); return; }
+    set(dist < DEAD ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  });
+  const end = (e) => { if (e.pointerId !== id) return; id = null; set(null); ring.remove(); };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+}
+setupSwipeStick();
 
 // ============================================================ Loop & title
 let last = performance.now();
