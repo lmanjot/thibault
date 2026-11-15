@@ -78,7 +78,7 @@ function withPauses(text: string): string {
 /**
  * The request for a clip. Every clip must end naturally: telling the voice that more follows
  * (next_text) makes it stop dead, cutting the last ~0.3 s, so it is never used.
- * - Words: said as the end of "Regarde, c'est un …" with a full stop (silent letters stay silent).
+ * - Words: said on their own after "Voici le mot.", with a full stop (silent letters stay silent).
  * - Sentences that lead into a sound or word end on a comma: a suspended tone, without the
  *   dragged last word ("le sooon") that a trailing "…" gave.
  */
@@ -89,7 +89,9 @@ export function request(clip: Clip, tuning: Tuning = {}) {
       text: clip.word && !/[.!?]$/.test(text) ? `${text}.` : text,
       model_id: MODEL,
       language_code: "fr",
-      previous_text: clip.word ? "Regarde, c'est un" : "Écoute bien, je vais le dire clairement :",
+      // Words follow a complete sentence: after "Regarde, c'est un" the voice sometimes added the
+      // article (« une mouche », « un vélo ») or something else (« main » → « maintenant »).
+      previous_text: clip.word ? "Voici le mot." : "Écoute bien, je vais le dire clairement :",
       // Picture words are said a little slower: at the end of a sentence the voice rushes them,
       // and they came out ~60% faster than the instructions around them.
       voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true, speed: tuning.speed ?? (clip.word ? 0.78 : 0.92) },

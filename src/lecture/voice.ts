@@ -2,7 +2,7 @@
 // Every spoken line is built from these short clips, generated once by
 // scripts/gen-voice.mts and stored in public/lecture/voice/ (no live text-to-speech).
 
-import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, WORDS } from "./content";
+import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, NO_SYLLABLE_VOWELS, WORDS } from "./content";
 
 /** Fixed lines, in Goku's voice. */
 export const L = {
@@ -130,7 +130,7 @@ export function allClips(): Clip[] {
   Object.values(LETTER_NAME).forEach((n) => add(n, true));
   const vowels = GRAPHEMES.filter((g) => g.kind === "v");
   for (const c of GRAPHEMES.filter((g) => g.kind === "c"))
-    for (const v of vowels) if (!c.noVowels?.includes(v.id)) add(sylSay(c.id, v.id), true);
+    for (const v of vowels) if (!c.noVowels?.includes(v.id) && !NO_SYLLABLE_VOWELS.includes(v.id)) add(sylSay(c.id, v.id), true);
   WORDS.forEach((w) => add(w.w, true, true));
   return [...out.values()];
 }

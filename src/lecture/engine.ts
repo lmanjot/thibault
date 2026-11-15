@@ -1,6 +1,6 @@
 // Lecture Z — progress state, mastery levels and session building.
 
-import { CONFUSE, GRAPHEME, GRAPHEMES, WORDS, segment, wordAmbiguous, wordHas, type Seg, type Word } from "./content";
+import { CONFUSE, GRAPHEME, GRAPHEMES, WORDS, segment, wordAmbiguous, wordHas, type Seg, type Word, NO_SYLLABLE_VOWELS } from "./content";
 
 // ——— State ———
 
@@ -205,7 +205,7 @@ export function availableSyllables(s: Save, onlyConsonant?: string): string[] {
   const vows = ready.filter((g) => GRAPHEME[g].kind === "v");
   const out: string[] = [];
   for (const c of cons)
-    for (const v of vows) if (!GRAPHEME[c].noVowels?.includes(v)) out.push(sid(c, v));
+    for (const v of vows) if (!GRAPHEME[c].noVowels?.includes(v) && !NO_SYLLABLE_VOWELS.includes(v)) out.push(sid(c, v));
   return out;
 }
 
@@ -381,7 +381,7 @@ function sylEx(s: Save, id: string, section: Section, bump = 0): Ex {
   const { c, v } = parseSyl(id);
   const lvl = level(s, id) + bump;
   const fusion = (): Ex => {
-    const vows = knownSounds(s).filter((x) => GRAPHEME[x].kind === "v" && x !== v && !GRAPHEME[c].noVowels?.includes(x));
+    const vows = knownSounds(s).filter((x) => GRAPHEME[x].kind === "v" && x !== v && !GRAPHEME[c].noVowels?.includes(x) && !NO_SYLLABLE_VOWELS.includes(x));
     const near = (CONFUSE[v] ?? []).filter((x) => vows.includes(x));
     const others = [...near, ...shuffle(vows.filter((x) => !near.includes(x)))].slice(0, 2);
     return { t: "fusion", section, item: id, c, v, options: shuffle([v, ...others]) };
@@ -447,7 +447,9 @@ const sylHas = (id: string, g: string) => {
 function syllablesWith(s: Save, g: string): string[] {
   const ready = knownSounds(s).filter((x) => x !== g);
   const gr = GRAPHEME[g];
-  if (gr.kind === "c") return ready.filter((v) => GRAPHEME[v].kind === "v" && !gr.noVowels?.includes(v)).map((v) => sid(g, v));
+  if (NO_SYLLABLE_VOWELS.includes(g)) return [];
+  if (gr.kind === "c")
+    return ready.filter((v) => GRAPHEME[v].kind === "v" && !gr.noVowels?.includes(v) && !NO_SYLLABLE_VOWELS.includes(v)).map((v) => sid(g, v));
   return ready.filter((c) => GRAPHEME[c].kind === "c" && !GRAPHEME[c].noVowels?.includes(g)).map((c) => sid(c, g));
 }
 

@@ -519,4 +519,11 @@ export function rematchFor(step: number, beaten: string[] = [], turn = 0): Boss 
   return pool[turn % pool.length];
 }
 
+/**
+ * Vowels never used to build syllables. The voice cannot say a syllable with « è » apart from « é »
+ * (« pè » comes out as « pé »), which confuses a child; « è » is still practised with words and
+ * the letter itself.
+ */
+export const NO_SYLLABLE_VOWELS = ["è"];
+
 export const ASSET = (name: string) => `/assets/dbz/ready/${name}`;
