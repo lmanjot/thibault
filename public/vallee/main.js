@@ -4,7 +4,7 @@ import {
   CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
-import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS } from './math.js';
+import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES } from './math.js';
 import * as A from './art.js';
 import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
 
@@ -38,7 +38,7 @@ function newState() {
     orders: [], creatures: {}, badges: {},
     stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0, perfectReviews: 0 },
     streak: 0, mastery: {}, objDone: {}, daily: {},
-    animals: [], barnSlots: 4, found: {}, stars: {}, defis: {},
+    animals: [], barnSlots: 4, found: {}, stars: {}, defis: {}, ease: {}, easeRun: {},
     pos: { ...START },
     settings: { sound: true, grade: 8, diff: 0, cats: {}, pin: '' },
   };
@@ -361,15 +361,27 @@ function diffFor(cat, off = 0) {
   if (fx) return fx;
   const m = S.mastery[mKey(cat)];
   let adj = 0;
-  if (!m || m.n < 3) adj = -1; // warm-up: the first problems of a new theme are a bit easier
+  adj += (S.ease || {})[mKey(cat)] || 0; // the child said "too hard" in this theme
+  if (!m || m.n < 3) adj -= 1; // warm-up: the first problems of a new theme are a bit easier
   else if (m.r.length >= 6) {
     const last = m.r.slice(-6), rate = last.filter(Boolean).length / last.length;
     if (rate >= 0.84) adj = 1; else if (rate <= 0.34) adj = -1;
   }
   return clamp(Math.round(baseD() + off + adj), 1, 5);
 }
-function record(cat, ok) {
-  const k = mKey(cat);
+/** Ease key: a calculation's operation ("calc:sub"), or the theme. */
+const easeKey = (p) => (p.op ? 'calc:' + p.op : mKey(p.cat));
+const easeLabel = (p) => (p.op ? OP_NAMES[p.op] : (CATS[p.cat] || '').toLowerCase());
+const opEase = () => Object.fromEntries(Object.entries(S.ease || {}).filter(([k]) => k.startsWith('calc:')).map(([k, v]) => [k.slice(5), v]));
+function record(p, ok) {
+  // after "too hard", 4 first-try right answers in a row bring the level one step back up
+  const ek = easeKey(p);
+  S.ease = S.ease || {}; S.easeRun = S.easeRun || {};
+  if (S.ease[ek] < 0) {
+    S.easeRun[ek] = ok ? (S.easeRun[ek] || 0) + 1 : 0;
+    if (S.easeRun[ek] >= 4) { S.ease[ek]++; S.easeRun[ek] = 0; if (!S.ease[ek]) delete S.ease[ek]; }
+  }
+  const k = mKey(p.cat);
   const m = (S.mastery[k] = S.mastery[k] || { ok: 0, n: 0, r: [] });
   m.n++; if (ok) m.ok++;
   m.r.push(ok ? 1 : 0); if (m.r.length > 8) m.r.shift();
@@ -605,11 +617,19 @@ const PRAISE = ['Bravo !', 'Super !', 'Génial !', 'Excellent !', 'Parfait !', '
  * Ask one problem. Returns { ok, first, quit }.
  * opts: cat, d, title, problem, mount (element for battles), noQuit
  */
-function askMath(opts) {
+async function askMath(opts) {
+  let o = opts;
+  for (;;) {
+    const r = await askOnce(o);
+    if (!r.easier) return r;
+    o = { ...o, cat: r.cat, op: r.op, d: r.op ? o.d : Math.max(1, r.d - 1) };
+  }
+}
+function askOnce(opts) {
   return new Promise((resolve) => {
     const cat = opts.problem ? opts.problem.cat : themeFor(opts.cat || 'calc');
     const dUsed = fixedLevel(cat) || (cat === opts.cat && opts.d) || diffFor(cat);
-    const p = opts.problem || makeProblem(cat, dUsed);
+    const p = opts.problem || makeProblem(cat, dUsed, opEase(), opts.op);
     window.__lastP = p; // read by the test helpers in the console
     let tries = 0, input = '', locked = false;
     const hintCost = 5 + 5 * dUsed;
@@ -624,6 +644,18 @@ function askMath(opts) {
       if (step) tip.append(h('div', { class: 'm-step' }, 'Pour commencer : ' + step));
       hintBtn.disabled = true; hintBtn.textContent = 'Indice acheté';
     } }, 'Indice · ', coinImg('coin sm'), ` ${hintCost}`);
+    // "Trop dur" lowers this theme (or this operation) a step and asks an easier problem instead
+    const easier = (p.op ? true : p.cat !== 'argent' || !opts.problem) && !opts.problem && !fixedLevel(cat);
+    const hardBtn = easier ? h('button', { class: 'm-hard', onclick: () => {
+      if (locked || tries > 0) return;
+      const ek = easeKey(p);
+      S.ease = S.ease || {};
+      S.ease[ek] = Math.max(-3, (S.ease[ek] || 0) - 1);
+      S.easeRun[ek] = 0;
+      toast(`D’accord ! Les ${easeLabel(p)} seront un peu plus faciles.`, 'blue');
+      save();
+      finish({ easier: true, cat, op: p.op || null, d: dUsed });
+    } }, 'Trop dur ?') : null;
     const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
     const ansVal = h('span', { class: 'm-val' });
     const ansRow = p.choices ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
@@ -633,7 +665,7 @@ function askMath(opts) {
       h('span', { class: 'm-cat' }, CATS[p.cat] || 'Calcul'),
       h('span', { class: 'm-title' }, opts.title || ''),
       S.streak >= 2 ? h('span', { class: 'm-streak' }, `Série ×${S.streak}`) : null);
-    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, h('div', { class: 'm-hintrow' }, hintBtn), tip, ansRow, fb, pad);
+    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, h('div', { class: 'm-hintrow' }, hardBtn, hintBtn), tip, ansRow, fb, pad);
     function paint() { ansVal.textContent = input || '?'; ansVal.classList.toggle('empty', !input); }
     function key(k) {
       if (locked) return;
@@ -653,7 +685,7 @@ function askMath(opts) {
       if (!p.choices && !input) return;
       const ok = checkAnswer(p, p.choices ? val : input);
       tries++;
-      if (tries === 1) record(p.cat, ok);
+      if (tries === 1) record(p, ok);
       if (ok) {
         locked = true;
         S.stats.correct++;
@@ -674,7 +706,7 @@ function askMath(opts) {
         fb.innerHTML = '';
         fb.append(h('b', { class: 'no' }, 'Presque ! '), h('span', null, 'Indice : ' + p.hint));
         input = ''; paint();
-        if (p.choices) [...pad.children].forEach((b) => { if (b.dataset.v === val) b.disabled = true; });
+        if (p.choices) { [...pad.children].forEach((b) => { if (b.dataset.v === val) b.disabled = true; }); moveSel(1); }
       } else {
         locked = true;
         sfx.bad();
@@ -688,8 +720,16 @@ function askMath(opts) {
       }
       save();
     }
+    let csel = 0;
+    const paintSel = () => [...pad.querySelectorAll('.m-choice')].forEach((b, i) => b.classList.toggle('sel', i === csel));
+    const moveSel = (step) => {
+      const bs = [...pad.querySelectorAll('.m-choice')];
+      for (let k = 0; k < bs.length; k++) { csel = (csel + step + bs.length) % bs.length; if (!bs[csel].disabled) break; }
+      paintSel();
+    };
     if (p.choices) {
       p.choices.forEach((c, i) => pad.append(h('button', { class: 'm-choice', 'data-v': c, onclick: () => submit(c) }, h('small', null, i + 1), c)));
+      paintSel();
     } else {
       for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫']) pad.append(h('button', { class: 'k' + (k === '⌫' ? ' del' : ''), onclick: () => key(k) }, k));
       pad.append(h('button', { class: 'k ok', onclick: () => submit() }, 'OK'));
@@ -698,6 +738,9 @@ function askMath(opts) {
     function onDocKey(e) {
       if (locked && e.key === 'Enter' && pad.querySelector('.btn')) { pad.querySelector('.btn').click(); e.preventDefault(); e.stopPropagation(); return; }
       if (p.choices) {
+        if (['ArrowRight', 'ArrowDown'].includes(e.key)) { moveSel(1); e.preventDefault(); e.stopPropagation(); return; }
+        if (['ArrowLeft', 'ArrowUp'].includes(e.key)) { moveSel(-1); e.preventDefault(); e.stopPropagation(); return; }
+        if (e.key === 'Enter' || e.key === ' ') { const b = pad.querySelectorAll('.m-choice')[csel]; if (b && !b.disabled) submit(p.choices[csel]); e.preventDefault(); e.stopPropagation(); return; }
         const n = Number(e.key);
         if (n >= 1 && n <= p.choices.length) { const b = pad.children[n - 1]; if (!b.disabled) submit(p.choices[n - 1]); e.preventDefault(); e.stopPropagation(); }
         return;
@@ -711,7 +754,13 @@ function askMath(opts) {
     }
     document.addEventListener('keydown', onDocKey, true);
     // A (touch button) = OK, or "J’ai compris" once the solution is shown
-    const mathA = { a() { const done = pad.querySelector('.btn'); if (locked && done) done.click(); else if (!p.choices) submit(); } };
+    const mathA = { a() {
+      const done = pad.querySelector('.btn');
+      if (locked && done) { done.click(); return; }
+      if (!p.choices) { submit(); return; }
+      const b = pad.querySelectorAll('.m-choice')[csel];
+      if (b && !b.disabled) submit(p.choices[csel]);
+    } };
     activeMath = mathA;
     let L = null;
     if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }

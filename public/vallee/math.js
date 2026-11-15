@@ -400,11 +400,23 @@ function theme(name, d) {
 }
 
 /** Make one problem of a category at difficulty d (1-5). */
-export function makeProblem(cat, d) {
+const OPS = { add, sub, mul, div, mental };
+export const OP_NAMES = { add: 'additions', sub: 'soustractions', mul: 'multiplications', div: 'divisions', mental: 'calculs de tête' };
+/**
+ * opAdj: easier/harder steps per operation for calculations, e.g. { sub: -1 } (the "too hard" button).
+ * op: force one operation (to ask an easier problem of the same kind). Calculation problems get p.op.
+ */
+export function makeProblem(cat, d, opAdj = {}, op = null) {
   d = Math.max(1, Math.min(5, Math.round(d)));
-  if (cat === 'calc') return pick(CALC_POOLS[d])(d);
-  if (cat === 'add') return genAdd(d);
-  if (cat === 'mul') return genMul(d);
+  if (cat === 'calc' || cat === 'add' || cat === 'mul' || !cat) {
+    const pool = cat === 'add' ? [add, sub] : cat === 'mul' ? [mul, mul, div] : CALC_POOLS[d];
+    const fn = pick(pool);
+    const name = op && OPS[op] ? op : Object.keys(OPS).find((k) => OPS[k] === fn);
+    const dd = Math.max(1, Math.min(5, Math.round(d + (opAdj[name] || 0))));
+    const p = OPS[name](dd);
+    p.op = name;
+    return p;
+  }
   if (cat === 'frac') return frac(d);
   if (cat === 'conv') return conv(d);
   if (T[cat]) return theme(cat, d);

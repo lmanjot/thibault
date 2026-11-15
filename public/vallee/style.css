@@ -488,3 +488,8 @@ button.row:hover { background: #f1f4ff; }
   .is-touch { --tb: 0px; }
   .is-touch .dialog, .is-touch .toast { margin-bottom: 62px; }
 }
+
+/* ---------- "too hard" and highlighted choice ---------- */
+.m-hintrow { gap: 8px; }
+.m-hard { font-size: 14px; padding: 5px 10px; border-radius: 8px; border: 2px solid #8aa8d8; background: #eef4ff; box-shadow: 0 2px 0 #8aa8d8; color: #2a4a8a; }
+.m-choice.sel { border-color: var(--frame); box-shadow: 0 4px 0 var(--frame), inset 0 0 0 2px var(--gold); background: #fffbe6; }
