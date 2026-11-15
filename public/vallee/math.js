@@ -21,7 +21,7 @@ const hm = (h, m) => `${h} h ${String(m).padStart(2, '0')}`;
 
 export const CATS = {
   calc: 'Calcul', frac: 'Fractions', conv: 'Conversions', masse: 'Masses', contenance: 'Contenances',
-  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Géométrie', animaux: 'Animaux',
+  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Géométrie', animaux: 'Animaux', enigme: 'Énigmes',
 };
 export const MEASURE_CATS = ['conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux'];
 
@@ -37,6 +37,7 @@ const HINTS = {
   argent: 'Calcule d’abord le prix total, puis la différence.',
   geo: 'Périmètre = le tour (on additionne les côtés). Aire = longueur × largeur.',
   animaux: 'Lis bien : combien pour UN animal, puis multiplie ou divise.',
+  enigme: 'Lis l’énigme deux fois, et fais un petit dessin ou un calcul à la fois.',
 };
 
 function P(cat, q, a, u, ex, hint) {
@@ -299,6 +300,91 @@ T.animaux = [
   [5, 5, () => { const L = R(2, 9) * 10; return P('animaux', `Il faut 10 L de lait pour faire 1 kg de fromage. Combien de kg de fromage fais-tu avec ${L} L ?`, L / 10, 'kg', `${L} ÷ 10 = ${L / 10} kg`); }],
   [5, 5, () => { const kg = R(2, 6), p = pick([250, 500]); return P('animaux', `Les abeilles ont fait ${kg} kg de miel. Tu remplis des pots de ${p} g. Combien de pots ?`, (kg * 1000) / p, 'pots', `${kg} kg = ${kg * 1000} g. ${kg * 1000} ÷ ${p} = ${(kg * 1000) / p} pots`); }],
   [5, 5, () => { const e = pick([12, 18, 15]), j = 3, k = pick([5, 7, 10]); return P('animaux', `Tes poules pondent ${e} œufs en ${j} jours. Combien en ${k} jours ?`, (e / j) * k, 'œufs', `Par jour : ${e} ÷ ${j} = ${e / j}. En ${k} jours : ${e / j} × ${k} = ${(e / j) * k} œufs`); }],
+];
+
+// Énigmes: small problems in several steps (budget, logic, sequences, "I think of a number"…)
+const KIDS = ['Léa', 'Tom', 'Zoé', 'Noé', 'Mia', 'Hugo', 'Lina', 'Sami'];
+const FRUITS = [['pommes', 'pomme'], ['bananes', 'banane'], ['kiwis', 'kiwi'], ['poires', 'poire'], ['oranges', 'orange'], ['prunes', 'prune']];
+T.enigme = [
+  // two steps: buy then change
+  [1, 2, (d) => {
+    const k = pick(KIDS), n = R(2, 5), p = R(2, d <= 1 ? 4 : 8), A = n * p + R(2, 12);
+    return P('enigme', `${k} a ${A} CHF. ${k} achète ${n} cahiers à ${p} CHF chacun. Combien lui reste-t-il ?`, A - n * p, 'CHF', `${n} × ${p} = ${n * p} CHF. ${A} − ${n * p} = ${A - n * p} CHF`);
+  }],
+  [1, 2, () => {
+    const k = pick(KIDS), b = R(3, 6), per = R(4, 9), g = R(2, b * per - 2);
+    return P('enigme', `${k} a ${b} sacs de ${per} billes. ${k} en donne ${g} à un copain. Combien de billes lui reste-t-il ?`, b * per - g, 'billes', `${b} × ${per} = ${b * per}. ${b * per} − ${g} = ${b * per - g} billes`);
+  }],
+  [1, 3, (d) => {
+    const st = R(1, 9), step = R(2, d <= 1 ? 5 : 12), seq = [0, 1, 2, 3].map((i) => st + i * step);
+    return P('enigme', `Trouve le nombre suivant : ${seq.join(', ')}, @`, st + 4 * step, '', `On ajoute ${step} à chaque fois : ${seq[3]} + ${step} = ${st + 4 * step}`, 'Regarde de combien on avance entre deux nombres.');
+  }],
+  [2, 3, () => {
+    const s = R(4, 9), plus = R(2, 6), mult = 2;
+    return P('enigme', `J’ai le double de l’âge de ma sœur. Elle a ${s} ans. Quel âge aurai-je dans ${plus} ans ?`, s * mult + plus, 'ans', `Moi : ${s} × 2 = ${s * 2} ans. Dans ${plus} ans : ${s * 2} + ${plus} = ${s * 2 + plus} ans`);
+  }],
+  [2, 3, () => {
+    const a = R(9, 15), c = R(5, 8), na = R(1, 2), nc = R(2, 4);
+    return P('enigme', `Au cinéma, une place adulte coûte ${a} CHF et une place enfant ${c} CHF. Combien paie une famille de ${na} adulte${na > 1 ? 's' : ''} et ${nc} enfants ?`, na * a + nc * c, 'CHF', `Adultes : ${na} × ${a} = ${na * a}. Enfants : ${nc} × ${c} = ${nc * c}. Total : ${na * a + nc * c} CHF`);
+  }],
+  [2, 3, () => {
+    const kids = R(3, 6), each = R(3, 8), rest = R(1, kids - 1), tot = kids * each + rest;
+    return P('enigme', `On partage ${tot} bonbons entre ${kids} enfants, chacun la même chose. Combien de bonbons reste-t-il à la fin ?`, rest, 'bonbons', `${tot} ÷ ${kids} = ${each}, reste ${rest}`, 'Divise, puis regarde ce qui reste.');
+  }],
+  // the fruit budget: buy the cheapest first to get the most fruits
+  [3, 4, () => {
+    const pickF = [...FRUITS].sort(() => Math.random() - 0.5).slice(0, 3);
+    const items = pickF.map((f, i) => ({ f, price: [1, 2, 3][i] + (Math.random() < 0.5 ? 0 : [0, 1, 1][i]), max: R(1, 4) }));
+    items.sort((x, y) => x.price - y.price);
+    const all = items.reduce((t, it) => t + it.price * it.max, 0);
+    const money = R(Math.max(4, Math.floor(all / 2)), all - 1);
+    let left = money, count = 0; const steps = [];
+    for (const it of items) { const n = Math.min(it.max, Math.floor(left / it.price)); if (n) steps.push(`${n} ${n > 1 ? it.f[0] : it.f[1]} (${n * it.price} CHF)`); left -= n * it.price; count += n; }
+    const k = pick(KIDS);
+    const list = items.map((it) => `${it.max} ${it.max > 1 ? it.f[0] : it.f[1]} à ${it.price} CHF`).join(', ');
+    return P('enigme', `${k} a ${money} CHF. Au marché, il reste : ${list} (prix pour chaque fruit). Combien de fruits ${k} peut acheter au maximum ?`, count, 'fruits',
+      `Pour en avoir le plus, on prend d’abord les moins chers : ${steps.join(' + ')}. Total : ${count} fruits`, 'Pour avoir le plus de fruits, commence par les moins chers.');
+  }],
+  [3, 4, () => {
+    const x = R(3, 12), m = R(2, 5), a = R(2, 15), res = x * m + a;
+    return P('enigme', `Je pense à un nombre. Je le multiplie par ${m}, puis j’ajoute ${a}. J’obtiens ${res}. Quel est mon nombre ?`, x, '', `On fait à l’envers : ${res} − ${a} = ${res - a}, puis ${res - a} ÷ ${m} = ${x}`, 'Fais le chemin à l’envers : enlève, puis divise.');
+  }],
+  [3, 4, () => {
+    const e = R(13, 50), b = pick([6, 10, 12]);
+    return P('enigme', `Tu as ${e} œufs et des boîtes de ${b}. Combien de boîtes faut-il pour ranger TOUS les œufs ?`, Math.ceil(e / b), 'boîtes', `${e} ÷ ${b} = ${Math.floor(e / b)} reste ${e % b} : il faut une boîte de plus pour le reste, donc ${Math.ceil(e / b)}`, 'S’il reste des œufs, il faut une boîte en plus.');
+  }],
+  [3, 5, () => {
+    const has = R(2, 12), w = R(3, 8), price = has + w * R(3, 8) - R(0, w - 1);
+    const weeks = Math.ceil((price - has) / w);
+    return P('enigme', `Tu reçois ${w} CHF par semaine. Tu as déjà ${has} CHF. Un jeu coûte ${price} CHF. Dans combien de semaines peux-tu l’acheter ?`, weeks, 'semaines', `Il manque ${price} − ${has} = ${price - has} CHF. ${price - has} ÷ ${w} → ${weeks} semaines (on arrondit au-dessus)`);
+  }],
+  [4, 5, () => {
+    const st = R(1, 4), r = pick([2, 3]), seq = [0, 1, 2, 3].map((i) => st * r ** i);
+    return P('enigme', `Trouve le nombre suivant : ${seq.join(', ')}, @`, st * r ** 4, '', `On multiplie par ${r} à chaque fois : ${seq[3]} × ${r} = ${st * r ** 4}`, 'Ici on ne fait pas +, on fait ×.');
+  }],
+  [4, 5, () => {
+    const L = R(3, 8) * pick([2, 3, 4, 5]), gap = pick([2, 3, 4, 5]);
+    const len = Math.floor(L / gap) * gap;
+    return P('enigme', `Une clôture droite mesure ${len} m. On plante un piquet tous les ${gap} m, et aussi un à chaque bout. Combien de piquets faut-il ?`, len / gap + 1, 'piquets', `${len} ÷ ${gap} = ${len / gap} espaces, donc ${len / gap} + 1 = ${len / gap + 1} piquets`, 'Dessine-la ! Il y a toujours un piquet de plus que d’espaces.');
+  }],
+  [4, 5, () => {
+    const lap = R(2, 9), pou = R(2, 9), tetes = lap + pou, pattes = lap * 4 + pou * 2;
+    return P('enigme', `Dans la ferme, il y a des poules et des lapins : ${tetes} têtes et ${pattes} pattes. Combien de lapins ?`, lap, 'lapins', `Si tous étaient des poules : ${tetes} × 2 = ${tetes * 2} pattes. Il y a ${pattes - tetes * 2} pattes en plus, 2 par lapin : ${pattes - tetes * 2} ÷ 2 = ${lap} lapins`, 'Imagine que ce sont toutes des poules, puis compte les pattes en trop.');
+  }],
+  [4, 5, () => {
+    const st = 8, gap = pick([10, 15, 20, 30]), end = pick([10, 11, 12]);
+    const n = ((end - st) * 60) / gap;
+    return P('enigme', `Le bus passe toutes les ${gap} minutes, à partir de 8 h 00. Combien de bus passent avant ${end} h 00 (sans compter celui de ${end} h) ?`, n, 'bus', `De 8 h à ${end} h : ${(end - st) * 60} min. ${(end - st) * 60} ÷ ${gap} = ${n} bus`);
+  }],
+  [5, 5, () => {
+    const son = R(4, 10), x = R(2, 8), dad = 3 * (son + x) - x;
+    return P('enigme', `Papa a ${dad} ans et son fils ${son} ans. Dans combien d’années Papa aura-t-il exactement 3 fois l’âge de son fils ?`, x, 'ans', `Dans ${x} ans : Papa ${dad + x}, fils ${son + x}, et ${son + x} × 3 = ${dad + x}`, 'Essaie : dans 1 an, dans 2 ans… et vérifie à chaque fois.');
+  }],
+  [5, 5, () => {
+    const p1 = pick([2.5, 3.5, 1.5]), n1 = R(2, 4), p2 = pick([4.2, 2.8, 5.5]), A = 20;
+    const tot = n1 * p1 + p2;
+    return P('enigme', `Avec un billet de ${A} CHF, tu achètes ${n1} glaces à ${chf(p1)} CHF et un livre à ${chf(p2)} CHF. Combien te rend-on ?`, A - tot, 'CHF', `${n1} × ${chf(p1)} = ${chf(n1 * p1)}. + ${chf(p2)} = ${chf(tot)}. ${A} − ${chf(tot)} = ${chf(A - tot)} CHF`);
+  }],
 ];
 
 function theme(name, d) {

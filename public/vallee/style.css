@@ -444,3 +444,7 @@ button.row:hover { background: #f1f4ff; }
 /* ---------- floating stick (slide a finger anywhere to walk) ---------- */
 .joy { position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.6); background: rgba(30, 34, 52, 0.22); pointer-events: none; z-index: 3; }
 .joy i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; background: rgba(255, 255, 255, 0.8); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3); }
+.owl-rewards { flex-direction: column; align-items: flex-start; gap: 3px; font-family: var(--read); }
+.owl-rewards b { font-family: var(--ui); }
+.catbtn.star { border-color: #e0b020; box-shadow: 0 3px 0 #c89818; background: #fff9e0; }
+.catbtn .gold { color: #e0a800; }

@@ -36,9 +36,9 @@ function newState() {
     hat: 'rouge', hats: ['rouge'],
     built: {}, flags: {}, chests: {}, res: {},
     orders: [], creatures: {}, badges: {},
-    stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0 },
+    stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0, perfectReviews: 0 },
     streak: 0, mastery: {}, objDone: {}, daily: {},
-    animals: [], barnSlots: 4, found: {},
+    animals: [], barnSlots: 4, found: {}, stars: {},
     pos: { ...START },
     settings: { sound: true, grade: 8 },
   };
@@ -611,6 +611,7 @@ function askMath(opts) {
       sfx.blip(); paint();
     }
     function finish(res) {
+      if (activeMath === mathA) activeMath = null;
       document.removeEventListener('keydown', onDocKey, true);
       if (L) popLayer(L); else box.remove();
       resolve(res);
@@ -658,7 +659,7 @@ function askMath(opts) {
     if (p.choices) {
       p.choices.forEach((c, i) => pad.append(h('button', { class: 'm-choice', 'data-v': c, onclick: () => submit(c) }, h('small', null, i + 1), c)));
     } else {
-      for (const k of ['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0', '⌫']) pad.append(h('button', { class: 'k' + (k === '⌫' ? ' del' : ''), onclick: () => key(k) }, k));
+      for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫']) pad.append(h('button', { class: 'k' + (k === '⌫' ? ' del' : ''), onclick: () => key(k) }, k));
       pad.append(h('button', { class: 'k ok', onclick: () => submit() }, 'OK'));
     }
     if (!opts.noQuit) box.append(h('button', { class: 'm-quit', onclick: () => { if (!locked) finish({ ok: false, quit: true }); } }, 'Plus tard'));
@@ -677,12 +678,32 @@ function askMath(opts) {
       e.preventDefault(); e.stopPropagation();
     }
     document.addEventListener('keydown', onDocKey, true);
+    // A (touch button) = OK, or "J’ai compris" once the solution is shown
+    const mathA = { a() { const done = pad.querySelector('.btn'); if (locked && done) done.click(); else if (!p.choices) submit(); } };
+    activeMath = mathA;
     let L = null;
     if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }
-    else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true });
+    else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true, math: true });
     paint();
   });
 }
+
+let activeMath = null;
+/**
+ * Several problems in a row for one action. steps: list of categories (or { cat, d }).
+ * needAll: stop at the first miss. Returns { ok, n, firsts, quit, all }.
+ */
+async function askSeries(steps, title, needAll = true, off = 0) {
+  let ok = 0, firsts = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const st = typeof steps[i] === 'string' ? { cat: steps[i] } : steps[i];
+    const r = await askMath({ cat: st.cat, d: st.d || diffFor(st.cat, off), title: steps.length > 1 ? `${title} · ${i + 1}/${steps.length}` : title });
+    if (r.quit) return { ok, n: steps.length, firsts, quit: true, all: false };
+    if (r.ok) { ok++; if (r.first) firsts++; } else if (needAll) return { ok, n: steps.length, firsts, quit: false, all: false };
+  }
+  return { ok, n: steps.length, firsts, quit: false, all: ok === steps.length };
+}
+const maybeEnigme = (other, chance = 0.5) => (Math.random() < chance ? 'enigme' : other);
 
 // ============================================================ Interactions
 async function interact() {
@@ -791,29 +812,29 @@ function water(i, frac) {
 async function waterMenu(i) {
   const p = S.plots[i], c = CROPS[p.crop];
   const growing = S.plots.filter((pp) => pp.crop && progress(pp) < 1).length;
-  const opts = ['Arroser cette plante', growing > 1 ? `Arroser tout le potager (${growing} plantes, calcul plus dur)` : null, 'Plus tard'].filter(Boolean);
-  const k = await choose(`${c.name} : prêt dans ${fmtTime(remaining(p))}. Arroser ? Il faut réussir un calcul !`, opts);
+  const opts = ['Arroser cette plante', growing > 1 ? `Arroser tout le potager (${growing} plantes, 3 problèmes)` : null, 'Plus tard'].filter(Boolean);
+  const k = await choose(`${c.name} : prêt dans ${fmtTime(remaining(p))}. Arroser ? Il faut réussir 2 calculs !`, opts);
   const frac = WATER_FRAC[S.tools.arrosoir];
   if (opts[k] === 'Arroser cette plante') {
     for (;;) {
-      const cat = waterCat();
-      const r = await askMath({ cat, title: `Arroser : ${c.name}` });
-      if (r.quit) return;
+      const r = await askSeries([waterCat(), maybeEnigme(waterCat(), 0.35)], `Arroser : ${c.name}`, false);
       if (r.ok) {
-        const gained = water(i, r.first ? frac : frac * 0.6);
+        let gained = 0;
+        for (let j = 0; j < r.ok; j++) gained += water(i, j < r.firsts ? frac * 0.6 : frac * 0.35);
         S.stats.watered++;
         sfx.water();
         toast(`Ça pousse ! −${fmtTime(gained)}`, 'blue');
         afterChange();
       }
+      if (r.quit) return;
       if (progress(p) >= 1) { await say(`${c.name} : c’est prêt à récolter ! Parle encore à la plante pour la cueillir.`); return; }
       if (!(await confirm(`Encore ${fmtTime(remaining(p))}. Arroser encore ?`, 'Oui, encore', 'Non merci'))) return;
     }
   } else if (opts[k] && opts[k].startsWith('Arroser tout')) {
-    const r = await askMath({ cat: waterCat(), d: diffFor('calc', 1), title: 'Arroser tout le potager' });
-    if (r.ok) {
+    const r = await askSeries([{ cat: 'calc', d: diffFor('calc', 1) }, waterCat(), 'enigme'], 'Arroser tout le potager', false);
+    if (r.ok >= 2) {
       let n = 0;
-      S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.first ? 0.7 : 0.45)); n++; } });
+      S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.ok === 3 ? 0.75 : 0.45)); n++; } });
       S.stats.watered++;
       sfx.water();
       toast(`${n} plantes arrosées !`, 'blue');
@@ -972,9 +993,9 @@ async function onBuilding(id) {
     const missing = Object.entries(B.cost).filter(([k, v]) => (k === 'coins' ? S.coins < v : !has(k, v)))
       .map(([k, v]) => (k === 'coins' ? `${fmt(v - S.coins)} pièces` : qtyName(k, v - (S.inv[k] || 0))));
     if (missing.length) return say([`Il te manque encore : ${missing.join(', ')}.`, id === 'serre' ? 'Les cristaux se trouvent dans la montagne.' : 'Le bois et les pierres se trouvent dans la forêt, à l’ouest de la ferme.']);
-    await say('Le chef de chantier vérifie le plan avec toi. Réussis ce calcul pour lancer la construction !');
-    const r = await askMath({ cat: 'geo', title: `Construire : ${B.name}` });
-    if (!r.ok) return say('Le chef de chantier dit : pas grave, on réessaie quand tu veux !');
+    await say('Le chef de chantier vérifie le plan avec toi. Réussis ces 3 problèmes pour lancer la construction !');
+    const r = await askSeries(['geo', 'enigme', pick(['calc', 'masse', 'longueur'])], `Construire : ${B.name}`);
+    if (!r.all) return say('Le chef de chantier dit : pas grave, on réessaie quand tu veux !');
     for (const [k, v] of Object.entries(B.cost)) { if (k === 'coins') S.coins -= v; else addItem(k, -v); }
     S.built[id] = true;
     addXP(30);
@@ -991,7 +1012,7 @@ async function craftPanel(id) {
   let job = null, invent = false;
   const secrets = RECIPES[id].filter((r) => r.secret);
   const P = panel(B.name, (body) => {
-    body.append(h('p', { class: 'note' }, 'Chaque fabrication demande de résoudre un problème. Si tu te trompes, tu gardes tes ingrédients.'));
+    body.append(h('p', { class: 'note' }, 'Chaque fabrication demande 2 problèmes. Si tu te trompes, tu gardes tes ingrédients.'));
     if (secrets.length) {
       const nf = secrets.filter((r) => S.found[r.out]).length;
       body.append(h('div', { class: 'invent' }, h('span', null, `Recettes secrètes : ${nf}/${secrets.length}`),
@@ -1017,8 +1038,8 @@ async function craftPanel(id) {
   await P.done;
   if (invent) { await inventPanel(id); return craftPanel(id); }
   if (!job) return;
-  const r = await askMath({ cat: job.theme, title: `${B.name} : ${itemName(job.out)}` });
-  if (r.ok) {
+  const r = await askSeries([job.theme, maybeEnigme('calc')], `${B.name} : ${itemName(job.out)}`);
+  if (r.all) {
     for (const [k, v] of Object.entries(job.in)) addItem(k, -v);
     addItem(job.out, 1);
     S.stats.made[job.out] = (S.stats.made[job.out] || 0) + 1;
@@ -1036,12 +1057,9 @@ async function onWild(e) {
   if (S.lvl < d.lvl) return say([`${cap(art)} !`, `Il est encore trop farouche… Reviens au niveau ${d.lvl} pour l’apprivoiser.`]);
   if (!S.built.etable) return say([`${cap(art)} ! Tu pourrais l’adopter…`, 'Mais il te faut d’abord une Étable : elle se construit sous ta maison, à côté de l’enclos (niveau 3).']);
   if (S.animals.length >= S.barnSlots) return say('Ton Étable est pleine ! Agrandis-la à la Boutique (onglet Outils).');
-  if (!(await confirm(`${cap(art)} ! Veux-tu l’apprivoiser ? Réussis 2 problèmes pour gagner sa confiance.`, 'Essayer', 'Plus tard'))) return;
-  for (let i = 0; i < 2; i++) {
-    const cat = i === 0 ? 'animaux' : pick(['animaux', 'calc', 'recette']);
-    const r = await askMath({ cat, title: `Apprivoiser : ${d.name} · ${i + 1}/2` });
-    if (!r.ok) return say(r.quit ? 'Tu reviendras plus tard.' : 'Oups, il a eu peur et s’éloigne un peu… Réessaie !');
-  }
+  if (!(await confirm(`${cap(art)} ! Veux-tu l’apprivoiser ? Réussis 3 problèmes pour gagner sa confiance.`, 'Essayer', 'Plus tard'))) return;
+  const tame = await askSeries(['animaux', 'enigme', pick(['animaux', 'calc', 'recette'])], `Apprivoiser : ${d.name}`);
+  if (!tame.all) return say(tame.quit ? 'Tu reviendras plus tard.' : 'Oups, il a eu peur et s’éloigne un peu… Réessaie !');
   const used = new Set(S.animals.map((a) => a.name));
   const name = d.names.find((n) => !used.has(n)) || `${pick(d.names)} ${S.animals.length + 1}`;
   S.animals.push({ id: 'a' + now().toString(36) + R(10, 99), kind: e.kind, name, fedAt: 0, prod: 0, skip: 0 });
@@ -1082,7 +1100,7 @@ async function brushLoop(a) {
   const verb = a.kind === 'abeilles' ? 'Aider les abeilles' : `Brosser ${a.name}`;
   if (!(await confirm(`${a.name} prépare : ${itemName(d.out).toLowerCase()}. Encore ${fmtTime(aRemaining(a))}. ${verb} pour aller plus vite ? (un calcul)`, 'Oui', 'Plus tard'))) return;
   for (;;) {
-    const r = await askMath({ cat: Math.random() < 0.6 ? 'animaux' : 'calc', title: verb });
+    const r = await askMath({ cat: Math.random() < 0.5 ? 'animaux' : maybeEnigme('calc'), title: verb });
     if (r.quit) return;
     if (r.ok) {
       const rem = Math.max(0, a.prod - ((now() - a.fedAt) * speedMult() + a.skip));
@@ -1203,7 +1221,18 @@ async function ordersPanel() {
         h('div', { class: 'need' }, Object.entries(o.items).map(([k, v]) => h('span', { class: 'ing' + (has(k, v) ? '' : ' miss') }, icon(k), `${Math.min(S.inv[k] || 0, v)}/${v} ${itemName(k)}`))),
         h('div', { class: 'reward' }, coinImg('coin sm'), ` ${o.coins}  ·  ${o.xp} XP`),
         h('div', { class: 'acts' },
-          h('button', { class: 'btn sm', disabled: !can, onclick: () => {
+          h('button', { class: 'btn sm', disabled: !can, onclick: async () => {
+            const lines = Object.entries(o.items).map(([k, v]) => ({ k, v, p: ITEMS[k].sell }));
+            const total = lines.reduce((t, l) => t + l.v * l.p, 0);
+            const bill = {
+              cat: 'argent', u: 'pièces', a: total,
+              q: `${o.who} te demande la facture : ${lines.map((l) => `${qtyName(l.k, l.v)} à ${l.p} pièces`).join(', ')}. Combien ça fait en tout ?`,
+              ex: lines.map((l) => `${l.v} × ${l.p} = ${l.v * l.p}`).join(' ; ') + (lines.length > 1 ? `. Total : ${total} pièces` : ''),
+              hint: 'Multiplie la quantité par le prix pour chaque produit, puis additionne.',
+            };
+            const r = await askMath({ problem: bill, title: 'Facture de la commande' });
+            if (!r.ok) { if (!r.quit) toast('Vérifie ta facture et réessaie !', 'red'); return; }
+            if (!S.orders[i] || S.orders[i] !== o) return;
             for (const [k, v] of Object.entries(o.items)) addItem(k, -v);
             S.coins += o.coins; sfx.coin(); addXP(o.xp);
             S.stats.orders++;
@@ -1283,9 +1312,9 @@ async function onMamie() {
 async function onMailbox() {
   if (S.daily.mail === today()) return say('La boîte aux lettres est vide. Reviens demain pour un nouveau cadeau !');
   await say('Il y a un colis dans la boîte aux lettres ! Il est fermé par un cadenas à calcul.');
-  const cat = pick(['calc', 'frac', 'conv', 'masse', 'argent', 'geo', 'duree']);
-  const r = await askMath({ cat, title: 'Cadeau du jour' });
-  if (r.quit) return;
+  const res = await askSeries(['enigme', pick(['calc', 'frac', 'conv', 'masse', 'argent', 'geo', 'duree'])], 'Cadeau du jour', false);
+  if (res.quit) return;
+  const r = { ok: res.ok >= 1 };
   S.daily.mail = today();
   const seedPool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
   const seed = pick(seedPool.slice(-3));
@@ -1306,17 +1335,26 @@ async function onFountain() {
 }
 async function onOwl() {
   const who = 'Maître Hibou';
-  const opts = ['Réviser un thème', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
+  const opts = ['Réviser un thème (gagne des récompenses)', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
   const k = await choose('Hou hou ! Que veux-tu faire, jeune calculateur ?', opts, who);
   const o = opts[k];
-  if (o === 'Réviser un thème') {
+  if (o && o.startsWith('Réviser')) {
     let cat = null;
     const P = panel('Réviser avec Maître Hibou', (body) => {
-      body.append(h('p', { class: 'note' }, '5 questions sur le thème choisi. Chaque bonne réponse rapporte des pièces.'));
+      body.append(h('div', { class: 'note owl-rewards' },
+        h('b', null, '5 questions sur le thème de ton choix, autant de fois que tu veux :'),
+        h('span', null, '• chaque bonne réponse : des pièces (plus c’est dur, plus ça rapporte)'),
+        h('span', null, '• 3 bonnes réponses : un sachet de graines surprise'),
+        h('span', null, '• 5 sur 5 : gros bonus + engrais'),
+        h('span', null, '• premier 5 sur 5 d’un thème : une étoile d’or et 100 pièces')));
+      const nStars = Object.keys(S.stars).length;
+      body.append(h('p', { class: 'small' }, `Étoiles d’or : ${nStars} / ${Object.keys(CATS).length}`));
       const grid = h('div', { class: 'cats' });
       for (const [k2, label] of Object.entries(CATS)) {
         const m = S.mastery[k2];
-        grid.append(h('button', { class: 'catbtn', onclick: () => { cat = k2; P.close(); } }, h('b', null, label), h('small', null, m ? `${Math.round((m.ok / m.n) * 100)} % réussi` : 'Pas encore essayé')));
+        grid.append(h('button', { class: 'catbtn' + (S.stars[k2] ? ' star' : ''), onclick: () => { cat = k2; P.close(); } },
+          h('b', null, label, S.stars[k2] ? h('span', { class: 'gold' }, ' ★') : null),
+          h('small', null, m ? `${Math.round((m.ok / m.n) * 100)} % réussi` : 'Pas encore essayé')));
       }
       body.append(grid);
     });
@@ -1334,32 +1372,66 @@ async function onOwl() {
   } else if (o === 'Mes progrès') return carnetPanel('progres');
 }
 async function series(cat, n, off, title, mixed) {
-  let score = 0;
-  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux'];
+  let score = 0, won = 0;
+  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme', 'enigme'];
   for (let i = 0; i < n; i++) {
     const c = mixed ? pick(pool) : cat;
-    const r = await askMath({ cat: c, d: diffFor(c, off), title: `${title} · ${i + 1}/${n}` });
+    const d = diffFor(c, off);
+    const r = await askMath({ cat: c, d, title: `${title} · ${i + 1}/${n}` });
     if (r.quit) return i === 0 ? null : score;
-    if (r.ok && r.first) { score++; S.coins += 3 + diffFor(c); }
-    else if (r.ok) S.coins += 1;
+    const gain = r.ok ? (r.first ? 5 + 3 * d : 2) : 0;
+    if (r.ok && r.first) score++;
+    if (gain) { won += gain; addCoins(gain); }
     updateHud();
   }
-  if (!mixed) {
-    addXP(score * 2);
-    await celebrate({ title: `${score}/${n}`, lines: [score === n ? 'Parfait ! Tu maîtrises ce thème.' : score >= 3 ? 'Très bien ! Encore un peu d’entraînement.' : 'Courage ! Chaque erreur t’aide à apprendre.'] });
-  }
+  if (!mixed) await reviewRewards(cat, score, n, won);
   return score;
+}
+// What a revision with Maître Hibou brings: coins for each right answer, a surprise seed bag from 3/5,
+// a big bonus for 5/5, and a gold star the first time a theme is done perfectly.
+async function reviewRewards(cat, score, n, won) {
+  const lines = [`+${won} pièces gagnées pendant la révision`];
+  const icons = [A.coinURL()];
+  const xp = score * 5;
+  addXP(xp);
+  lines.push(`+${xp} XP`);
+  if (score >= 3) {
+    const pool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
+    let seed = pick(pool.slice(-4)), q = R(2, 3);
+    if (score === n && S.lvl >= 8 && Math.random() < 0.15) { seed = pick(['melon', 'lune']); q = 1; }
+    addItem('graine:' + seed, q);
+    lines.push(`Sachet surprise : ${q} × ${CROPS[seed].seedName.toLowerCase()}`);
+    icons.push(A.iconURL('graine:' + seed));
+  }
+  if (score === n) {
+    const bonus = 40 + S.lvl * 8;
+    S.coins += bonus; addItem('engrais', 1);
+    S.stats.perfectReviews = (S.stats.perfectReviews || 0) + 1;
+    lines.push(`Sans faute ! Bonus : +${bonus} pièces et 1 engrais`);
+    icons.push(A.iconURL('engrais'));
+    if (!S.stars[cat]) {
+      S.stars[cat] = now();
+      S.coins += 100;
+      lines.push(`Nouvelle étoile d’or en ${CATS[cat]} ! +100 pièces`);
+    }
+  }
+  sfx.coin();
+  afterChange();
+  await celebrate({
+    title: score === n ? 'Parfait ! 5/5' : `${score}/${n}`,
+    lines: [score === n ? 'Tu maîtrises ce thème !' : score >= 3 ? 'Très bien ! Encore un peu d’entraînement.' : 'Courage ! Chaque erreur t’aide à apprendre.', ...lines],
+    icons,
+    foot: score < n ? 'Réussis 5/5 pour gagner le gros bonus et une étoile d’or.' : null,
+  });
 }
 
 // ---- Gates
 async function onBigRock() {
   if (S.lvl < 3) return say(['Un énorme rocher bloque le chemin de la forêt.', 'Reviens au niveau 3 : tu seras assez fort pour le casser ! (Tu es niveau ' + S.lvl + '.)']);
-  if (!(await confirm('Un énorme rocher… Tu es assez fort pour le casser ! Il faut réussir 2 calculs de suite.', 'Casser le rocher', 'Plus tard'))) return;
-  for (let i = 0; i < 2; i++) {
-    const r = await askMath({ cat: 'mul', title: `Casser le rocher · ${i + 1}/2` });
-    if (!r.ok) return say('Le rocher tient bon. Réessaie, tu vas y arriver !');
-    sfx.hit();
-  }
+  if (!(await confirm('Un énorme rocher… Tu es assez fort pour le casser ! Il faut réussir 3 problèmes de suite.', 'Casser le rocher', 'Plus tard'))) return;
+  const rk = await askSeries(['mul', 'mul', 'enigme'], 'Casser le rocher');
+  if (!rk.all) return say('Le rocher tient bon. Réessaie, tu vas y arriver !');
+  sfx.hit();
   S.flags.rock = true; applyWorldFlags();
   addXP(20);
   await celebrate({ title: 'Le chemin est ouvert !', lines: ['La Forêt des Murmures t’attend à l’ouest.', 'Tu y trouveras du bois, des pierres, des coffres… et des créatures !'] });
@@ -1368,8 +1440,8 @@ async function onBridge() {
   if (S.lvl < 6) return say(['Le pont du lac est cassé.', 'Au niveau 6, tu pourras le réparer avec 10 bois et 5 pierres. (Tu es niveau ' + S.lvl + '.)']);
   if (!has('bois', 10) || !has('pierre', 5)) return say([`Pour réparer le pont, il faut 10 bois et 5 pierres.`, `Tu as ${S.inv.bois || 0} bois et ${S.inv.pierre || 0} pierres. La forêt en est pleine !`]);
   if (!(await confirm('Réparer le pont avec 10 bois et 5 pierres ? Il faut calculer les planches !', 'Réparer', 'Plus tard'))) return;
-  const r = await askMath({ cat: 'longueur', title: 'Réparer le pont' });
-  if (!r.ok) return say('Les planches ne sont pas bien coupées… Réessaie !');
+  const r = await askSeries(['longueur', 'enigme'], 'Réparer le pont');
+  if (!r.all) return say('Les planches ne sont pas bien coupées… Réessaie !');
   addItem('bois', -10); addItem('pierre', -5);
   S.flags.bridge = true; applyWorldFlags();
   addXP(30);
@@ -1380,12 +1452,9 @@ async function onGuardian() {
   npcDir.guardian = 'left';
   if (S.flags.guardian) return say(pick(['Les cristaux brillent près des rochers. Bonne chance là-haut !', 'Les créatures de la montagne sont coriaces. Garde ta série !']), who);
   if (S.lvl < 10) return say(['Halte ! Le Mont Givré est dangereux.', `Seuls les calculateurs de niveau 10 peuvent passer. Tu es niveau ${S.lvl}. Reviens plus tard !`], who);
-  if (!(await confirm('Tu veux passer ? Réussis 3 problèmes difficiles de suite !', 'J’accepte le défi', 'Plus tard', who))) return;
-  const cats = ['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo'])];
-  for (let i = 0; i < 3; i++) {
-    const r = await askMath({ cat: cats[i], d: diffFor(cats[i], 1), title: `Défi du gardien · ${i + 1}/3` });
-    if (!r.ok) return say('Pas encore… Entraîne-toi et reviens me voir !', who);
-  }
+  if (!(await confirm('Tu veux passer ? Réussis 4 problèmes difficiles de suite !', 'J’accepte le défi', 'Plus tard', who))) return;
+  const gd = await askSeries(['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo']), 'enigme'], 'Défi du gardien', true, 1);
+  if (!gd.all) return say('Pas encore… Entraîne-toi et reviens me voir !', who);
   S.flags.guardian = true; applyWorldFlags();
   addXP(60);
   await say('Impressionnant ! Tu peux passer. Le Mont Givré est à toi.', who);
@@ -1397,12 +1466,10 @@ async function onAncient() {
   const need = first ? 3 : 2;
   if (!first && S.daily.arbre === today()) return say('Hmmm… Je t’ai déjà donné une graine aujourd’hui. Reviens demain, petit jardinier.', who);
   if (!has('cristal', need)) return say([first ? 'Hmmm… Un jeune jardinier ! Apporte-moi 3 cristaux de la montagne…' : 'Apporte-moi 2 cristaux…', '…et je te donnerai une Graine dorée.'], who);
-  if (!(await confirm(`Donner ${need} cristaux au Vieil Arbre ? Il te posera ${first ? 3 : 1} énigme${first ? 's' : ''}.`, 'Donner', 'Plus tard', who))) return;
-  for (let i = 0; i < (first ? 3 : 1); i++) {
-    const c = pick(['frac', 'masse', 'contenance', 'duree', 'argent', 'geo', 'recette']);
-    const r = await askMath({ cat: c, d: diffFor(c, 1), title: `Énigme du Vieil Arbre · ${i + 1}` });
-    if (!r.ok) return say('Hmmm… pas tout à fait. Garde tes cristaux et reviens quand tu veux.', who);
-  }
+  if (!(await confirm(`Donner ${need} cristaux au Vieil Arbre ? Il te posera ${first ? 3 : 2} énigmes.`, 'Donner', 'Plus tard', who))) return;
+  const steps = first ? ['enigme', pick(['frac', 'masse', 'contenance', 'duree', 'argent', 'geo', 'recette']), 'enigme'] : ['enigme', pick(['frac', 'argent', 'recette'])];
+  const tr = await askSeries(steps, 'Énigme du Vieil Arbre', true, 1);
+  if (!tr.all) return say('Hmmm… pas tout à fait. Garde tes cristaux et reviens quand tu veux.', who);
   addItem('cristal', -need);
   addItem('graine:doree', 1);
   S.flags.arbre = true; S.daily.arbre = today();
@@ -1412,9 +1479,9 @@ async function onAncient() {
 // ---- Resources
 async function onTree(o) {
   if (respawning(o)) return say(`Une souche. L’arbre repousse… (encore ${fmtTime(S.res[o.id] - now())})`);
-  const r = await askMath({ cat: 'add', title: 'Couper du bois' });
+  const r = await askSeries(['add', maybeEnigme('add', 0.4)], 'Couper du bois', false);
   if (!r.ok) return;
-  const n = 2 + (S.tools.hache ? 1 : 0) + (r.first ? 0 : -1);
+  const n = r.ok + (r.firsts === 2 ? 1 : 0) + (S.tools.hache ? 1 : 0);
   addItem('bois', n); S.stats.bois += n;
   S.res[o.id] = now() + 180000;
   sfx.hit(); addXP(3);
@@ -1422,9 +1489,9 @@ async function onTree(o) {
 }
 async function onRock(o) {
   if (respawning(o)) return say('Il ne reste que des cailloux. Une nouvelle pierre apparaîtra bientôt.');
-  const r = await askMath({ cat: 'mul', title: 'Casser la pierre' });
+  const r = await askSeries(['mul', maybeEnigme('mul', 0.4)], 'Casser la pierre', false);
   if (!r.ok) return;
-  const n = 2 + (S.tools.pioche ? 1 : 0) + (r.first ? 0 : -1);
+  const n = r.ok + (r.firsts === 2 ? 1 : 0) + (S.tools.pioche ? 1 : 0);
   addItem('pierre', n); S.stats.pierre += n;
   S.res[o.id] = now() + 200000;
   sfx.hit(); addXP(3);
@@ -1433,8 +1500,8 @@ async function onRock(o) {
 async function onCrystal(o) {
   if (respawning(o)) return say(`Le cristal repousse lentement… (encore ${fmtTime(S.res[o.id] - now())})`);
   const cat = pick(['frac', 'conv', 'masse', 'contenance', 'geo']);
-  const r = await askMath({ cat, d: diffFor(cat, 1), title: 'Récolter un cristal' });
-  if (!r.ok) return;
+  const r = await askSeries([{ cat, d: diffFor(cat, 1) }, 'enigme'], 'Récolter un cristal');
+  if (!r.all) return;
   addItem('cristal', 1); S.stats.cristal++;
   S.res[o.id] = now() + 360000;
   sfx.harvest(); addXP(10);
@@ -1450,9 +1517,9 @@ async function onForage(o) {
 }
 async function onChest(o) {
   if (S.chests[o.chest]) return say('Le coffre est vide.');
-  await say('Un coffre ! Il est fermé par une serrure à fractions.');
-  const r = await askMath({ cat: 'frac', title: 'Ouvrir le coffre' });
-  if (!r.ok) return say(r.quit ? 'Tu reviendras plus tard.' : 'La serrure ne s’ouvre pas… Réessaie !');
+  await say('Un coffre ! Il a deux serrures : une à fractions et une à énigme.');
+  const r = await askSeries(['frac', 'enigme'], 'Ouvrir le coffre');
+  if (!r.all) return say(r.quit ? 'Tu reviendras plus tard.' : 'La serrure ne s’ouvre pas… Réessaie !');
   const c = CHESTS[o.chest];
   S.chests[o.chest] = true;
   S.coins += c.coins;
@@ -1462,10 +1529,11 @@ async function onChest(o) {
 }
 async function onFish() {
   if (!S.tools.canne) return say('Il te faudrait une canne à pêche. Tom le pêcheur en a peut-être une ?');
-  const r = await askMath({ cat: 'conv', title: 'Pêcher' });
+  const r = await askSeries(['conv', maybeEnigme('conv')], 'Pêcher', false);
   if (r.quit) return;
   if (!r.ok) return say('Le poisson s’est échappé…');
-  const table = [['gardon', 40], ['perche', 30], ['truite', S.lvl >= 7 ? 18 : 0], ['brochet', S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && r.first ? 4 : 0]];
+  const big = r.ok === 2;
+  const table = [['gardon', 40], ['perche', 30], ['truite', big && S.lvl >= 7 ? 18 : 0], ['brochet', big && S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && r.firsts === 2 ? 4 : 0]];
   const tot = table.reduce((s, [, w]) => s + w, 0);
   let x = Math.random() * tot, fish = 'gardon';
   for (const [id, w] of table) { if ((x -= w) < 0) { fish = id; break; } }
@@ -1654,11 +1722,12 @@ async function battle(zone, id) {
     h('div', { class: 'b-me' }, h('div', { class: 'b-plat' }), meCv), meInfo);
   const bottom = h('div', { class: 'b-bottom' });
   const root = h('div', { class: 'layer battle' }, field, bottom);
-  const L = pushLayer(root, { onKey: () => false });
-  let hp = c.hp, energy = 3;
+  const L = pushLayer(root, { onKey: () => false, battle: true });
+  let hp = c.hp + 1, energy = 3;
+  const maxHp = hp;
   const paint = () => {
-    hpBar.style.width = `${(hp / c.hp) * 100}%`;
-    hpBar.className = hp / c.hp <= 0.34 ? 'low' : hp / c.hp <= 0.67 ? 'mid' : '';
+    hpBar.style.width = `${(hp / maxHp) * 100}%`;
+    hpBar.className = hp / maxHp <= 0.34 ? 'low' : hp / maxHp <= 0.67 ? 'mid' : '';
     hearts.innerHTML = '';
     for (let i = 0; i < 3; i++) hearts.append(h('b', { class: i < energy ? 'on' : '' }, '♥'));
   };
@@ -1862,6 +1931,7 @@ function drawGuide(t) {
 const KEYDIR = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', z: 'up', q: 'left', W: 'up', S: 'down', A: 'left', D: 'right' };
 function pressA() {
   const top = layers[layers.length - 1];
+  if (activeMath && (!top || top.math || top.battle)) { activeMath.a(); return; }
   if (top) { if (top.onA) top.onA(); return; }
   if (mode === 'world' && !busy && !pl.moving) interact();
 }

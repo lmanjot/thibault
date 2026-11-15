@@ -247,5 +247,6 @@ export const BADGES = [
   { id: 'chef', name: 'Badge Chef', desc: 'Livrer 20 commandes', c: (s) => s.stats.orders >= 20, color: '#f08030' },
   { id: 'eleveur', name: 'Badge Éleveur', desc: 'Avoir 6 animaux à la ferme', c: (s) => (s.animals || []).length >= 6, color: '#c8803c' },
   { id: 'inventeur', name: 'Badge Inventeur', desc: 'Découvrir 4 recettes secrètes', c: (s) => Object.keys(s.found || {}).length >= 4, color: '#a060e0' },
+  { id: 'hibou', name: 'Badge Hibou', desc: 'Réussir 5 révisions sans faute avec Maître Hibou', c: (s) => (s.stats.perfectReviews || 0) >= 5, color: '#a0703c' },
   { id: 'legende', name: 'Badge Légende', desc: 'Récolter un Fruit d’or', c: (s) => (s.stats.harvested.doree || 0) >= 1, color: '#ffd700' },
 ];
