@@ -466,3 +466,15 @@ button.row:hover { background: #f1f4ff; }
 .defi.gold { border-color: #e0b020; background: #fff9e0; box-shadow: 0 3px 0 #c89818; }
 .defi.locked { opacity: 0.45; }
 .defi.locked .dstars { color: var(--ink-soft); font-size: 12px; }
+
+/* ---------- parent space ---------- */
+.pcats { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 12px; }
+.prow { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(110px, 1fr) auto auto; gap: 6px 10px; align-items: center; padding: 8px 6px; border-bottom: 2px dotted #d4d6e2; }
+.prow.off { opacity: 0.5; }
+.pon { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.pon input { width: 22px; height: 22px; }
+.pstat { font-family: var(--read); color: var(--ink-soft); font-size: 13px; }
+.psel { font-family: var(--read); font-size: 15px; padding: 6px 8px; border: 2px solid #8a8ca0; border-radius: 8px; background: #fff; }
+.pex { grid-column: 1 / -1; font-family: var(--read); font-size: 15px; background: #eef4ff; border-radius: 8px; padding: 6px 10px; }
+.pex i { color: var(--leaf-d); font-style: normal; font-weight: 700; }
+@media (max-width: 560px) { .prow { grid-template-columns: 1fr auto; } .pstat { grid-column: 1 / -1; } }

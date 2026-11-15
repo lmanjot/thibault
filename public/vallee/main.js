@@ -40,7 +40,7 @@ function newState() {
     streak: 0, mastery: {}, objDone: {}, daily: {},
     animals: [], barnSlots: 4, found: {}, stars: {}, defis: {},
     pos: { ...START },
-    settings: { sound: true, grade: 8, diff: 0 },
+    settings: { sound: true, grade: 8, diff: 0, cats: {}, pin: '' },
   };
 }
 function migrate(s) {
@@ -343,7 +343,22 @@ function baseD() {
   return d + (S.settings.grade === 8 ? 0.5 : 0) + (S.settings.diff || 0);
 }
 const mKey = (cat) => (cat === 'add' || cat === 'mul' ? 'calc' : cat);
+/** Level fixed by the parents for this theme (1-5), or null when the game adapts by itself. */
+function fixedLevel(cat) {
+  const c = (S.settings.cats || {})[mKey(cat)];
+  return c && typeof c.lvl === 'number' ? c.lvl : null;
+}
+const themeOn = (cat) => !((S.settings.cats || {})[mKey(cat)] || {}).off;
+/** The theme to ask: the requested one, or another switched-on theme if the parents turned it off. */
+function themeFor(cat) {
+  if (!cat || themeOn(cat)) return cat;
+  const on = Object.keys(CATS).filter(themeOn);
+  if (!on.length) return cat;
+  return on.includes('calc') && Math.random() < 0.5 ? 'calc' : pick(on);
+}
 function diffFor(cat, off = 0) {
+  const fx = fixedLevel(cat);
+  if (fx) return fx;
   const m = S.mastery[mKey(cat)];
   let adj = 0;
   if (!m || m.n < 3) adj = -1; // warm-up: the first problems of a new theme are a bit easier
@@ -592,8 +607,9 @@ const PRAISE = ['Bravo !', 'Super !', 'Génial !', 'Excellent !', 'Parfait !', '
  */
 function askMath(opts) {
   return new Promise((resolve) => {
-    const dUsed = opts.d || diffFor(opts.cat || 'calc');
-    const p = opts.problem || makeProblem(opts.cat, dUsed);
+    const cat = opts.problem ? opts.problem.cat : themeFor(opts.cat || 'calc');
+    const dUsed = fixedLevel(cat) || (cat === opts.cat && opts.d) || diffFor(cat);
+    const p = opts.problem || makeProblem(cat, dUsed);
     window.__lastP = p; // read by the test helpers in the console
     let tries = 0, input = '', locked = false;
     const hintCost = 5 + 5 * dUsed;
@@ -1378,6 +1394,7 @@ async function onOwl() {
       body.append(h('p', { class: 'small' }, `Étoiles d’or : ${nStars} / ${Object.keys(CATS).length}`));
       const grid = h('div', { class: 'cats' });
       for (const [k2, label] of Object.entries(CATS)) {
+        if (!themeOn(k2)) continue;
         const m = S.mastery[k2];
         grid.append(h('button', { class: 'catbtn' + (S.stars[k2] ? ' star' : ''), onclick: () => { cat = k2; P.close(); } },
           h('b', null, label, S.stars[k2] ? h('span', { class: 'gold' }, ' ★') : null),
@@ -1701,12 +1718,7 @@ async function optionsPanel() {
   await panel('Options', (body, api) => {
     body.append(
       h('div', { class: 'opt' }, h('b', null, 'Son'), h('button', { class: 'btn sm' + (S.settings.sound ? '' : ' ghost'), onclick: () => { S.settings.sound = !S.settings.sound; save(); api.refresh(); } }, S.settings.sound ? 'Activé' : 'Coupé')),
-      h('div', { class: 'opt' }, h('b', null, 'Classe'), h('div', null,
-        h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, '7H'), ' ',
-        h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, '8H'))),
-      h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté des calculs'),
-        h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
-        h('small', null, `Niveau actuel des calculs : ${clamp(Math.round(baseD()), 1, 5)} sur 5. Il monte doucement avec ton niveau et s’adapte à tes réussites dans chaque thème.`)),
+      h('div', { class: 'opt' }, h('b', null, 'Espace parents'), h('button', { class: 'btn sm', onclick: () => { parentPanel(); } }, 'Ouvrir')),
       h('div', { class: 'opt' }, h('b', null, 'Prénom'), h('input', { class: 'name', value: S.name, maxlength: 14, onchange: (e) => { S.name = e.target.value.trim() || 'Thibault'; save(); } })),
       syncSection(api),
       h('button', { class: 'btn ghost danger', onclick: async () => {
@@ -1716,6 +1728,65 @@ async function optionsPanel() {
           localStorage.removeItem(SAVE_KEY); location.reload();
         }
       } }, 'Recommencer une nouvelle partie'));
+  }).done;
+}
+
+// ---- Parent space (4-digit code): class, overall difficulty, and a level or on/off per theme
+async function askPin() {
+  const creating = !S.settings.pin;
+  return new Promise((resolve) => {
+    let input, ok = false;
+    const msg = h('p', { class: 'small codemsg' });
+    const go = () => {
+      const v = String(input.value).replace(/\D/g, '');
+      if (v.length !== 4) { msg.textContent = 'Le code a 4 chiffres.'; return; }
+      if (creating) { S.settings.pin = v; save(); ok = true; P.close(); resolve(true); return; }
+      if (v === S.settings.pin) { ok = true; P.close(); resolve(true); return; }
+      msg.textContent = 'Ce n’est pas le bon code.'; input.value = '';
+    };
+    const P = panel('Espace parents', (body) => {
+      input = h('input', { class: 'codein', type: 'password', inputmode: 'numeric', maxlength: 4, autocomplete: 'off', placeholder: '••••', onkeydown: (e) => { if (e.key === 'Enter') go(); } });
+      body.append(h('p', { class: 'small' }, creating ? 'Choisissez un code parent à 4 chiffres. Il protège les réglages de difficulté.' : 'Code parent (4 chiffres) :'),
+        input, h('button', { class: 'btn big', onclick: go }, creating ? 'Créer le code' : 'Entrer'), msg);
+      setTimeout(() => input.focus(), 50);
+    });
+    P.done.then(() => { if (!ok) resolve(false); });
+  });
+}
+async function parentPanel() {
+  if (!(await askPin())) return;
+  S.settings.cats = S.settings.cats || {};
+  const examples = {};
+  await panel('Espace parents', (body, api) => {
+    body.append(
+      h('div', { class: 'opt' }, h('b', null, 'Classe'), h('div', null,
+        h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, '7H'), ' ',
+        h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, '8H'))),
+      h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté générale'),
+        h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
+        h('small', null, `Niveau de base actuel : ${clamp(Math.round(baseD()), 1, 5)} sur 5 (selon le niveau du joueur, la classe et ce réglage). En « Auto », chaque thème s’adapte ensuite aux réussites.`)),
+      h('h3', null, 'Par thème'),
+      h('p', { class: 'small' }, 'Fixez un niveau de 1 (très facile) à 5 (très difficile), ou laissez « Auto ». Décochez un thème pas encore vu en classe : il ne sera plus demandé.'));
+    const list = h('div', { class: 'pcats' });
+    for (const [k, label] of Object.entries(CATS)) {
+      const c = S.settings.cats[k] || {};
+      const mm = S.mastery[k];
+      const now_ = fixedLevel(k) || diffFor(k);
+      const setLvl = (v) => { S.settings.cats[k] = { ...c, lvl: v === 'auto' ? undefined : Number(v) }; delete examples[k]; save(); api.refresh(); };
+      const sel = h('select', { class: 'psel', onchange: (e) => setLvl(e.target.value) },
+        h('option', { value: 'auto', selected: c.lvl == null }, `Auto (${now_})`),
+        [1, 2, 3, 4, 5].map((v) => h('option', { value: v, selected: c.lvl === v }, `Niveau ${v}`)));
+      list.append(h('div', { class: 'prow' + (c.off ? ' off' : '') },
+        h('label', { class: 'pon' }, h('input', { type: 'checkbox', checked: !c.off, onchange: (e) => { S.settings.cats[k] = { ...c, off: !e.target.checked }; save(); api.refresh(); } }), h('b', null, label)),
+        h('small', { class: 'pstat' }, mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé'),
+        sel,
+        h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || diffFor(k)); api.refresh(); } }, 'Exemple'),
+        examples[k] ? h('div', { class: 'pex', html: renderQ(examples[k].q) + ` <i>→ ${examples[k].choices ? examples[k].a : fmt(examples[k].a) + ' ' + examples[k].u}</i>` }) : null));
+    }
+    body.append(list,
+      h('div', { class: 'sync-acts' },
+        h('button', { class: 'btn sm ghost', onclick: () => { S.settings.cats = {}; save(); api.refresh(); } }, 'Tout remettre en Auto'),
+        h('button', { class: 'btn sm ghost', onclick: () => { S.settings.pin = ''; save(); toast('Code parent effacé : un nouveau sera demandé la prochaine fois.', 'gold'); api.close(); } }, 'Changer le code parent')));
   }).done;
 }
 
@@ -2038,7 +2109,7 @@ function pressB() {
   if (mode === 'world' && !busy) openMenu();
 }
 addEventListener('keydown', (e) => {
-  if (e.target && e.target.tagName === 'INPUT') return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   const top = layers[layers.length - 1];
   if (top) {
     if (top.onKey && top.onKey(e)) e.preventDefault();
