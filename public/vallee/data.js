@@ -27,6 +27,24 @@ export const PRODUCTS = {
   sauce:           { name: 'Sauce tomate', sell: 85, shape: 'jar', c1: '#d82818', c2: '#f8f8f8' },
   confiture:       { name: 'Confiture de fraises', sell: 120, shape: 'jar', c1: '#c81838', c2: '#f8f8f8' },
   jusPomme:        { name: 'Jus de pomme', sell: 210, shape: 'bottle', c1: '#f0d050', c2: '#e8f0f0' },
+  // from animals
+  oeuf:            { name: 'Œuf', sell: 12, shape: 'egg', c1: '#fff4e0', c2: '#e8d4b0' },
+  lait:            { name: 'Lait', sell: 30, shape: 'milk', c1: '#ffffff', c2: '#5a8ad8' },
+  laitChevre:      { name: 'Lait de chèvre', sell: 40, shape: 'milk', c1: '#fffbea', c2: '#58a848' },
+  laine:           { name: 'Laine', sell: 70, shape: 'wool', c1: '#f6f2ea', c2: '#d8d0c0' },
+  miel:            { name: 'Miel', sell: 75, shape: 'jar', c1: '#f0a820', c2: '#fff4c8' },
+  truffe:          { name: 'Truffe', sell: 280, shape: 'truffle', c1: '#4a3428', c2: '#7a5a48' },
+  // from the Dairy and secret recipes
+  fromage:         { name: 'Fromage', sell: 90, shape: 'cheese', c1: '#f8d860', c2: '#e0b030' },
+  fromageChevre:   { name: 'Fromage de chèvre', sell: 120, shape: 'cheese', c1: '#fbf6e8', c2: '#d8ccb0' },
+  yaourt:          { name: 'Yaourt au miel', sell: 150, shape: 'jar', c1: '#fff8f0', c2: '#f0a820' },
+  glace:           { name: 'Glace à la fraise', sell: 130, shape: 'icecream', c1: '#f8a8c0', c2: '#e8b878' },
+  crepes:          { name: 'Crêpes', sell: 110, shape: 'crepe', c1: '#f0c870', c2: '#c88a38' },
+  gateau:          { name: 'Gâteau d’anniversaire', sell: 220, shape: 'cake', c1: '#fff0f4', c2: '#f06090' },
+  painEpices:      { name: 'Pain d’épices', sell: 190, shape: 'loaf', c1: '#a86030', c2: '#d89850' },
+  quiche:          { name: 'Quiche', sell: 300, shape: 'pie', c1: '#f8d860', c2: '#d8a050' },
+  tartePommes:     { name: 'Tarte aux pommes', sell: 230, shape: 'pie', c1: '#e8c050', c2: '#d8a050' },
+  omelette:        { name: 'Omelette aux truffes', sell: 560, shape: 'omelette', c1: '#f8d848', c2: '#4a3428' },
 };
 
 export const RESOURCES = {
@@ -60,9 +78,21 @@ export const RECIPES = {
   ],
   four: [
     { out: 'pain', in: { farine: 1 }, lvl: 7, theme: 'duree' },
+    { out: 'crepes', in: { farine: 1, oeuf: 2 }, lvl: 7, theme: 'recette', secret: true, hint: 'Fines et rondes : de la farine… et beaucoup d’œufs.' },
+    { out: 'gateau', in: { farine: 1, oeuf: 1, lait: 1 }, lvl: 7, theme: 'recette', secret: true, hint: 'Pour un anniversaire : farine, œuf, et quelque chose de blanc que donne la vache.' },
+    { out: 'tartePommes', in: { farine: 1, pomme: 2 }, lvl: 7, theme: 'recette', secret: true, hint: 'Une tarte avec le fruit des pommiers.' },
+    { out: 'painEpices', in: { farine: 1, miel: 1 }, lvl: 7, theme: 'masse', secret: true, hint: 'Un pain brun et sucré… les abeilles t’aideront.' },
+    { out: 'quiche', in: { farine: 1, oeuf: 1, fromage: 1 }, lvl: 7, theme: 'recette', secret: true, hint: 'Une tarte salée avec un œuf et quelque chose qui vient de la Laiterie.' },
+    { out: 'omelette', in: { oeuf: 2, truffe: 1 }, lvl: 7, theme: 'argent', secret: true, hint: 'Des œufs… et le trésor que le cochon déniche dans la forêt.' },
     { out: 'tarteFraise', in: { farine: 1, fraise: 3 }, lvl: 8, theme: 'recette' },
     { out: 'tarteCitrouille', in: { farine: 1, citrouille: 1 }, lvl: 11, theme: 'recette' },
     { out: 'pizza', in: { farine: 1, tomate: 2, huile: 1 }, lvl: 13, theme: 'argent' },
+  ],
+  laiterie: [
+    { out: 'fromage', in: { lait: 2 }, lvl: 8, theme: 'contenance' },
+    { out: 'fromageChevre', in: { laitChevre: 2 }, lvl: 8, theme: 'masse' },
+    { out: 'yaourt', in: { lait: 1, miel: 1 }, lvl: 8, theme: 'contenance', secret: true, hint: 'Du lait et le trésor sucré des abeilles.' },
+    { out: 'glace', in: { lait: 1, fraise: 2 }, lvl: 8, theme: 'recette', secret: true, hint: 'Froide et sucrée : du lait et des fruits rouges.' },
   ],
   pressoir: [
     { out: 'jusCarotte', in: { carotte: 4 }, lvl: 10, theme: 'contenance' },
@@ -73,8 +103,10 @@ export const RECIPES = {
 };
 
 export const BUILDINGS = {
+  etable:   { name: 'Étable', lvl: 3, cost: { coins: 120, bois: 10, pierre: 4 }, desc: 'Une maison pour tes animaux, avec un enclos.' },
   moulin:   { name: 'Moulin', lvl: 4, cost: { coins: 150, bois: 8, pierre: 4 }, desc: 'Transforme le blé en farine.' },
   four:     { name: 'Boulangerie', lvl: 7, cost: { coins: 400, bois: 15, pierre: 12 }, desc: 'Cuit le pain, les tartes et les pizzas.' },
+  laiterie: { name: 'Laiterie', lvl: 8, cost: { coins: 600, bois: 15, pierre: 10 }, desc: 'Transforme le lait en fromage… et cache des recettes secrètes.' },
   pressoir: { name: 'Pressoir', lvl: 10, cost: { coins: 800, bois: 20, pierre: 15 }, desc: 'Fait des jus, de la sauce et de la confiture.' },
   serre:    { name: 'Serre magique', lvl: 15, cost: { coins: 2500, bois: 30, pierre: 30, cristal: 5 }, desc: 'Toutes tes plantes poussent 50 % plus vite.' },
 };
@@ -140,6 +172,18 @@ export const CREATURES = {
 };
 export const CREATURE_ORDER = Object.keys(CREATURES);
 
+// Farm animals: caught in the wild, fed with crops, then they produce. foods: any one of these meals.
+export const ANIMALS = {
+  poule:    { name: 'Poule', lvl: 3, foods: [{ ble: 1 }, { mais: 1 }], out: 'oeuf', qty: [2, 3], prod: 60, xp: 4, names: ['Cocotte', 'Plume', 'Paprika', 'Coquette', 'Picorette'] },
+  vache:    { name: 'Vache', lvl: 6, foods: [{ mais: 2 }, { ble: 3 }], out: 'lait', qty: [2, 3], prod: 120, xp: 8, names: ['Marguerite', 'Noisette', 'Caramel', 'Praline'] },
+  chevre:   { name: 'Chèvre', lvl: 8, foods: [{ carotte: 2 }], out: 'laitChevre', qty: [2, 2], prod: 150, xp: 10, names: ['Biquette', 'Capucine', 'Blanchette'] },
+  mouton:   { name: 'Mouton', lvl: 9, foods: [{ ble: 2 }, { mais: 1 }], out: 'laine', qty: [1, 2], prod: 220, xp: 12, names: ['Frisette', 'Nuage', 'Bouclette', 'Flocon'] },
+  abeilles: { name: 'Ruche', lvl: 10, foods: [{ tournesol: 1 }], out: 'miel', qty: [2, 3], prod: 280, xp: 14, names: ['Reine Bzz', 'Reine Dorée', 'Reine Fleurette'] },
+  cochon:   { name: 'Cochon', lvl: 12, foods: [{ citrouille: 1 }, { pomme: 2 }], out: 'truffe', qty: [1, 1], prod: 360, xp: 20, names: ['Rosette', 'Groin-Groin', 'Pistache'] },
+};
+// Each purchase gives 2 more places in the barn (4 at the start).
+export const BARN_BUYS = [{ price: 200, lvl: 5 }, { price: 450, lvl: 8 }, { price: 900, lvl: 11 }];
+
 // One-time treasure chests in the world.
 export const CHESTS = {
   maison:  { coins: 30, items: { 'graine:carotte': 3 } },
@@ -154,33 +198,44 @@ export const CHESTS = {
 
 export const CUSTOMERS = ['Mme Lapin', 'M. Hérisson', 'Léa', 'Le chef Marmotte', 'Tom le pêcheur', 'Mamie Rose', 'Zoé', 'M. Blaireau', 'La maîtresse', 'Le facteur'];
 
-// Guided goals shown at the top of the screen. target = object to point at.
+// Guided goals shown at the top of the screen, done in order. target = object to point at.
 export const OBJECTIVES = [
-  { t: 'Parle à Mamie Rose, à côté de ta maison', c: (s) => s.flags.intro, target: 'mamie', r: { coins: 0, xp: 0 } },
-  { t: 'Plante tes 4 graines de radis dans le potager', c: (s) => s.stats.planted >= 4, target: 'plot', r: { coins: 10, xp: 10 } },
-  { t: 'Arrose une plante en réussissant un calcul', c: (s) => s.stats.watered >= 1, target: 'plot', r: { coins: 5, xp: 5 } },
-  { t: 'Récolte tes radis quand ils sont mûrs', c: (s) => s.stats.harvests >= 1, target: 'plot', r: { coins: 10, xp: 10 } },
-  { t: 'Vends des légumes dans la caisse devant ta maison', c: (s) => s.stats.sold >= 1, target: 'caisse', r: { coins: 10, xp: 10 } },
-  { t: 'Achète des graines à la Boutique du village (au nord)', c: (s) => s.stats.bought >= 1, target: 'shop', r: { coins: 15, xp: 15 } },
-  { t: 'Livre une commande au tableau du village', c: (s) => s.stats.orders >= 1, target: 'board', r: { coins: 20, xp: 20 } },
-  { t: 'Atteins le niveau 3 et casse le gros rocher à l’ouest', c: (s) => s.flags.rock, target: 'bigrock', r: { coins: 30, xp: 30 } },
-  { t: 'Dans la forêt : coupe un arbre et casse une pierre', c: (s) => s.stats.bois > 0 && s.stats.pierre > 0, target: 'forest', r: { coins: 20, xp: 20 } },
-  { t: 'Gagne un défi contre une créature des hautes herbes', c: (s) => Object.keys(s.creatures).length >= 1, r: { coins: 20, xp: 20 } },
-  { t: 'Construis le Moulin au village (niveau 4)', c: (s) => s.built.moulin, target: 'moulin', r: { coins: 40, xp: 40 } },
-  { t: 'Fabrique ta première farine au Moulin', c: (s) => (s.stats.made.farine || 0) >= 1, target: 'moulin', r: { coins: 30, xp: 30 } },
-  { t: 'Répare le pont du lac, à l’est de la ferme (niveau 6)', c: (s) => s.flags.bridge, target: 'brokenbridge', r: { coins: 50, xp: 50 } },
-  { t: 'Pêche un poisson au ponton du lac', c: (s) => s.stats.fish >= 1, target: 'fishspot', r: { coins: 30, xp: 30 } },
-  { t: 'Construis la Boulangerie (niveau 7)', c: (s) => s.built.four, target: 'four', r: { coins: 60, xp: 60 } },
-  { t: 'Cuis ton premier pain', c: (s) => (s.stats.made.pain || 0) >= 1, target: 'four', r: { coins: 40, xp: 40 } },
-  { t: 'Ouvre le passage de la montagne (niveau 10)', c: (s) => s.flags.guardian, target: 'guardian', r: { coins: 80, xp: 80 } },
-  { t: 'Trouve un cristal dans la montagne', c: (s) => s.stats.cristal >= 1, target: 'crystal', r: { coins: 50, xp: 50 } },
-  { t: 'Construis le Pressoir (niveau 10)', c: (s) => s.built.pressoir, target: 'pressoir', r: { coins: 80, xp: 80 } },
-  { t: 'Offre 3 cristaux au Vieil Arbre de la forêt (niveau 14)', c: (s) => s.flags.arbre, target: 'ancient', r: { coins: 150, xp: 120 } },
-  { t: 'Construis la Serre magique (niveau 15)', c: (s) => s.built.serre, target: 'serre', r: { coins: 200, xp: 150 } },
-  { t: 'Récolte un Fruit d’or', c: (s) => (s.stats.harvested.doree || 0) >= 1, target: 'plot', r: { coins: 300, xp: 200 } },
-  { t: 'Deviens ami avec les 11 créatures', c: (s) => Object.keys(s.creatures).length >= 11, r: { coins: 500, xp: 300 } },
-  { t: 'Tu es une légende de la vallée ! Continue à cultiver et à calculer.', c: () => false, r: { coins: 0, xp: 0 } },
+  { id: 'intro', t: 'Parle à Mamie Rose, à côté de ta maison', c: (s) => s.flags.intro, target: 'mamie', r: { coins: 0, xp: 0 } },
+  { id: 'plant', t: 'Plante tes 4 graines de radis dans le potager', c: (s) => s.stats.planted >= 4, target: 'plot', r: { coins: 10, xp: 10 } },
+  { id: 'water', t: 'Arrose une plante en réussissant un calcul', c: (s) => s.stats.watered >= 1, target: 'plot', r: { coins: 5, xp: 5 } },
+  { id: 'harvest', t: 'Récolte tes radis quand ils sont mûrs', c: (s) => s.stats.harvests >= 1, target: 'plot', r: { coins: 10, xp: 10 } },
+  { id: 'sell', t: 'Vends des légumes dans la caisse devant ta maison', c: (s) => s.stats.sold >= 1, target: 'caisse', r: { coins: 10, xp: 10 } },
+  { id: 'buy', t: 'Achète des graines à la Boutique du village (au nord)', c: (s) => s.stats.bought >= 1, target: 'shop', r: { coins: 15, xp: 15 } },
+  { id: 'order', t: 'Livre une commande au tableau du village', c: (s) => s.stats.orders >= 1, target: 'board', r: { coins: 20, xp: 20 } },
+  { id: 'rock', t: 'Atteins le niveau 3 et casse le gros rocher à l’ouest', c: (s) => s.flags.rock, target: 'bigrock', r: { coins: 30, xp: 30 } },
+  { id: 'forest', t: 'Dans la forêt : coupe un arbre et casse une pierre', c: (s) => s.stats.bois > 0 && s.stats.pierre > 0, target: 'forest', r: { coins: 20, xp: 20 } },
+  { id: 'etable', t: 'Construis l’Étable, à côté de ta maison', c: (s) => s.built.etable, target: 'etable', r: { coins: 30, xp: 30 } },
+  { id: 'catch', t: 'Attrape une poule : il y en a une à l’est de la ferme', c: (s) => (s.animals || []).length >= 1, target: 'wildpoule', r: { coins: 25, xp: 25 } },
+  { id: 'feed', t: 'Nourris ta poule avec du blé (dans l’enclos ou l’Étable)', c: (s) => (s.stats.fed || 0) >= 1, target: 'etable', r: { coins: 15, xp: 15 } },
+  { id: 'collect', t: 'Ramasse les œufs de ta poule', c: (s) => (s.stats.collected || 0) >= 1, target: 'etable', r: { coins: 20, xp: 20 } },
+  { id: 'creature', t: 'Gagne un défi contre une créature des hautes herbes', c: (s) => Object.keys(s.creatures).length >= 1, r: { coins: 20, xp: 20 } },
+  { id: 'moulin', t: 'Construis le Moulin au village (niveau 4)', c: (s) => s.built.moulin, target: 'moulin', r: { coins: 40, xp: 40 } },
+  { id: 'farine', t: 'Fabrique ta première farine au Moulin', c: (s) => (s.stats.made.farine || 0) >= 1, target: 'moulin', r: { coins: 30, xp: 30 } },
+  { id: 'bridge', t: 'Répare le pont du lac, à l’est de la ferme (niveau 6)', c: (s) => s.flags.bridge, target: 'brokenbridge', r: { coins: 50, xp: 50 } },
+  { id: 'fish', t: 'Pêche un poisson au ponton du lac', c: (s) => s.stats.fish >= 1, target: 'fishspot', r: { coins: 30, xp: 30 } },
+  { id: 'four', t: 'Construis la Boulangerie (niveau 7)', c: (s) => s.built.four, target: 'four', r: { coins: 60, xp: 60 } },
+  { id: 'pain', t: 'Cuis ton premier pain', c: (s) => (s.stats.made.pain || 0) >= 1, target: 'four', r: { coins: 40, xp: 40 } },
+  { id: 'secret', t: 'Invente une recette secrète à la Boulangerie (lis les indices !)', c: (s) => Object.keys(s.found || {}).length >= 1, target: 'four', r: { coins: 60, xp: 50 } },
+  { id: 'laiterie', t: 'Construis la Laiterie au village (niveau 8)', c: (s) => s.built.laiterie, target: 'laiterie', r: { coins: 60, xp: 60 } },
+  { id: 'fromage', t: 'Attrape une vache près du lac et fais du fromage', c: (s) => (s.stats.made.fromage || 0) >= 1, target: 'laiterie', r: { coins: 60, xp: 60 } },
+  { id: 'guardian', t: 'Ouvre le passage de la montagne (niveau 10)', c: (s) => s.flags.guardian, target: 'guardian', r: { coins: 80, xp: 80 } },
+  { id: 'cristal', t: 'Trouve un cristal dans la montagne', c: (s) => s.stats.cristal >= 1, target: 'crystal', r: { coins: 50, xp: 50 } },
+  { id: 'pressoir', t: 'Construis le Pressoir (niveau 10)', c: (s) => s.built.pressoir, target: 'pressoir', r: { coins: 80, xp: 80 } },
+  { id: 'ruche', t: 'Trouve l’essaim d’abeilles caché dans la forêt (niveau 10)', c: (s) => (s.animals || []).some((a) => a.kind === 'abeilles'), target: 'wildabeilles', r: { coins: 80, xp: 80 } },
+  { id: 'arbre', t: 'Offre 3 cristaux au Vieil Arbre de la forêt (niveau 14)', c: (s) => s.flags.arbre, target: 'ancient', r: { coins: 150, xp: 120 } },
+  { id: 'serre', t: 'Construis la Serre magique (niveau 15)', c: (s) => s.built.serre, target: 'serre', r: { coins: 200, xp: 150 } },
+  { id: 'doree', t: 'Récolte un Fruit d’or', c: (s) => (s.stats.harvested.doree || 0) >= 1, target: 'plot', r: { coins: 300, xp: 200 } },
+  { id: 'recettes', t: 'Découvre les 8 recettes secrètes', c: (s) => Object.keys(s.found || {}).length >= 8, r: { coins: 400, xp: 250 } },
+  { id: 'all', t: 'Deviens ami avec les 11 créatures', c: (s) => Object.keys(s.creatures).length >= 11, r: { coins: 500, xp: 300 } },
+  { id: 'legend', t: 'Tu es une légende de la vallée ! Continue à cultiver et à calculer.', c: () => false, r: { coins: 0, xp: 0 } },
 ];
+// The order of the first version, to carry old saves (which kept an index) over to objDone.
+export const OLD_OBJECTIVE_ORDER = ['intro', 'plant', 'water', 'harvest', 'sell', 'buy', 'order', 'rock', 'forest', 'creature', 'moulin', 'farine', 'bridge', 'fish', 'four', 'pain', 'guardian', 'cristal', 'pressoir', 'arbre', 'serre', 'doree', 'all', 'legend'];
 
 export const BADGES = [
   { id: 'pousse', name: 'Badge Pousse', desc: 'Faire ta première récolte', c: (s) => s.stats.harvests >= 1, color: '#62c048' },
@@ -190,5 +245,7 @@ export const BADGES = [
   { id: 'eclair', name: 'Badge Éclair', desc: 'Faire une série de 15 bonnes réponses', c: (s) => s.stats.maxStreak >= 15, color: '#f8d030' },
   { id: 'mesure', name: 'Badge Mesure', desc: 'Réussir 30 problèmes de mesures', c: (s) => s.stats.measureOK >= 30, color: '#e85890' },
   { id: 'chef', name: 'Badge Chef', desc: 'Livrer 20 commandes', c: (s) => s.stats.orders >= 20, color: '#f08030' },
+  { id: 'eleveur', name: 'Badge Éleveur', desc: 'Avoir 6 animaux à la ferme', c: (s) => (s.animals || []).length >= 6, color: '#c8803c' },
+  { id: 'inventeur', name: 'Badge Inventeur', desc: 'Découvrir 4 recettes secrètes', c: (s) => Object.keys(s.found || {}).length >= 4, color: '#a060e0' },
   { id: 'legende', name: 'Badge Légende', desc: 'Récolter un Fruit d’or', c: (s) => (s.stats.harvested.doree || 0) >= 1, color: '#ffd700' },
 ];

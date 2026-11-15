@@ -6,6 +6,22 @@ export const TALL = new Set(['G', 'N']);
 export const PLOT_ORIGIN = { x: 30, y: 31 }; // 6 columns × 3 rows
 export const plotPos = (i) => ({ x: PLOT_ORIGIN.x + (i % 6), y: PLOT_ORIGIN.y + Math.floor(i / 6) });
 export const START = { x: 24, y: 27, dir: 'down' };
+// Fenced paddock where the farm animals live (inside, walkable area).
+export const PADDOCK = { x0: 22, y0: 36, x1: 27, y1: 42 };
+// Wild animals wander around their home tile until caught (then they come back later).
+export const WILD = [
+  { id: 'wildpoule', kind: 'poule', x: 40, y: 34 },
+  { id: 'wildpoule2', kind: 'poule', x: 27, y: 21 },
+  { id: 'wildvache', kind: 'vache', x: 50, y: 32 },
+  { id: 'wildvache2', kind: 'vache', x: 58, y: 33 },
+  { id: 'wildchevre', kind: 'chevre', x: 14, y: 22 },
+  { id: 'wildchevre2', kind: 'chevre', x: 6, y: 24 },
+  { id: 'wildmouton', kind: 'mouton', x: 48, y: 41 },
+  { id: 'wildmouton2', kind: 'mouton', x: 60, y: 44 },
+  { id: 'wildabeilles', kind: 'abeilles', x: 9, y: 5, still: true },
+  { id: 'wildcochon', kind: 'cochon', x: 15, y: 32 },
+  { id: 'wildcochon2', kind: 'cochon', x: 5, y: 40 },
+];
 
 function rng(seed) {
   return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -63,7 +79,11 @@ export function buildWorld() {
   rect(29, 31, 29, 33, 'F'); rect(36, 31, 36, 33, 'F');
   set(32, 30, 'p'); set(33, 30, 'p');
   rect(30, 31, 35, 33, 'g');
-  rect(38, 37, 42, 42, 'G'); rect(22, 38, 26, 42, 'G');
+  rect(38, 37, 42, 42, 'G');
+  // paddock (fence ring, gate at the top) and the path from the barn door
+  rect(21, 35, 28, 35, 'f'); rect(21, 43, 28, 43, 'f');
+  rect(21, 36, 21, 42, 'F'); rect(28, 36, 28, 42, 'F');
+  set(25, 35, 'p'); set(25, 33, 'p'); set(25, 34, 'p'); set(23, 33, 'p'); set(24, 33, 'p');
   rect(21, 45, 43, 46, 't');
   for (const [x, y] of [[22, 44], [23, 44], [43, 44], [42, 44], [43, 43]]) set(x, y, 't');
 
@@ -107,6 +127,9 @@ export function buildWorld() {
   add('bld', 35, 8, { w: 4, h: 3, id: 'four', bld: 'four' });
   add('bld', 23, 15, { w: 4, h: 3, id: 'pressoir', bld: 'pressoir' });
   add('bld', 38, 31, { w: 4, h: 3, id: 'serre', bld: 'serre' });
+  add('bld', 22, 30, { w: 3, h: 3, id: 'etable', bld: 'etable' });
+  add('bld', 28, 19, { w: 4, h: 3, id: 'laiterie', bld: 'laiterie' });
+  add('sign', 26, 34, { text: 'Enclos des animaux.\nAttrape des animaux dans la vallée et nourris-les ici !' });
   add('board', 34, 13, { w: 2, h: 1, id: 'board' });
   add('fountain', 37, 14, { w: 2, h: 2, id: 'fountain' });
   add('owl', 40, 13, { id: 'hibou' });

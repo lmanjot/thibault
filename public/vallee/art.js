@@ -525,6 +525,7 @@ function drawTool(g, id) {
     case 'panier': ellipse(g, 8, 11, 7, 4, '#8a5a30'); ellipse(g, 8, 10, 6, 3, '#c8945a'); for (let i = 3; i < 14; i += 3) rect(g, i, 8, 1, 6, '#8a5a30'); rect(g, 3, 4, 1, 5, '#8a5a30'); rect(g, 12, 4, 1, 5, '#8a5a30'); rect(g, 4, 3, 8, 1, '#8a5a30'); rect(g, 6, 7, 2, 2, '#e8406a'); rect(g, 9, 6, 2, 2, '#f08a24'); break;
     case 'epouvantail': rect(g, 7, 4, 2, 12, '#8a5a30'); rect(g, 2, 7, 12, 2, '#8a5a30'); disc(g, 8, 4, 3, '#f0d890'); rect(g, 6, 3, 1, 1, '#202020'); rect(g, 9, 3, 1, 1, '#202020'); rect(g, 4, 1, 8, 2, '#a83a28'); rect(g, 6, 0, 4, 1, '#a83a28'); rect(g, 5, 9, 6, 4, '#3a70c8'); break;
     case 'arroseur': rect(g, 7, 8, 2, 7, '#7a7a88'); rect(g, 4, 14, 8, 2, '#5a5a68'); rect(g, 5, 6, 6, 2, '#9a9aa8'); for (const [x, y] of [[2, 2], [5, 1], [10, 1], [13, 2], [1, 5], [14, 5]]) rect(g, x, y, 1, 2, '#78b8f8'); break;
+    case 'etable': rect(g, 2, 7, 12, 8, '#b83a2c'); for (let r = 0; r < 6; r++) rect(g, 1 + r, 6 - r, 14 - r * 2, 1, '#8a6a58'); rect(g, 5, 9, 6, 6, '#f8f0e0'); rect(g, 6, 10, 4, 5, '#9a3024'); break;
     case 'plots': rect(g, 1, 3, 14, 12, '#6a4224'); rect(g, 2, 4, 12, 10, '#8c5c34'); for (const r of [7, 11]) rect(g, 2, r, 12, 1, '#74482a'); rect(g, 7, 2, 1, 5, '#3a9a34'); rect(g, 5, 2, 2, 2, '#58c048'); rect(g, 8, 1, 2, 2, '#58c048'); break;
     default: disc(g, 8, 8, 5, '#888');
   }
@@ -616,6 +617,32 @@ function drawItemShape(g, id) {
       if (ITEMS[id] && ITEMS[ITEMS[id].crop] && ITEMS[ITEMS[id].crop].rare) { rect(g, 12, 1, 1, 3, '#fff8b0'); rect(g, 11, 2, 3, 1, '#fff8b0'); }
       break;
     }
+    case 'egg':
+      ellipse(g, 8, 9, 5, 6, c2); ellipse(g, 8, 9, 4, 5, c1); rect(g, 6, 5, 2, 2, '#ffffff'); break;
+    case 'milk':
+      rect(g, 6, 1, 4, 2, c2); rect(g, 6, 3, 4, 2, '#d8e4f0'); rect(g, 4, 5, 8, 10, '#c8d4e0'); rect(g, 5, 5, 6, 9, c1);
+      rect(g, 5, 9, 6, 3, c2); rect(g, 6, 6, 1, 2, '#ffffff'); break;
+    case 'wool':
+      for (const [a, b] of [[5, 7], [10, 7], [8, 5], [5, 11], [10, 11], [8, 9]]) { disc(g, a, b, 3, c2); disc(g, a, b - 1, 2, c1); }
+      rect(g, 11, 12, 3, 1, '#c8a878'); rect(g, 13, 13, 2, 1, '#c8a878'); break;
+    case 'truffle':
+      disc(g, 8, 9, 5, c1); disc(g, 7, 8, 3, c2); for (const [a, b] of [[5, 10], [10, 7], [9, 11], [11, 10]]) rect(g, a, b, 1, 1, '#2a1a12');
+      rect(g, 2, 2, 1, 3, '#fff8b0'); rect(g, 1, 3, 3, 1, '#fff8b0'); break;
+    case 'cheese':
+      for (let r = 0; r < 8; r++) rect(g, 2, 5 + r, 4 + Math.min(10, r * 2 + 2), 1, r === 0 ? shade(c1, 0.3) : c1);
+      rect(g, 2, 13, 14, 2, c2); for (const [a, b, rr] of [[5, 9, 1], [9, 11, 1], [12, 12, 0]]) disc(g, a, b, rr, c2); break;
+    case 'icecream':
+      for (let r = 0; r < 7; r++) rect(g, 5 + Math.floor(r / 2), 8 + r, 6 - Math.floor(r / 2) * 2, 1, r % 2 ? c2 : shade(c2, -0.15));
+      disc(g, 8, 6, 4, c1); disc(g, 7, 5, 1, '#ffffff'); rect(g, 8, 1, 2, 2, '#e02838'); break;
+    case 'crepe':
+      ellipse(g, 8, 11, 7, 3, c2); ellipse(g, 8, 10, 7, 3, c1); ellipse(g, 8, 8, 6, 2, shade(c1, 0.15)); ellipse(g, 8, 6, 5, 2, shade(c1, 0.25));
+      rect(g, 5, 5, 6, 1, '#7a4020'); break;
+    case 'cake':
+      rect(g, 2, 8, 12, 7, c2); rect(g, 2, 8, 12, 3, c1); rect(g, 2, 11, 12, 1, shade(c2, -0.2)); rect(g, 2, 14, 12, 1, shade(c2, -0.25));
+      for (const x of [4, 8, 12]) { rect(g, x - 1, 10, 1, 2, c1); }
+      rect(g, 7, 3, 2, 5, '#78b8f8'); rect(g, 7, 1, 2, 2, '#f8d030'); break;
+    case 'omelette':
+      ellipse(g, 8, 10, 7, 4, '#d8b020'); ellipse(g, 8, 9, 6, 3, c1); for (const [a, b] of [[5, 9], [9, 8], [11, 10]]) rect(g, a, b, 2, 1, c2); break;
     default: disc(g, 8, 8, 5, c1 || '#888');
   }
 }
@@ -748,4 +775,81 @@ export function badgeURL(i, color, earned) {
     urlCache.set(k, c.toDataURL());
   }
   return urlCache.get(k);
+}
+
+// ---------------- Farm animals (16x16, side view; facing right unless flip) ----------------
+export function drawAnimal(g, x, y, kind, flip, frame, t) {
+  g.save();
+  if (flip) { g.translate(x * 2 + 16, 0); g.scale(-1, 1); }
+  const P = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(x + a, y + b, w, h); };
+  const step = frame % 2;
+  g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 3, y + 14, 10, 2);
+  switch (kind) {
+    case 'poule': {
+      const bob = step;
+      ellipse(g, x + 7, y + 9 + bob, 5, 4, '#d8d0c8'); ellipse(g, x + 7, y + 8 + bob, 5, 3, '#ffffff');
+      P(2, 5 + bob, 2, 3, '#ffffff'); P(1, 4 + bob, 2, 2, '#f0ece4');
+      disc(g, x + 12, y + 5 + bob, 2, '#ffffff'); P(11, 1 + bob, 3, 2, '#e83030'); P(14, 5 + bob, 2, 1, '#f0a020'); P(12, 7 + bob, 1, 2, '#e83030');
+      P(12, 4 + bob, 1, 1, '#202020'); P(5, 8 + bob, 4, 1, '#d8d0c8');
+      P(6, 13, 1, 2 - bob, '#f0a020'); P(9, 13, 1, 1 + bob, '#f0a020'); break;
+    }
+    case 'vache': case 'chevre': {
+      const cow = kind === 'vache';
+      const body = cow ? '#fbfbf6' : '#e2dccf', dk = cow ? '#2a2a2a' : '#9a8e7e';
+      P(2, 5, 10, 6, body); P(2, 10, 10, 1, shade(body, -0.15));
+      if (cow) { P(4, 5, 3, 3, dk); P(8, 7, 3, 2, dk); P(3, 9, 2, 1, dk); } else { P(3, 5, 8, 1, '#c8c0b0'); }
+      P(1, 5, 1, 4, dk);
+      P(11, 2, 4, 6, body); P(13, 6, 3, 3, cow ? '#f8b0b8' : body); P(13, 3, 1, 1, '#202020');
+      if (cow) { P(11, 1, 1, 2, '#e8dcc0'); P(14, 1, 1, 2, '#e8dcc0'); P(10, 3, 1, 2, dk); }
+      else { P(11, 0, 1, 3, '#7a6a58'); P(12, -1, 1, 2, '#7a6a58'); P(14, 9, 2, 2, '#c8c0b0'); }
+      const lg = cow ? '#d8d0c8' : '#7a6a58';
+      P(3, 11, 2, 3 - step, lg); P(6, 11, 2, 2 + step, lg); P(9, 11, 2, 3 - step, lg); P(11, 11, 1, 2 + step, lg);
+      P(3, 13 - step, 2, 1, '#3a3030'); P(9, 13 - step, 2, 1, '#3a3030'); break;
+    }
+    case 'mouton': {
+      for (const [a, b] of [[4, 7], [7, 6], [10, 7], [5, 10], [9, 10], [3, 9], [11, 9]]) disc(g, x + a, y + b, 2, '#e8e4dc');
+      for (const [a, b] of [[4, 6], [7, 5], [10, 6], [6, 9], [9, 9]]) disc(g, x + a, y + b, 2, '#fbfaf6');
+      P(12, 4, 3, 5, '#2e2a2a'); P(11, 4, 1, 2, '#2e2a2a'); P(13, 5, 1, 1, '#ffffff');
+      P(4, 12, 1, 3 - step, '#2e2a2a'); P(6, 12, 1, 2 + step, '#2e2a2a'); P(9, 12, 1, 3 - step, '#2e2a2a'); P(11, 12, 1, 2 + step, '#2e2a2a'); break;
+    }
+    case 'cochon': {
+      ellipse(g, x + 7, y + 9, 6, 4, '#e88a9a'); ellipse(g, x + 7, y + 8, 6, 3, '#f8b0bc');
+      P(12, 6, 3, 5, '#f8b0bc'); P(14, 7, 2, 3, '#e87888'); P(15, 8, 1, 1, '#a04858'); P(13, 6, 1, 1, '#202020');
+      P(11, 4, 2, 2, '#e88a9a'); P(1, 6, 1, 1, '#e88a9a'); P(0, 5, 1, 1, '#e88a9a');
+      P(3, 12, 2, 2 - step, '#e88a9a'); P(6, 12, 2, 1 + step, '#e88a9a'); P(9, 12, 2, 2 - step, '#e88a9a'); P(11, 12, 1, 1 + step, '#e88a9a'); break;
+    }
+    case 'abeilles': {
+      // a straw hive (skep) with bees around
+      g.restore(); g.save();
+      ellipse(g, x + 8, y + 14, 6, 2, 'rgba(0,0,0,0.2)');
+      for (let r = 0; r < 11; r++) { const w = Math.round(2 + Math.sqrt(r) * 2.2); P(8 - w, 3 + r, w * 2, 1, r % 3 === 2 ? '#b07818' : '#e8b030'); }
+      P(7, 11, 3, 3, '#4a2a10');
+      for (let i = 0; i < 3; i++) {
+        const a = t * 3 + i * 2.1, bx = Math.round(x + 8 + Math.cos(a) * 7), by = Math.round(y + 6 + Math.sin(a * 1.3) * 4);
+        g.fillStyle = '#202020'; g.fillRect(bx, by, 2, 1); g.fillStyle = '#f8d030'; g.fillRect(bx, by - 1, 1, 1);
+      }
+      break;
+    }
+    default: disc(g, x + 8, y + 9, 5, '#c8a878');
+  }
+  g.restore();
+}
+export function drawBarn(g, x, y) {
+  // 3x3 tiles red barn with a big white-crossed door
+  const W = 48, H = 48;
+  rect(g, x + 2, y + H - 2, W - 2, 3, 'rgba(0,0,0,0.18)');
+  rect(g, x + 2, y + 18, W - 4, H - 18, '#b83a2c'); rect(g, x + 2, y + 18, W - 4, 2, '#8a2a20');
+  for (let i = 0; i < 6; i++) rect(g, x + 4 + i * 7, y + 20, 1, H - 22, '#9a3024');
+  for (let r = 0; r < 18; r++) { const inset = Math.max(0, Math.round((18 - r) * 0.9)); rect(g, x + inset, y + r, W - inset * 2, 1, r % 4 === 3 ? '#6a4a3a' : '#8a6a58'); }
+  rect(g, x + 20, y + 6, 8, 8, '#f8f0e0'); rect(g, x + 21, y + 7, 6, 6, '#3a2a20'); rect(g, x + 23, y + 7, 2, 6, '#f8f0e0'); rect(g, x + 21, y + 9, 6, 2, '#f8f0e0');
+  rect(g, x + 14, y + 28, 20, 20, '#f8f0e0'); rect(g, x + 16, y + 30, 16, 18, '#9a3024');
+  for (let i = 0; i < 16; i++) { rect(g, x + 16 + i, y + 30 + i, 2, 2, '#f8f0e0'); rect(g, x + 30 - i, y + 30 + i, 2, 2, '#f8f0e0'); }
+  rect(g, x + 2, y + H - 2, W - 4, 2, '#6a2a20');
+}
+export function drawDairy(g, x, y, t) {
+  building(g, x, y, 4, 3, { roof: '#5a8ad8', roofD: '#3a62a8', wall: '#fbfaf2', wallD: '#c0c4cc', door: 1, doorC: '#5a8ad8' });
+  rect(g, x + 36, y + 28, 22, 12, '#7a4e2c'); rect(g, x + 37, y + 29, 20, 10, '#f8e8b8');
+  g.drawImage(itemIcon('fromage'), x + 39, y + 26);
+  // milk can by the door
+  rect(g, x + 4, y + 36, 8, 12, '#9aa4b0'); rect(g, x + 5, y + 36, 6, 10, '#c8d0dc'); rect(g, x + 6, y + 33, 4, 3, '#9aa4b0');
 }

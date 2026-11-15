@@ -21,9 +21,9 @@ const hm = (h, m) => `${h} h ${String(m).padStart(2, '0')}`;
 
 export const CATS = {
   calc: 'Calcul', frac: 'Fractions', conv: 'Conversions', masse: 'Masses', contenance: 'Contenances',
-  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Géométrie',
+  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Géométrie', animaux: 'Animaux',
 };
-export const MEASURE_CATS = ['conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo'];
+export const MEASURE_CATS = ['conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux'];
 
 const HINTS = {
   calc: 'Prends ton temps. Tu peux poser le calcul sur une feuille.',
@@ -36,6 +36,7 @@ const HINTS = {
   recette: 'Cherche par combien on multiplie… ou calcule d’abord pour 1.',
   argent: 'Calcule d’abord le prix total, puis la différence.',
   geo: 'Périmètre = le tour (on additionne les côtés). Aire = longueur × largeur.',
+  animaux: 'Lis bien : combien pour UN animal, puis multiplie ou divise.',
 };
 
 function P(cat, q, a, u, ex, hint) {
@@ -285,6 +286,19 @@ T.longueur = [
   [3, 4, () => { const M = R(4, 12), w = pick([20, 25, 50]); return P('longueur', `Le pont mesure ${M} m de long. Chaque planche fait ${w} cm de large. Combien de planches faut-il ?`, (M * 100) / w, 'planches', `${M} m = ${M * 100} cm. ${M * 100} ÷ ${w} = ${(M * 100) / w} planches`); }],
   [4, 5, () => { const a = R(15, 45) / 10, b = R(25, 95); return P('longueur', `Tu as une corde de ${fmt(a)} m. Tu en coupes ${b} cm. Combien de cm reste-t-il ?`, a * 100 - b, 'cm', `${fmt(a)} m = ${fmt(a * 100)} cm. ${fmt(a * 100)} − ${b} = ${fmt(a * 100 - b)} cm`); }],
   [5, 5, () => { const L = R(8, 15) * 10, l = R(4, 7) * 10, n = R(2, 4), d = 2 * (L + l) * n; return P('longueur', `Tu fais ${n} fois le tour d’un champ de ${L} m sur ${l} m. Combien de km parcours-tu ?`, d / 1000, 'km', `Un tour : (${L} + ${l}) × 2 = ${2 * (L + l)} m. × ${n} = ${d} m = ${fmt(d / 1000)} km`); }],
+];
+
+T.animaux = [
+  [1, 2, (d) => { const a = R(2, d <= 1 ? 6 : 12), b = R(1, d <= 1 ? 4 : 9); return P('animaux', `Dans le pré, il y a ${a} poules et ${b} vaches. Combien de pattes en tout ?`, 2 * a + 4 * b, 'pattes', `Poules : ${a} × 2 = ${2 * a}. Vaches : ${b} × 4 = ${4 * b}. ${2 * a} + ${4 * b} = ${2 * a + 4 * b} pattes`, 'Une poule a 2 pattes, une vache en a 4.'); }],
+  [1, 2, () => { const n = R(3, 7), k = R(2, 6); return P('animaux', `Une poule pond ${n} œufs par semaine. Combien d’œufs pond-elle en ${k} semaines ?`, n * k, 'œufs', `${k} × ${n} = ${n * k} œufs`); }],
+  [2, 3, () => { const q = R(3, 12); return P('animaux', `Tu as ramassé ${q * 6} œufs. Tu les ranges dans des boîtes de 6. Combien de boîtes remplis-tu ?`, q, 'boîtes', `${q * 6} ÷ 6 = ${q} boîtes`); }],
+  [3, 3, () => { const e = R(20, 70), b = pick([6, 10, 12]); return P('animaux', `Tu as ${e} œufs et des boîtes de ${b}. Combien de boîtes peux-tu remplir complètement ?`, Math.floor(e / b), 'boîtes', `${e} ÷ ${b} = ${Math.floor(e / b)} et il reste ${e % b} œufs : ${Math.floor(e / b)} boîtes pleines`, 'Divise, et ne compte que les boîtes pleines.'); }],
+  [3, 4, () => { const L = R(8, 25), j = pick([7, 5, 10]); return P('animaux', `Ta vache donne ${L} L de lait par jour. Combien de litres en ${j} jours ?`, L * j, 'L', `${L} × ${j} = ${L * j} L`); }],
+  [4, 4, () => { const L = pick([12.5, 8.5, 15.5, 9.5]), j = R(2, 6); return P('animaux', `Ta vache donne ${fmt(L)} L de lait par jour. Combien de litres en ${j} jours ?`, L * j, 'L', `${fmt(L)} × ${j} = ${fmt(L * j)} L`); }],
+  [4, 5, () => { const kg = pick([1.5, 2.5, 0.5]), n = R(2, 6), j = R(2, 5); return P('animaux', `Un mouton mange ${fmt(kg)} kg de foin par jour. Combien de kg faut-il pour ${n} moutons pendant ${j} jours ?`, kg * n * j, 'kg', `Par jour : ${fmt(kg)} × ${n} = ${fmt(kg * n)} kg. En ${j} jours : ${fmt(kg * n)} × ${j} = ${fmt(kg * n * j)} kg`); }],
+  [5, 5, () => { const L = R(2, 9) * 10; return P('animaux', `Il faut 10 L de lait pour faire 1 kg de fromage. Combien de kg de fromage fais-tu avec ${L} L ?`, L / 10, 'kg', `${L} ÷ 10 = ${L / 10} kg`); }],
+  [5, 5, () => { const kg = R(2, 6), p = pick([250, 500]); return P('animaux', `Les abeilles ont fait ${kg} kg de miel. Tu remplis des pots de ${p} g. Combien de pots ?`, (kg * 1000) / p, 'pots', `${kg} kg = ${kg * 1000} g. ${kg * 1000} ÷ ${p} = ${(kg * 1000) / p} pots`); }],
+  [5, 5, () => { const e = pick([12, 18, 15]), j = 3, k = pick([5, 7, 10]); return P('animaux', `Tes poules pondent ${e} œufs en ${j} jours. Combien en ${k} jours ?`, (e / j) * k, 'œufs', `Par jour : ${e} ÷ ${j} = ${e / j}. En ${k} jours : ${e / j} × ${k} = ${(e / j) * k} œufs`); }],
 ];
 
 function theme(name, d) {

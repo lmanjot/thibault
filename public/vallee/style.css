@@ -427,3 +427,16 @@ button.row:hover { background: #f1f4ff; }
 .codemsg { min-height: 20px; margin: 10px 0 0; text-align: center; }
 .celebrate.code .cel-lines p:first-child { font-family: var(--read); font-size: 40px; letter-spacing: 5px; background: #fff; border: 3px dashed var(--ring); border-radius: 10px; padding: 4px; user-select: text; -webkit-user-select: text; }
 .title-btns .row2 .btn { min-width: 0; }
+
+/* ---------- animals & secret recipes ---------- */
+.invent { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; padding: 8px 12px; border-radius: 10px; background: #f3ecff; border: 2px solid #d4c4f4; font-size: 16px; }
+.qmark { display: grid; place-items: center; font-size: 26px; font-weight: 700; color: #8a60d0; background: #f3ecff; border: 2px dashed #b89ae8; border-radius: 8px; }
+.row.mystery .row-main small { font-size: 14px; color: #6a4aa8; }
+.hints { background: #f3ecff; border-radius: 10px; padding: 6px 12px; margin-bottom: 10px; }
+.hints p { margin: 4px 0; font-family: var(--read); font-size: 15px; color: #5a3a98; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px 4px 4px; border-radius: 8px; border: 2px solid #b8bccf; background: #fff; font-size: 15px; box-shadow: 0 2px 0 #b8bccf; }
+.chip .ic { width: 28px; height: 28px; }
+.chip.on { border-color: #8a60d0; background: #efe4ff; box-shadow: 0 2px 0 #8a60d0; }
+.invent-msg { font-family: var(--read); font-size: 16px; text-align: center; color: #a04020; margin: 10px 0 0; }
+.row-main .mbar { display: block; height: 7px; margin-top: 4px; max-width: 220px; }

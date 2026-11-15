@@ -1,8 +1,8 @@
 // La Vallée des Graines — main game: state, world loop, input, UI, farming, shop, crafting, battles.
-import { W, H, SOLID, TALL, buildWorld, zoneAt, plotPos, START, NPCS } from './world.js';
+import { W, H, SOLID, TALL, buildWorld, zoneAt, plotPos, START, NPCS, WILD, PADDOCK } from './world.js';
 import {
   CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
-  GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES,
+  GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
 import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS } from './math.js';
 import * as A from './art.js';
@@ -36,14 +36,17 @@ function newState() {
     hat: 'rouge', hats: ['rouge'],
     built: {}, flags: {}, chests: {}, res: {},
     orders: [], creatures: {}, badges: {},
-    stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0 },
-    streak: 0, mastery: {}, obj: 0, daily: {},
+    stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0 },
+    streak: 0, mastery: {}, objDone: {}, daily: {},
+    animals: [], barnSlots: 4, found: {},
     pos: { ...START },
     settings: { sound: true, grade: 8 },
   };
 }
 function migrate(s) {
   const d = newState();
+  // First version kept the objective as an index: turn it into the list of finished ones.
+  if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   for (const grp of ['stats', 'tools', 'settings']) for (const k of Object.keys(d[grp])) if (s[grp][k] === undefined) s[grp][k] = d[grp][k];
   return s;
@@ -87,7 +90,7 @@ function applyPendingRemote() {
   lastSig = progressSig(S);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
   pl.x = S.pos.x; pl.y = S.pos.y; pl.dir = S.pos.dir || 'down'; pl.px = pl.x * 16; pl.py = pl.y * 16;
-  applyWorldFlags(); ensureOrders(); updateHud(); updateObjective();
+  applyWorldFlags(); farmEnts = []; syncFarm(); ensureOrders(); updateHud(); updateObjective();
   toast('Partie mise à jour depuis un autre appareil', 'blue');
 }
 
@@ -163,10 +166,98 @@ function applyWorldFlags() {
   }
 }
 const tileAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 't' : tiles[x + y * W]);
-function walkable(x, y) {
+function walkable(x, y, self) {
   if (SOLID.has(tileAt(x, y))) return false;
   const o = objAt.get(x + y * W);
-  return !(o && o.solid);
+  if (o && o.solid) return false;
+  return !entAt(x, y, self);
+}
+
+// ============================================================ Animals (wild ones to tame, farm ones in the paddock)
+const ART = { poule: 'une poule', vache: 'une vache', chevre: 'une chèvre', mouton: 'un mouton', abeilles: 'un essaim d’abeilles', cochon: 'un cochon' };
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+const makeEnt = (id, kind, x, y, extra) => ({ id, kind, x, y, px: x * 16, py: y * 16, fx: x, fy: y, tx: x, ty: y, moving: false, t: 0, flip: false, frame: 0, next: now() + R(500, 3000), ...extra });
+const wildEnts = WILD.map((w) => makeEnt(w.id, w.kind, w.x, w.y, { wild: true, home: { x: w.x, y: w.y }, still: !!w.still }));
+let farmEnts = [];
+const hiveSpots = [[27, 36], [27, 37], [27, 38], [27, 39], [27, 40], [27, 41], [27, 42], [26, 42], [25, 42], [24, 42]];
+const entShown = (e) => !(e.wild && S.res[e.id] && S.res[e.id] > now());
+function entAt(x, y, self) {
+  for (const list of [wildEnts, farmEnts]) for (const e of list) {
+    if (e === self || !entShown(e)) continue;
+    if ((e.x === x && e.y === y) || (e.moving && e.tx === x && e.ty === y)) return e;
+  }
+  return null;
+}
+function syncFarm() {
+  const keep = [];
+  let hive = 0;
+  for (const a of S.animals || []) {
+    let e = farmEnts.find((f) => f.animal === a.id);
+    if (!e) {
+      if (a.kind === 'abeilles') { const [x, y] = hiveSpots[hive % hiveSpots.length]; e = makeEnt('farm:' + a.id, a.kind, x, y, { animal: a.id, still: true }); }
+      else {
+        let x = PADDOCK.x0, y = PADDOCK.y0;
+        for (let i = 0; i < 40; i++) { x = R(PADDOCK.x0, PADDOCK.x1 - 1); y = R(PADDOCK.y0 + 1, PADDOCK.y1); if (walkable(x, y)) break; }
+        e = makeEnt('farm:' + a.id, a.kind, x, y, { animal: a.id });
+      }
+    }
+    if (a.kind === 'abeilles') hive++;
+    keep.push(e);
+  }
+  farmEnts = keep;
+}
+function updateEnts(dt) {
+  for (const e of [...wildEnts, ...farmEnts]) {
+    if (e.still || !entShown(e)) continue;
+    if (e.moving) {
+      e.t += (dt * 1000) / 420;
+      if (e.t >= 1) { e.t = 1; e.moving = false; e.x = e.tx; e.y = e.ty; }
+      e.px = Math.round((e.fx + (e.tx - e.fx) * e.t) * 16); e.py = Math.round((e.fy + (e.ty - e.fy) * e.t) * 16);
+      e.frame = e.moving ? Math.floor(e.t * 4) % 2 : 0;
+      continue;
+    }
+    if (now() < e.next) continue;
+    e.next = now() + R(900, 3500);
+    if (Math.random() < 0.3) continue;
+    const [dx, dy] = pick(Object.values(DIRS));
+    const nx = e.x + dx, ny = e.y + dy;
+    const inside = e.wild ? Math.abs(nx - e.home.x) <= 3 && Math.abs(ny - e.home.y) <= 3
+      : nx >= PADDOCK.x0 && nx <= PADDOCK.x1 && ny >= PADDOCK.y0 && ny <= PADDOCK.y1;
+    const onPlayer = (nx === pl.x && ny === pl.y) || (pl.moving && nx === pl.tx && ny === pl.ty);
+    if (dx) e.flip = dx < 0;
+    if (inside && !onPlayer && walkable(nx, ny, e)) {
+      e.moving = true; e.t = 0; e.fx = e.x; e.fy = e.y; e.tx = nx; e.ty = ny;
+    }
+  }
+}
+function animalURL(kind, scale = 5) {
+  const c = A.canvas(16 * scale, 16 * scale), g = c.getContext('2d');
+  const base = A.canvas(16, 18); A.drawAnimal(base.getContext('2d'), 0, 2, kind, false, 0, 0);
+  g.imageSmoothingEnabled = false; g.drawImage(base, 0, -2 * scale, 16 * scale, 18 * scale);
+  return c.toDataURL();
+}
+// farm animal state
+const animalOf = (e) => (S.animals || []).find((a) => a.id === e.animal);
+function aProgress(a) { return a.fedAt ? Math.min(1, ((now() - a.fedAt) * speedMult() + a.skip) / a.prod) : 0; }
+function aRemaining(a) { return Math.max(0, a.prod - ((now() - a.fedAt) * speedMult() + a.skip)) / speedMult(); }
+const aStatus = (a) => (!a.fedAt ? 'faim' : aProgress(a) >= 1 ? 'pret' : 'occupe');
+const mealText = (meal) => Object.entries(meal).map(([k, v]) => qtyName(k, v)).join(' + ');
+const foodsText = (kind) => ANIMALS[kind].foods.map(mealText).join(' ou ');
+const mealFor = (a) => ANIMALS[a.kind].foods.find((meal) => Object.entries(meal).every(([k, v]) => has(k, v)));
+function feedAnimal(a, meal) {
+  for (const [k, v] of Object.entries(meal)) addItem(k, -v);
+  Object.assign(a, { fedAt: now(), prod: ANIMALS[a.kind].prod * 1000, skip: 0 });
+  S.stats.fed++;
+  sfx.harvest();
+}
+function collectAnimal(a) {
+  const d = ANIMALS[a.kind], q = R(d.qty[0], d.qty[1]);
+  addItem(d.out, q);
+  a.fedAt = 0; a.skip = 0;
+  S.stats.collected++;
+  addXP(d.xp);
+  sfx.coin();
+  return q;
 }
 const respawning = (o) => S.res[o.id] && S.res[o.id] > now();
 
@@ -272,6 +363,7 @@ function unlocksAt(L) {
   for (const [id, b] of Object.entries(BUILDINGS)) if (b.lvl === L) out.push({ icon: null, text: `Tu peux construire : ${b.name}` });
   for (const [bid, list] of Object.entries(RECIPES)) for (const r of list) if (r.lvl === L && r.lvl !== BUILDINGS[bid].lvl) out.push({ icon: A.iconURL(r.out), text: `Nouvelle recette : ${itemName(r.out)} (${BUILDINGS[bid].name})` });
   for (const tl of TOOLS) if (tl.lvl === L) out.push({ icon: null, text: `À la boutique : ${tl.name}` });
+  for (const [k, an] of Object.entries(ANIMALS)) if (an.lvl === L) out.push({ icon: A.iconURL(an.out), text: `Animal à apprivoiser : ${an.name} (donne : ${itemName(an.out).toLowerCase()})` });
   for (const g of GATES) if (g.lvl === L) out.push({ icon: null, text: g.text });
   for (const hh of Object.values(HATS)) if (hh.lvl === L && hh.price) out.push({ icon: null, text: `Nouveau style : ${hh.name}` });
   return out;
@@ -289,11 +381,11 @@ function levelUp(L) {
   const nx = nextUnlock(L);
   celebrate({ title: `Niveau ${L} !`, lines: lines.length ? lines : ['Tu deviens plus fort !'], icons: u.map((x) => x.icon).filter(Boolean), foot: nx ? `Prochain : ${nx}` : null, kind: 'level' });
 }
+const curObj = () => OBJECTIVES.find((o) => !S.objDone[o.id]) || OBJECTIVES[OBJECTIVES.length - 1];
 function checkObjectives() {
   let guard = 0;
-  while (S.obj < OBJECTIVES.length - 1 && OBJECTIVES[S.obj].c(S) && guard++ < 30) {
-    const o = OBJECTIVES[S.obj];
-    S.obj++;
+  for (let o = curObj(); o.id !== 'legend' && o.c(S) && guard++ < 40; o = curObj()) {
+    S.objDone[o.id] = 1;
     if (o.r.coins || o.r.xp) {
       toast(`Objectif réussi ! +${o.r.coins} pièces`, 'gold');
       S.coins += o.r.coins; addXP(o.r.xp);
@@ -357,7 +449,7 @@ function updateHud() {
 }
 function updateObjective() {
   if (!S) return;
-  const o = OBJECTIVES[S.obj];
+  const o = curObj();
   objBar.innerHTML = '';
   objBar.append(h('span', { class: 'obj-tag' }, 'Objectif'), h('span', null, o.t));
 }
@@ -596,6 +688,12 @@ function askMath(opts) {
 async function interact() {
   const [dx, dy] = DIRS[pl.dir];
   const tx = pl.x + dx, ty = pl.y + dy;
+  const ent = entAt(tx, ty);
+  if (ent) {
+    busy = true;
+    try { await (ent.wild ? onWild(ent) : onFarmAnimal(ent)); } finally { busy = false; afterChange(); }
+    return;
+  }
   let o = objAt.get(tx + ty * W);
   if (!o) { const here = objAt.get(pl.x + pl.y * W); if (here && here.type === 'plot') o = here; }
   if (!o) return;
@@ -817,6 +915,15 @@ async function shopPanel() {
             if (buy(nb.price)) { S.plotBuys++; for (let i = 0; i < 4 + S.plotBuys * 2; i++) S.plots[i].u = true; toast('Nouvelles parcelles dans le potager !', 'green'); afterChange(); api.refresh(); }
           } }, coinImg('coin sm'), ` ${nb.price}`)));
       }
+      const bb = BARN_BUYS[(S.barnSlots - 4) / 2];
+      if (S.built.etable && bb) {
+        const locked = bb.lvl > S.lvl;
+        list.append(h('div', { class: 'row' + (locked ? ' locked' : '') }, icon('tool:etable'),
+          h('div', { class: 'row-main' }, h('b', null, 'Agrandir l’Étable'), h('small', null, `2 places de plus pour tes animaux. Tu as ${S.barnSlots} places.`)),
+          locked ? h('span', { class: 'lock' }, `Niv. ${bb.lvl}`) : h('button', { class: 'btn sm', onclick: () => {
+            if (buy(bb.price)) { S.barnSlots += 2; toast('L’Étable est plus grande !', 'green'); afterChange(); api.refresh(); }
+          } }, coinImg('coin sm'), ` ${bb.price}`)));
+      }
       const eLocked = S.lvl < 5;
       list.append(h('div', { class: 'row' + (eLocked ? ' locked' : '') }, icon('engrais'),
         h('div', { class: 'row-main' }, h('b', null, 'Engrais'), h('small', null, `Double la récolte d’une plante. Tu en as ${S.inv.engrais || 0}.`)),
@@ -854,10 +961,12 @@ async function shopPanel() {
 }
 
 // ---- Buildings & crafting
+const MASC = new Set(['moulin', 'pressoir']);
+const theName = (id) => (id === 'etable' ? 'l’Étable' : `${MASC.has(id) ? 'le' : 'la'} ${BUILDINGS[id].name}`);
 async function onBuilding(id) {
   const B = BUILDINGS[id];
   if (!S.built[id]) {
-    if (S.lvl < B.lvl) return say([`Un chantier : ici, on pourra construire ${B.name === 'Moulin' ? 'le' : 'la'} ${B.name}.`, `${B.desc} Il faut être niveau ${B.lvl}.`]);
+    if (S.lvl < B.lvl) return say([`Un chantier : ici, on pourra construire ${theName(id)}.`, `${B.desc} Il faut être niveau ${B.lvl}.`]);
     const cost = Object.entries(B.cost).map(([k, v]) => (k === 'coins' ? `${fmt(v)} pièces` : qtyName(k, v))).join(', ');
     if (!(await confirm(`Construire : ${B.name} ? Il faut ${cost}.`, 'Construire', 'Plus tard'))) return;
     const missing = Object.entries(B.cost).filter(([k, v]) => (k === 'coins' ? S.coins < v : !has(k, v)))
@@ -869,19 +978,32 @@ async function onBuilding(id) {
     for (const [k, v] of Object.entries(B.cost)) { if (k === 'coins') S.coins -= v; else addItem(k, -v); }
     S.built[id] = true;
     addXP(30);
-    await celebrate({ title: `${B.name} construit${id === 'moulin' ? '' : 'e'} !`, lines: [B.desc] });
+    await celebrate({ title: `${B.name} construit${MASC.has(id) ? '' : 'e'} !`, lines: [B.desc, id === 'etable' ? 'Maintenant, attrape des animaux dans la vallée : une poule se promène à l’est de la ferme !' : null].filter(Boolean) });
+    if (id === 'etable') syncFarm();
     return;
   }
+  if (id === 'etable') return barnPanel();
   if (id === 'serre') return say(['La Serre magique fait pousser toutes tes plantes 50 % plus vite.', 'Même quand tu n’es pas là !']);
   return craftPanel(id);
 }
 async function craftPanel(id) {
   const B = BUILDINGS[id];
-  let job = null;
+  let job = null, invent = false;
+  const secrets = RECIPES[id].filter((r) => r.secret);
   const P = panel(B.name, (body) => {
     body.append(h('p', { class: 'note' }, 'Chaque fabrication demande de résoudre un problème. Si tu te trompes, tu gardes tes ingrédients.'));
+    if (secrets.length) {
+      const nf = secrets.filter((r) => S.found[r.out]).length;
+      body.append(h('div', { class: 'invent' }, h('span', null, `Recettes secrètes : ${nf}/${secrets.length}`),
+        nf < secrets.length ? h('button', { class: 'btn sm alt', onclick: () => { invent = true; P.close(); } }, 'Inventer une recette') : h('span', { class: 'tick' }, 'Toutes trouvées !')));
+    }
     const list = h('div', { class: 'list' });
     for (const r of RECIPES[id]) {
+      if (r.secret && !S.found[r.out]) {
+        list.append(h('div', { class: 'row recipe mystery' }, h('span', { class: 'ic qmark' }, '?'),
+          h('div', { class: 'row-main' }, h('b', null, 'Recette mystère'), h('small', null, 'Indice : ' + r.hint))));
+        continue;
+      }
       const locked = r.lvl > S.lvl;
       const ok = !locked && Object.entries(r.in).every(([k, v]) => has(k, v));
       list.append(h('div', { class: 'row recipe' + (locked ? ' locked' : '') },
@@ -893,6 +1015,7 @@ async function craftPanel(id) {
     body.append(list);
   });
   await P.done;
+  if (invent) { await inventPanel(id); return craftPanel(id); }
   if (!job) return;
   const r = await askMath({ cat: job.theme, title: `${B.name} : ${itemName(job.out)}` });
   if (r.ok) {
@@ -907,11 +1030,151 @@ async function craftPanel(id) {
   if (!r.quit) return craftPanel(id);
 }
 
+// ---- Animals
+async function onWild(e) {
+  const d = ANIMALS[e.kind], art = ART[e.kind];
+  if (S.lvl < d.lvl) return say([`${cap(art)} !`, `Il est encore trop farouche… Reviens au niveau ${d.lvl} pour l’apprivoiser.`]);
+  if (!S.built.etable) return say([`${cap(art)} ! Tu pourrais l’adopter…`, 'Mais il te faut d’abord une Étable : elle se construit sous ta maison, à côté de l’enclos (niveau 3).']);
+  if (S.animals.length >= S.barnSlots) return say('Ton Étable est pleine ! Agrandis-la à la Boutique (onglet Outils).');
+  if (!(await confirm(`${cap(art)} ! Veux-tu l’apprivoiser ? Réussis 2 problèmes pour gagner sa confiance.`, 'Essayer', 'Plus tard'))) return;
+  for (let i = 0; i < 2; i++) {
+    const cat = i === 0 ? 'animaux' : pick(['animaux', 'calc', 'recette']);
+    const r = await askMath({ cat, title: `Apprivoiser : ${d.name} · ${i + 1}/2` });
+    if (!r.ok) return say(r.quit ? 'Tu reviendras plus tard.' : 'Oups, il a eu peur et s’éloigne un peu… Réessaie !');
+  }
+  const used = new Set(S.animals.map((a) => a.name));
+  const name = d.names.find((n) => !used.has(n)) || `${pick(d.names)} ${S.animals.length + 1}`;
+  S.animals.push({ id: 'a' + now().toString(36) + R(10, 99), kind: e.kind, name, fedAt: 0, prod: 0, skip: 0 });
+  S.stats.caught++;
+  S.res[e.id] = now() + 240000;
+  Object.assign(e, { x: e.home.x, y: e.home.y, px: e.home.x * 16, py: e.home.y * 16, moving: false });
+  syncFarm();
+  addXP(15 + d.lvl * 2);
+  sfx.level();
+  await celebrate({ title: `${name} rejoint ta ferme !`, iconsBig: [animalURL(e.kind)], lines: [`Mange : ${foodsText(e.kind)}`, `Donne : ${itemName(d.out).toLowerCase()}`, 'Va la voir dans l’enclos, à côté de ta maison.'] });
+}
+async function onFarmAnimal(e) {
+  const a = animalOf(e);
+  if (!a) return;
+  const d = ANIMALS[a.kind];
+  const st = aStatus(a);
+  if (st === 'pret') {
+    const q = collectAnimal(a);
+    toast(`${a.name} : +${qtyName(d.out, q)}`, 'green', [A.iconURL(d.out)]);
+    afterChange();
+    const meal = mealFor(a);
+    if (meal && (await confirm(`Redonner à manger à ${a.name} (${mealText(meal)}) ?`, 'Oui', 'Non'))) feedAnimal(a, meal);
+    return;
+  }
+  if (st === 'faim') {
+    const meal = mealFor(a);
+    if (!meal) return say([`${a.name} a faim !`, `Son repas : ${foodsText(a.kind)}. Tu n’en as pas : plante-en au potager !`]);
+    if (await confirm(`${a.name} a faim ! Lui donner ${mealText(meal)} ?`, 'Donner', 'Plus tard')) {
+      feedAnimal(a, meal);
+      toast(`${a.name} se régale ! ${cap(itemName(d.out).toLowerCase())} dans ${fmtTime(aRemaining(a))}.`, 'green');
+    }
+    return;
+  }
+  return brushLoop(a);
+}
+async function brushLoop(a) {
+  const d = ANIMALS[a.kind];
+  const verb = a.kind === 'abeilles' ? 'Aider les abeilles' : `Brosser ${a.name}`;
+  if (!(await confirm(`${a.name} prépare : ${itemName(d.out).toLowerCase()}. Encore ${fmtTime(aRemaining(a))}. ${verb} pour aller plus vite ? (un calcul)`, 'Oui', 'Plus tard'))) return;
+  for (;;) {
+    const r = await askMath({ cat: Math.random() < 0.6 ? 'animaux' : 'calc', title: verb });
+    if (r.quit) return;
+    if (r.ok) {
+      const rem = Math.max(0, a.prod - ((now() - a.fedAt) * speedMult() + a.skip));
+      a.skip += rem * (r.first ? 0.5 : 0.3);
+      sfx.water();
+      afterChange();
+    }
+    if (aProgress(a) >= 1) { await say(`${a.name} a fini ! Va ramasser : ${itemName(d.out).toLowerCase()}.`); return; }
+    if (!(await confirm(`Encore ${fmtTime(aRemaining(a))}. Continuer ?`, 'Oui, encore', 'Non merci'))) return;
+  }
+}
+async function barnPanel() {
+  let brush = null;
+  const P = panel('Étable', (body, api) => {
+    const n = S.animals.length;
+    body.append(h('p', { class: 'note' }, `${n}/${S.barnSlots} places. Nourris tes animaux avec tes récoltes : ils te donnent des œufs, du lait, de la laine…`));
+    if (!n) {
+      body.append(h('p', { class: 'empty' }, 'L’Étable est vide. Attrape des animaux dans la vallée :'));
+      body.append(h('div', { class: 'list' }, Object.entries(ANIMALS).map(([k, d]) => h('div', { class: 'row' + (d.lvl > S.lvl ? ' locked' : '') },
+        h('img', { class: 'ic', src: animalURL(k, 3) }), h('div', { class: 'row-main' }, h('b', null, d.name), h('small', null, `Niveau ${d.lvl} · mange ${foodsText(k)} · donne ${itemName(d.out).toLowerCase()}`))))));
+      return;
+    }
+    const ready = S.animals.filter((a) => aStatus(a) === 'pret'), hungry = S.animals.filter((a) => aStatus(a) === 'faim' && mealFor(a));
+    body.append(h('div', { class: 'sync-acts' },
+      h('button', { class: 'btn sm', disabled: !ready.length, onclick: () => {
+        const got = {};
+        for (const a of ready) { const d = ANIMALS[a.kind]; got[d.out] = (got[d.out] || 0) + collectAnimal(a); }
+        toast(Object.entries(got).map(([k, q]) => '+' + qtyName(k, q)).join(', '), 'green', Object.keys(got).map((k) => A.iconURL(k)));
+        afterChange(); api.refresh();
+      } }, `Tout ramasser (${ready.length})`),
+      h('button', { class: 'btn sm alt', disabled: !hungry.length, onclick: () => {
+        let fed = 0;
+        for (const a of S.animals) { const meal = aStatus(a) === 'faim' && mealFor(a); if (meal) { feedAnimal(a, meal); fed++; } }
+        toast(`${fed} animal${fed > 1 ? 'aux' : ''} nourri${fed > 1 ? 's' : ''} !`, 'green');
+        afterChange(); api.refresh();
+      } }, 'Tout nourrir')));
+    const list = h('div', { class: 'list' });
+    for (const a of S.animals) {
+      const d = ANIMALS[a.kind], st = aStatus(a), meal = mealFor(a);
+      const status = st === 'pret' ? `Prêt : ${itemName(d.out).toLowerCase()} à ramasser !` : st === 'faim' ? `A faim · mange ${foodsText(a.kind)}` : `Prépare ${itemName(d.out).toLowerCase()} · encore ${fmtTime(aRemaining(a))}`;
+      list.append(h('div', { class: 'row' },
+        h('img', { class: 'ic', src: animalURL(a.kind, 3) }),
+        h('div', { class: 'row-main' }, h('b', null, `${a.name} `, h('small', null, d.name)), h('small', null, status),
+          st === 'occupe' ? h('span', { class: 'mbar' }, h('i', { style: `width:${Math.round(aProgress(a) * 100)}%` })) : null),
+        st === 'pret' ? h('button', { class: 'btn sm', onclick: () => { const q = collectAnimal(a); toast(`+${qtyName(d.out, q)}`, 'green', [A.iconURL(d.out)]); afterChange(); api.refresh(); } }, 'Ramasser')
+          : st === 'faim' ? h('button', { class: 'btn sm alt', disabled: !meal, onclick: () => { feedAnimal(a, meal); afterChange(); api.refresh(); } }, 'Nourrir')
+            : h('button', { class: 'btn sm ghost', onclick: () => { brush = a; P.close(); } }, a.kind === 'abeilles' ? 'Aider' : 'Brosser')));
+    }
+    body.append(list);
+  });
+  const timer = setInterval(() => P.refresh(), 2000);
+  await P.done;
+  clearInterval(timer);
+  if (brush) { await brushLoop(brush); return barnPanel(); }
+}
+async function inventPanel(id) {
+  const B = BUILDINGS[id];
+  const sel = new Set();
+  let result = null;
+  const P = panel(`Inventer : ${B.name}`, (body, api) => {
+    const left = RECIPES[id].filter((r) => r.secret && !S.found[r.out]);
+    body.append(h('p', { class: 'note' }, 'Choisis 1 à 3 ingrédients de ton sac, puis essaie ! Les indices des recettes mystères t’aident.'));
+    body.append(h('div', { class: 'hints' }, left.map((r) => h('p', null, '• ' + r.hint))));
+    const ids = Object.keys(S.inv).filter((k) => S.inv[k] > 0 && ITEMS[k] && (ITEMS[k].kind === 'crop' || ITEMS[k].kind === 'product'));
+    if (!ids.length) { body.append(h('p', { class: 'empty' }, 'Ton sac est vide. Récolte et fabrique des choses d’abord !')); return; }
+    body.append(h('div', { class: 'chips' }, ids.map((k) => h('button', { class: 'chip' + (sel.has(k) ? ' on' : ''), onclick: () => {
+      if (sel.has(k)) sel.delete(k); else if (sel.size < 3) sel.add(k);
+      sfx.blip(); result = null; api.refresh();
+    } }, icon(k), itemName(k)))));
+    body.append(h('div', { class: 'sync-acts' }, h('button', { class: 'btn', disabled: !sel.size, onclick: () => {
+      const key = [...sel].sort().join('+');
+      const r = RECIPES[id].find((x) => Object.keys(x.in).sort().join('+') === key);
+      if (r && r.secret && !S.found[r.out]) {
+        S.found[r.out] = now();
+        addXP(25); sfx.level();
+        celebrate({ title: 'Recette découverte !', iconsBig: [A.iconURL(r.out, 5)], lines: [itemName(r.out), Object.entries(r.in).map(([k, v]) => qtyName(k, v)).join(' + '), `Se vend ${ITEMS[r.out].sell} pièces. Fabrique-la à : ${B.name}.`] });
+        afterChange(); P.close(); return;
+      }
+      result = r ? `Tu connais déjà cette recette : ${itemName(r.out)} !` : 'Hmm… ça ne donne rien de bon. Relis les indices et essaie autre chose !';
+      sfx.bad(); api.refresh();
+    } }, 'Essayer !'), sel.size ? h('button', { class: 'btn ghost', onclick: () => { sel.clear(); result = null; api.refresh(); } }, 'Vider') : null));
+    if (result) body.append(h('p', { class: 'invent-msg' }, result));
+  });
+  await P.done;
+}
+
 // ---- Orders board
 function orderPool() {
   const pool = [];
   for (const [id, c] of Object.entries(CROPS)) if (!c.rare && c.lvl <= S.lvl) pool.push([id, 2, 6]);
-  for (const [bid, list] of Object.entries(RECIPES)) if (S.built[bid]) for (const r of list) if (r.lvl <= S.lvl) pool.push([r.out, 1, 2]);
+  for (const [bid, list] of Object.entries(RECIPES)) if (S.built[bid]) for (const r of list) if (r.lvl <= S.lvl && (!r.secret || S.found[r.out])) pool.push([r.out, 1, 2]);
+  for (const k of new Set((S.animals || []).map((a) => a.kind))) pool.push([ANIMALS[k].out, 2, 4]);
   return pool;
 }
 function newOrder() {
@@ -984,15 +1247,20 @@ async function onNpc(o) {
   await say(list[tipIdx[o.npc]], n.name);
 }
 const MAMIE_HELP = {
-  1: 'Va dans le potager derrière la barrière, mets-toi devant une parcelle et appuie sur A pour planter.',
-  2: 'Parle à une plante qui pousse pour l’arroser. Un calcul juste = elle pousse plus vite !',
-  3: 'Quand la plante est mûre, elle brille. Appuie sur A devant elle pour récolter.',
-  4: 'La caisse en bois devant la maison achète tes légumes.',
-  5: 'La Boutique est tout en haut du village, au nord. Suis le chemin !',
-  6: 'Le tableau des commandes est au milieu du village, près de la fontaine.',
-  7: 'Le gros rocher est à l’ouest de la ferme. Gagne de l’XP pour atteindre le niveau 3 : récolte, arrose, livre des commandes !',
-  8: 'Dans la forêt, mets-toi devant un petit arbre ou une pierre grise et appuie sur A.',
-  9: 'Marche dans les hautes herbes : une créature finira par apparaître !',
+  plant: 'Va dans le potager derrière la barrière, mets-toi devant une parcelle et appuie sur A pour planter.',
+  water: 'Parle à une plante qui pousse pour l’arroser. Un calcul juste = elle pousse plus vite !',
+  harvest: 'Quand la plante est mûre, elle brille. Appuie sur A devant elle pour récolter.',
+  sell: 'La caisse en bois devant la maison achète tes légumes.',
+  buy: 'La Boutique est tout en haut du village, au nord. Suis le chemin !',
+  order: 'Le tableau des commandes est au milieu du village, près de la fontaine.',
+  rock: 'Le gros rocher est à l’ouest de la ferme. Gagne de l’XP pour atteindre le niveau 3 : récolte, arrose, livre des commandes !',
+  forest: 'Dans la forêt, mets-toi devant un petit arbre ou une pierre grise et appuie sur A.',
+  etable: 'L’Étable se construit juste sous ta maison, à côté de l’enclos. Il faut du bois et des pierres de la forêt.',
+  catch: 'Une poule se promène à l’est de la ferme. Mets-toi devant elle et appuie sur A !',
+  feed: 'Parle à ta poule dans l’enclos, ou ouvre l’Étable, et donne-lui du blé. Plante du blé s’il t’en manque !',
+  collect: 'Quand un animal a fini, une bulle apparaît au-dessus de lui. Va ramasser ce qu’il a fait !',
+  creature: 'Marche dans les hautes herbes : une créature finira par apparaître !',
+  secret: 'À la Boulangerie, appuie sur « Inventer une recette » et essaie des ingrédients. Les indices t’aident !',
 };
 async function onMamie() {
   const who = 'Mamie Rose';
@@ -1008,8 +1276,8 @@ async function onMamie() {
     afterChange();
     return;
   }
-  const tip = MAMIE_HELP[S.obj];
-  await say([tip ? `Ton objectif : ${OBJECTIVES[S.obj].t}. ${tip}` : pick(['Tu deviens un vrai fermier ! Je suis fière de toi.', 'N’oublie pas : une série de bonnes réponses rapporte plus d’XP.', 'As-tu exploré le lac et la montagne ? Il paraît qu’il y a des trésors !'])], who);
+  const tip = MAMIE_HELP[curObj().id];
+  await say([tip ? `Ton objectif : ${curObj().t}. ${tip}` : pick(['Tu deviens un vrai fermier ! Je suis fière de toi.', 'N’oublie pas : une série de bonnes réponses rapporte plus d’XP.', 'As-tu exploré le lac et la montagne ? Il paraît qu’il y a des trésors !'])], who);
 }
 async function onMailbox() {
   if (S.daily.mail === today()) return say('La boîte aux lettres est vide. Reviens demain pour un nouveau cadeau !');
@@ -1066,7 +1334,7 @@ async function onOwl() {
 }
 async function series(cat, n, off, title, mixed) {
   let score = 0;
-  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo'];
+  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux'];
   for (let i = 0; i < n; i++) {
     const c = mixed ? pick(pool) : cat;
     const r = await askMath({ cat: c, d: diffFor(c, off), title: `${title} · ${i + 1}/${n}` });
@@ -1453,11 +1721,12 @@ async function battle(zone, id) {
 // ============================================================ Rendering
 let camX = 0, camY = 0;
 function objectiveTarget() {
-  const o = OBJECTIVES[S.obj];
+  const o = curObj();
   if (!o || !o.target) return null;
+  if (o.target.startsWith('wild')) { const e = wildEnts.find((w) => w.id === o.target); return e && entShown(e) ? { x: e.x, y: e.y } : null; }
   if (o.target === 'plot') {
     let idx = S.plots.findIndex((p) => p.crop && progress(p) >= 1);
-    if (idx < 0 && S.obj === 1) idx = S.plots.findIndex((p) => p.u && !p.crop);
+    if (idx < 0 && o.id === 'plant') idx = S.plots.findIndex((p) => p.u && !p.crop);
     if (idx < 0) idx = S.plots.findIndex((p) => p.crop);
     if (idx < 0) idx = 0;
     const pp = plotPos(idx); return { x: pp.x, y: pp.y };
@@ -1475,7 +1744,7 @@ function drawObject(o, X, Y, t) {
     case 'shop': return A.drawShop(ctx, X, Y, t);
     case 'bld':
       if (!S.built[o.bld]) return A.drawSite(ctx, X, Y, o.w, o.h, t);
-      return { moulin: A.drawMill, four: A.drawBakery, pressoir: A.drawPress, serre: A.drawGreenhouse }[o.bld](ctx, X, Y, t);
+      return { moulin: A.drawMill, four: A.drawBakery, pressoir: A.drawPress, serre: A.drawGreenhouse, etable: A.drawBarn, laiterie: A.drawDairy }[o.bld](ctx, X, Y, t);
     case 'caisse': return A.drawCrate(ctx, X, Y);
     case 'mailbox': return A.drawMailbox(ctx, X, Y, S.daily.mail !== today());
     case 'npc': {
@@ -1501,6 +1770,19 @@ function drawObject(o, X, Y, t) {
   }
 }
 const FLAT = new Set(['plot', 'fishspot']);
+function drawEnt(e, X, Y, t) {
+  A.drawAnimal(ctx, X, Y, e.kind, e.flip, e.frame, t);
+  if (e.wild) return;
+  const a = animalOf(e);
+  if (!a) return;
+  const st = aStatus(a);
+  if (st === 'occupe') return;
+  const bob = Math.round(Math.sin(t * 4 + e.x) * 1), bx = X + 3, by = Y - 12 + bob;
+  ctx.fillStyle = '#2c3048'; ctx.fillRect(bx - 1, by - 1, 12, 11);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, by, 10, 9); ctx.fillRect(bx + 4, by + 9, 2, 2);
+  if (st === 'pret') ctx.drawImage(A.itemIcon(ANIMALS[a.kind].out), bx, by - 1, 10, 10);
+  else { ctx.fillStyle = '#c03030'; ctx.fillRect(bx + 4, by + 1, 2, 4); ctx.fillRect(bx + 4, by + 6, 2, 2); }
+}
 function render(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#2a5a2a'; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -1540,9 +1822,14 @@ function render(t) {
     list.push({ k: FLAT.has(o.type) ? o.y * 16 - 100 : (o.y + o.h) * 16, o });
   }
   if (mode === 'world') list.push({ k: pl.py + 16.5, player: true });
+  for (const e of [...wildEnts, ...farmEnts]) {
+    if (!entShown(e) || e.px + 16 < camX || e.px > camX + VW || e.py + 16 < camY - 8 || e.py > camY + VH) continue;
+    list.push({ k: e.py + 16.2, ent: e });
+  }
   list.sort((a, b) => a.k - b.k);
   for (const it of list) {
     if (it.player) A.drawPerson(ctx, pl.px - camX, pl.py - camY, pl.dir, pl.frame, playerLook());
+    else if (it.ent) drawEnt(it.ent, it.ent.px - camX, it.ent.py - camY, t);
     else drawObject(it.o, it.o.x * 16 - camX, it.o.y * 16 - camY, t);
   }
   if (mode === 'world') drawGuide(t);
@@ -1641,6 +1928,7 @@ function loop(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000);
   last = ts;
   if (mode === 'world') { updatePlayer(dt); if (pendingRemote) applyPendingRemote(); }
+  updateEnts(dt);
   render(ts / 1000);
   requestAnimationFrame(loop);
 }
@@ -1712,6 +2000,7 @@ function startWorld() {
   pl.px = pl.x * 16; pl.py = pl.y * 16;
   applyWorldFlags();
   if (!walkable(pl.x, pl.y) && !(objAt.get(pl.x + pl.y * W)?.type === 'plot')) { pl.x = START.x; pl.y = START.y; pl.px = pl.x * 16; pl.py = pl.y * 16; }
+  farmEnts = []; syncFarm();
   ui.append(hud, objBar, menuBtn, buildTouch());
   ensureOrders();
   updateHud(); updateObjective();
@@ -1730,6 +2019,7 @@ requestAnimationFrame(loop);
 // debug helpers for testing in the console
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
-  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm },
+  ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
   world, pl, walkable, objById, objAt: () => objAt };
