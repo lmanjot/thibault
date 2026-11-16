@@ -367,9 +367,10 @@ function Home({
   const week = save.settings.weekSounds.filter((g) => GRAPHEME[g]);
   const focus = focusSound(save);
   const letters = save.settings.classSounds.filter((g) => GRAPHEME[g]); // same order as in the parent settings
-  // The gauge fills with the current letter's good sessions: clearing it brings the next power.
-  const focusDone = focus ? Math.min(3, level(save, gid(focus)) - 1) : 0;
-  const gauge = next ? focusDone / 3 : 1;
+  // The gauge follows the current letter's dots: green (clearing it brings the next power), then yellow, then red.
+  const focusRound = focus ? roundOf(level(save, gid(focus))) : { round: 0, dots: 0 };
+  const gauge = focus ? focusRound.dots / 3 : next ? 0 : 1;
+  const roundName = ["", "jaunes", "rouges"][focusRound.round];
   const companion = equipped(save, "companion");
 
   // Shrink the home column when the screen is too short for it (Windows tablets with the browser bar,
@@ -410,11 +411,13 @@ function Home({
         </h1>
         <div className="lz-power">
           <span className="lz-formname">{form.name}</span>
-          <div className="lz-gauge">
+          <div className={`lz-gauge round-${focusRound.round}`}>
             <div style={{ width: `${Math.round(gauge * 100)}%` }} />
           </div>
           <span className="lz-hint-kid">
-            {next ? (
+            {focus && focusRound.round > 0 ? (
+              <>Points {roundName} · lettre {GRAPHEME[focus]?.display ?? ""}</>
+            ) : next ? (
               <>
                 Prochain pouvoir : {next.name}{focus ? ` · réussis la lettre ${GRAPHEME[focus]?.display ?? ""}` : ""}
               </>
@@ -466,13 +469,15 @@ function Home({
           <button className="lz-cta lz-cta-shop" onClick={onShop} aria-label="Boutique de Bulma">
             <span className="lz-capsule" /> <Zeni size={30} /> {zeni(save)}
           </button>
-          {fight && boss ? (
+          {fight && boss && (
             <button className={`lz-cta lz-cta-boss ${fight.kind === "revision" ? "is-revision" : ""}`} onClick={onBoss}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={ASSET(boss.sprite)} alt="" className="lz-cta-face" />
               {fight.kind === "revision" ? "Révision" : "Boss"} : {boss.name}
             </button>
-          ) : (
+          )}
+          {/* The targeted challenge is always there while the parent has it on; the plain revision only without a story boss. */}
+          {(target || !(fight && boss)) && (
             // No story boss waiting: a revision fight (a rematch) is always there, harder and worth more.
             <button
               className="lz-cta lz-cta-boss is-revision is-practice"

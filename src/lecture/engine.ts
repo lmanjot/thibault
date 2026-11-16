@@ -506,6 +506,9 @@ function syllablesWith(s: Save, g: string): string[] {
  * About 7 of 11 on the letter, 4 on the others.
  */
 export function buildSession(s: Save): Ex[] {
+  // Targeted revision on: training works only the parent's letters too.
+  const target = activeTarget(s);
+  if (target) return targetExercises(s, target, 11, (i) => (i < 2 ? "warm" : i < 9 ? "train" : "defi"));
   const out: Ex[] = [];
   const f = focusSound(s);
   const learned = knownSounds(s).filter((g) => g !== f);
@@ -598,23 +601,42 @@ export function targetSyllables(s: Save, t: Target): string[] {
 }
 
 /**
- * A targeted revision fight: 12 questions, each on a "must" letter. About half are syllables made
- * with it (when the letters allow), the rest letter exercises (hear it, find it, complete a word),
- * the other "must" letters always among the choices so they have to be told apart (e / u).
+ * Targeted exercises: each on a "must" letter. About half are syllables made with it (when the
+ * letters allow), the rest letter exercises (hear it, find it, complete a word), the other "must"
+ * letters always among the choices so they have to be told apart (e / u).
  */
-function buildTarget(s: Save, t: Target): Ex[] {
+function targetExercises(s: Save, t: Target, n: number, section: (i: number) => Section): Ex[] {
   const ts = targetSave(s, t);
   const syls = targetSyllables(s, t);
   const ids: string[] = [];
   if (syls.length) {
-    const want = 6;
+    const want = Math.round(n / 2);
     while (ids.length < want) ids.push(...pickReview(ts, syls, Math.min(want - ids.length, syls.length)));
   }
-  for (let i = 0; ids.length < 12; i++) ids.push(gid(t.must[i % t.must.length]));
+  for (let i = 0; ids.length < n; i++) ids.push(gid(t.must[i % t.must.length]));
   const rival = (id: string) => {
     const own = id.startsWith("g:") ? id.slice(2) : null;
     const others = t.must.filter((g) => g !== own);
     return others.length ? rnd(others) : null;
   };
-  return spread(shuffle(ids).map((id) => itemEx(ts, id, rival(id), "boss", 1)));
+  return spreadIds(shuffle(ids)).map((id, i) => {
+    const sec = section(i);
+    return itemEx(ts, id, rival(id), sec, sec === "boss" ? 1 : sec === "defi" ? 2 : 0);
+  });
+}
+
+/** A targeted revision fight: 12 questions on the parent's letters, a little harder. */
+function buildTarget(s: Save, t: Target): Ex[] {
+  return targetExercises(s, t, 12, () => "boss");
+}
+
+/** Space out repeats of the same item (ids). */
+function spreadIds(xs: string[]): string[] {
+  const out: string[] = [];
+  const rest = [...xs];
+  while (rest.length) {
+    const i = rest.findIndex((x) => x !== out[out.length - 1]);
+    out.push(rest.splice(i < 0 ? 0 : i, 1)[0]);
+  }
+  return out;
 }

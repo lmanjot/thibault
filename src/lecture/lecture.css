@@ -4385,3 +4385,17 @@
 .lz-weektile.is-locked .lz-read {
   opacity: 0.4;
 }
+
+/* The home gauge follows the letter's round: green, then yellow, then red. */
+.lz-gauge.round-0 > div {
+  background: linear-gradient(90deg, #138a48, var(--ok), #8ef0b4);
+  box-shadow: 0 0 12px rgba(31, 157, 85, 0.8);
+}
+.lz-gauge.round-1 > div {
+  background: linear-gradient(90deg, var(--ki-2), var(--ki), #fff7c2);
+  box-shadow: 0 0 12px var(--ki);
+}
+.lz-gauge.round-2 > div {
+  background: linear-gradient(90deg, #b3191f, #e0353b, #ff9a8a);
+  box-shadow: 0 0 12px rgba(224, 53, 59, 0.8);
+}
