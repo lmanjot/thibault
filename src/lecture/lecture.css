@@ -4239,3 +4239,81 @@
     text-align: center;
   }
 }
+
+/* ——— Tablets (touch, large screen): keep the bottom clear of the browser's own bar ———
+   Safari on iPad draws its bottom tab bar over the page without shrinking the visible area, so
+   the lowest buttons (the boss!) ended up under it. */
+.lz {
+  --bottom-safe: 0px;
+}
+@media (pointer: coarse) and (min-width: 700px) and (min-height: 600px) {
+  .lz {
+    --bottom-safe: 64px;
+  }
+}
+/* Home (landscape): the column scrolls if it ever doesn't fit, so every button stays reachable. */
+.lz-home-main {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: calc(24px + var(--bottom-safe));
+}
+.lz-home-main::-webkit-scrollbar {
+  display: none;
+}
+.lz-home-hero {
+  padding-bottom: calc(2 * var(--vh, 1vh) + var(--bottom-safe));
+}
+.lz-versus,
+.lz-result,
+.lz-transform,
+.lz-bonus-pick {
+  padding-bottom: var(--bottom-safe);
+}
+.lz-shop {
+  padding-bottom: calc(40px + var(--bottom-safe));
+}
+.lz-session {
+  padding-bottom: var(--bottom-safe);
+}
+/* Home (phones and tablets in portrait): same margin under the buttons. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-home {
+    padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--bottom-safe));
+  }
+  .lz-home-main {
+    max-height: none;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .lz-home-hero {
+    padding-bottom: 0;
+  }
+}
+/* Home in landscape: everything scales with the visible height, so the boss button fits above
+   the bottom margin even on a tablet with the browser's bars showing. */
+@media (orientation: landscape) and (min-height: 521px) {
+  .lz-home-main {
+    gap: clamp(10px, calc(2.4 * var(--vh, 1vh)), 22px);
+    padding-top: clamp(10px, calc(2.4 * var(--vh, 1vh)), 24px);
+  }
+  .lz-brand {
+    font-size: clamp(48px, min(11vw, calc(13 * var(--vh, 1vh))), 132px);
+  }
+  .lz-formname {
+    font-size: clamp(22px, calc(4 * var(--vh, 1vh)), 32px);
+  }
+  .lz-weektile {
+    padding: 6px 14px 10px;
+  }
+  .lz-weektile .lz-read {
+    font-size: clamp(44px, calc(8.5 * var(--vh, 1vh)), 76px);
+  }
+  .lz-actions {
+    gap: clamp(10px, calc(2 * var(--vh, 1vh)), 18px);
+  }
+  .lz-actions .lz-cta {
+    padding: clamp(10px, calc(1.8 * var(--vh, 1vh)), 18px) clamp(18px, 2.6vw, 34px);
+    font-size: clamp(24px, calc(4.6 * var(--vh, 1vh)), 40px);
+  }
+}
