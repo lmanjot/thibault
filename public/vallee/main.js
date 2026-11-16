@@ -45,8 +45,9 @@ function newState() {
 }
 function migrate(s) {
   const d = newState();
-  if (s.skills && s.skillsV !== 2) { for (const sk of Object.values(s.skills)) { sk.lv = 1; sk.r = []; sk.acq = 0; } }
-  s.skillsV = 2;
+  if (s.skills && (s.skillsV || 0) < 2) { for (const sk of Object.values(s.skills)) { sk.lv = 1; sk.r = []; sk.acq = 0; } }
+  if (s.skills && (s.skillsV || 0) < 3) { for (const sk of Object.values(s.skills)) { sk.sc = 0; sk.nl = 0; } }
+  s.skillsV = 3;
   // First version kept the objective as an index: turn it into the list of finished ones.
   if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
@@ -440,7 +441,17 @@ function checkConcepts() {
   S.concepts[k] = now();
   toast(`Nouvelle notion de 8H : ${CATS[k]} ! Elle arrive bientôt dans tes problèmes.`, 'gold');
 }
-function record(p, ok) {
+// A level goes up after at least 8 questions at it and a score of 6: about 8 quick right answers,
+// 12 slow ones, or 10 with 2 mistakes. It goes down when the score falls to −2.5 (mostly wrong answers).
+const LEVEL_MIN_Q = 8, LEVEL_UP = 6, LEVEL_DOWN = -2.5;
+/** Time after which a right answer counts as slow: short for a calculation, longer for a problem to read. */
+function slowMs(key, lv) {
+  if (key === 'calc:mental') return (8 + 3 * lv) * 1000;
+  if (opOf(key)) return (12 + 5 * lv) * 1000;
+  if (key === 'frac' || key === 'conv' || key === 'arrondi' || key === 'priorites' || key === 'decimaux' || key === 'fracplus') return (18 + 6 * lv) * 1000;
+  return (30 + 10 * lv) * 1000; // word problems
+}
+function record(p, ok, ms = 0, helped = false) {
   const key = p.key || keyOf(p.cat, p.op);
   const s = skillOf(key), cap = capFor(key);
   s.n++; if (ok) s.ok++;
@@ -449,16 +460,21 @@ function record(p, ok) {
   m.n++; if (ok) m.ok++;
   m.r.push(ok ? 1 : 0); if (m.r.length > 8) m.r.shift();
   if (s.lv > cap) s.lv = cap;
-  // only problems at the working level move the ladder (not a level fixed by the parents, nor a harder action)
+  // only problems at the working level move the ladder (not a level fixed by the parents, nor a défi above it)
   if (!fixedLevel(catOf(key)) && p.d === s.lv) {
-    s.r.push(ok ? 1 : 0); if (s.r.length > 5) s.r.shift();
-    if (s.r.length >= 5 && s.r.reduce((a, b) => a + b, 0) >= 4) {
-      s.r = [];
+    // right and quick: +1 · right but slow (or with a bought hint): +0.5 · wrong at the first try: −1
+    const fast = ok && !helped && ms <= slowMs(key, s.lv);
+    s.sc = (s.sc || 0) + (ok ? (fast ? 1 : 0.5) : -1);
+    s.nl = (s.nl || 0) + 1;
+    s.r.push(ok ? 1 : 0); if (s.r.length > 8) s.r.shift();
+    if (s.nl >= LEVEL_MIN_Q && s.sc >= LEVEL_UP) {
+      s.sc = 0; s.nl = 0; s.r = [];
       if (s.lv < cap) s.lv++;
       else if (!s.acq) { s.acq = now(); toast(`${skillTitle(key)} : maîtrisé ! Place à d’autres défis.`, 'gold'); }
-    } else if (s.r.length >= 4 && s.r.slice(-4).reduce((a, b) => a + b, 0) <= 1) {
-      s.r = []; s.acq = 0;
-      if (s.lv > 1) s.lv--;
+    } else if (s.nl >= 3 && s.sc <= LEVEL_DOWN) {
+      // a level back down, starting half-way so it does not bounce straight back up
+      s.sc = LEVEL_UP / 2; s.nl = 0; s.r = []; s.acq = 0;
+      if (s.lv > 1) s.lv--; else s.sc = 0;
     }
   }
   checkConcepts();
@@ -741,13 +757,16 @@ function askOnce(opts) {
     if (!p0) { p.d = dUsed; p.key = skKey; }
     let paused = false; // a lesson is open over the problem
     window.__lastP = p; // read by the test helpers in the console
-    let tries = 0, input = '', locked = false;
+    let tries = 0, input = '', locked = false, helped = false;
+    const t0 = performance.now();
+    let pausedMs = 0;
     const hintCost = 5 + 5 * dUsed;
     const tip = h('div', { class: 'm-tip' });
     const hintBtn = h('button', { class: 'm-hint', onclick: () => {
       if (locked || hintBtn.disabled) return;
       if (S.coins < hintCost) { sfx.bad(); toast(`Il te faut ${hintCost} pièces pour un indice.`, 'red'); return; }
       S.coins -= hintCost; updateHud(); sfx.coin();
+      helped = true;
       const step = firstStep(p);
       tip.innerHTML = '';
       tip.append(h('b', null, 'Indice : '), h('span', null, p.hint));
@@ -760,7 +779,7 @@ function askOnce(opts) {
       if (locked || tries > 0) return;
       const s = skillOf(skKey);
       if (s.lv > 1) s.lv--;
-      s.r = []; s.acq = 0;
+      s.r = []; s.acq = 0; s.sc = 0; s.nl = 0;
       toast(`D’accord ! « ${skillTitle(skKey)} » : un peu plus facile.`, 'blue');
       save();
       finish({ easier: true });
@@ -769,7 +788,7 @@ function askOnce(opts) {
     const lesKey = LESSONS[p.lesson] ? p.lesson : LESSONS[skKey] ? skKey : LESSONS[mKey(cat)] ? mKey(cat) : null;
     const learnBtn = lesKey ? h('button', { class: 'm-learn', onclick: async () => {
       if (paused) return;
-      paused = true; await showLesson(lesKey, false); paused = false;
+      paused = true; const tl = performance.now(); await showLesson(lesKey, false); pausedMs += performance.now() - tl; paused = false;
     } }, 'Comprendre') : null;
     const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
     const ansVal = h('span', { class: 'm-val' });
@@ -800,7 +819,7 @@ function askOnce(opts) {
       if (!p.choices && !input) return;
       const ok = checkAnswer(p, p.choices ? val : input);
       tries++;
-      if (tries === 1) record(p, ok);
+      if (tries === 1) record(p, ok, performance.now() - t0 - pausedMs, helped);
       if (ok) {
         locked = true;
         S.stats.correct++;
@@ -1896,14 +1915,14 @@ async function carnetPanel(tab) {
       for (const k of liveSkills()) {
         const s = (S.skills || {})[k], cap = capFor(k), acq = isAcquis(k);
         const lv = s ? Math.min(s.lv, cap) : 0;
-        const pct = acq ? 100 : s ? Math.min(95, Math.round(((lv - 1 + s.r.filter(Boolean).length / 4) / cap) * 100)) : 0;
+        const pct = acq ? 100 : s ? Math.min(95, Math.round(((lv - 1 + clamp((s.sc || 0) / LEVEL_UP, 0, 1)) / cap) * 100)) : 0;
         tbl.append(h('div', { class: 'mrow' + (acq ? ' acq' : '') }, h('span', { class: 'mlabel' }, skillTitle(k)), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })),
           h('span', { class: 'mpct' }, acq ? 'Maîtrisé' : s ? `Niveau ${lv}/${cap}` : '—'), h('span', { class: 'stars' }, acq ? '★' : '')));
       }
       body.append(tbl);
       const left = NEW_ORDER.length - unlockedConcepts().length;
       if (left) body.append(h('p', { class: 'note' }, `Encore ${left} notion${left > 1 ? 's' : ''} de 8H à découvrir. Maîtrise d’autres compétences pour les débloquer !`));
-      body.append(h('p', { class: 'small' }, `Mode de jeu : ${S.settings.grade === 8 ? 'Dur' : 'Normal'}. Une compétence monte d’un niveau quand tu réussis 4 questions sur 5. Une fois maîtrisée, elle revient moins souvent, pour laisser la place à d’autres.`));
+      body.append(h('p', { class: 'small' }, `Mode de jeu : ${S.settings.grade === 8 ? 'Dur' : 'Normal'}. Une compétence monte d’un niveau quand tu as bien réussi plusieurs questions (au moins 8), surtout si tu réponds vite. Une erreur la fait redescendre un peu. Une fois maîtrisée, elle revient moins souvent, pour laisser la place à d’autres.`));
     }
   }, { tabs: [['badges', 'Badges'], ['creatures', 'Créatures'], ['progres', 'Progrès']], tab }).done;
 }
@@ -1957,7 +1976,7 @@ async function parentPanel() {
         h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, 'Dur'))),
       h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté générale'),
         h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
-        h('small', null, 'En « Auto », chaque compétence monte d’un niveau après 4 bonnes réponses sur 5, jusqu’à un plafond (plus haut en mode Dur et avec une difficulté plus élevée). Une fois maîtrisée, elle revient moins souvent et les notions de 8H se débloquent une à une, avec une petite leçon.')),
+        h('small', null, 'En « Auto », chaque compétence monte d’un niveau après au moins 8 questions bien réussies (une réponse juste et rapide compte plus qu’une réponse lente, une erreur fait reculer), jusqu’à un plafond (plus haut en mode Dur et avec une difficulté plus élevée). Une fois maîtrisée, elle revient moins souvent et les notions de 8H se débloquent une à une, avec une petite leçon.')),
       h('h3', null, 'Par thème'),
       h('p', { class: 'small' }, 'Fixez un niveau de 1 (très facile) à 5 (très difficile), ou laissez « Auto ». Décochez un thème pas encore vu en classe : il ne sera plus demandé. Les notions de 8H peuvent être débloquées à la main.'));
     const list = h('div', { class: 'pcats' });
