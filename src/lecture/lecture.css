@@ -4399,3 +4399,11 @@
   background: linear-gradient(90deg, #b3191f, #e0353b, #ff9a8a);
   box-shadow: 0 0 12px rgba(224, 53, 59, 0.8);
 }
+
+/* Phones: a story boss and the targeted challenge both waiting: the challenge gets its own row. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-actions .lz-cta-boss + .lz-cta-boss {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
