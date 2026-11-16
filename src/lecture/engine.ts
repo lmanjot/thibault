@@ -248,10 +248,13 @@ export function activeTarget(s: Save): Target | null {
 }
 
 /** A revision fight available any time: the last letters learned and everything before, or the targeted letters. */
-export function practiceFight(s: Save): Fight {
+export function practiceFight(s: Save, targeted = true): Fight {
   const t = activeTarget(s);
-  if (t) return { kind: "revision", practice: true, target: true, letters: t.must };
-  return { kind: "revision", practice: true, letters: knownSounds(s).slice(-3) };
+  if (t && targeted) return { kind: "revision", practice: true, target: true, letters: t.must };
+  // The letter being worked on first, then the last letters learned.
+  const f = focusSound(s);
+  const known = knownSounds(s);
+  return { kind: "revision", practice: true, letters: [...new Set([...(f ? [f] : []), ...known.slice(-3)])].slice(0, 3) };
 }
 
 /** The next boss waiting to be fought, if any. */
@@ -591,7 +594,9 @@ export function buildBoss(s: Save, fight: Fight): Ex[] {
   const syls = availableSyllables(s);
   const recentItems = [...recent.map(gid), ...syls.filter((x) => recent.includes(parseSyl(x).c) || recent.includes(parseSyl(x).v))];
   const rest = [...knownSounds(s).map(gid), ...syls].filter((x) => !recentItems.includes(x));
-  const a = pickReview(s, recentItems, 7);
+  // A rematch chosen from home: the letter being worked on (first in its list) comes three times itself.
+  const lead = fight.practice && recent.length ? gid(recent[0]) : null;
+  const a = lead ? [lead, lead, lead, ...pickReview(s, recentItems.filter((x) => x !== lead), 4)] : pickReview(s, recentItems, 7);
   const b = pickReview(s, rest, 12 - a.length);
   const ids = [...a, ...b];
   while (ids.length < 12 && ids.length) ids.push(ids[ids.length % (a.length + b.length)]);

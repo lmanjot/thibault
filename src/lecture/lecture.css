@@ -4925,3 +4925,41 @@
     font-size: clamp(14px, 1.6vw, 22px);
   }
 }
+
+/* ——— Dots, final take: the finished round is the medal on the tile (✓ in silver, gold or diamond);
+   the dots are the current round, waiting slots tinted with the colour they will light up in. ——— */
+.lz-pips.round-0 i:not(.on) {
+  background: #eef1f6;
+  box-shadow: inset 0 0 0 2px #a9b6c9;
+}
+.lz-pips.round-1 i:not(.on) {
+  background: #fff3c4;
+  box-shadow: inset 0 0 0 2px #e0a400;
+}
+.lz-pips.round-2 i:not(.on) {
+  background: #dcf8ff;
+  box-shadow: inset 0 0 0 2px #27a9d6;
+}
+.lz-pips.is-mastered i {
+  background: radial-gradient(circle at 35% 30%, #ffffff 0 15%, #8fefff 45%, #1d8fc0);
+  box-shadow: 0 0 0 1px #1d8fc0, 0 0 8px rgba(111, 227, 255, 0.95);
+}
+/* The medal: a shiny coin, not a grey dot. */
+.lz-week-star.is-done {
+  border: 2px solid #fff;
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+.lz-week-star.is-done.round-0 {
+  background: linear-gradient(135deg, #ffffff 0%, #d4dceb 30%, #8d9bb4 55%, #e9eef6 80%, #a9b6c9 100%);
+  box-shadow: 0 0 0 1px #7d8ba3, 0 0 8px rgba(200, 215, 240, 0.9);
+}
+.lz-week-star.is-done.round-1 {
+  background: linear-gradient(135deg, #fff6c2 0%, #ffd23f 30%, #d18f00 60%, #ffe27a 85%, #c98a00 100%);
+  box-shadow: 0 0 0 1px #a86f00, 0 0 10px rgba(255, 194, 26, 0.95);
+}
+.lz-week-star.is-done.round-2 {
+  background: linear-gradient(135deg, #ffffff 0%, #b9f6ff 30%, #27a9d6 60%, #c9f9ff 85%, #1d8fc0 100%);
+  box-shadow: 0 0 0 1px #16739c, 0 0 12px rgba(111, 227, 255, 1);
+}

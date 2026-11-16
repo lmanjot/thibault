@@ -125,6 +125,32 @@ function Game({ fontClass }: { fontClass: string }) {
     return () => document.removeEventListener("visibilitychange", check);
   }, []);
 
+  // A tab left open keeps the old game after an update: on the home screen (never mid-session),
+  // when the game comes back to the screen and every few minutes, look for a newer version and reload.
+  useEffect(() => {
+    const mine = document.querySelector<HTMLScriptElement>('script[src*="/lecture/app.js?v="]')?.src.split("?v=")[1];
+    if (!mine) return; // the dev server: nothing to compare
+    const check = () => {
+      if (document.visibilityState !== "visible" || screenRef.current !== "home" || !navigator.onLine) return;
+      fetch("/lecture/index.html", { cache: "no-store" })
+        .then((r) => (r.ok ? r.text() : ""))
+        .then((html) => {
+          const live = html.match(/\/lecture\/app\.js\?v=([a-z0-9]+)/)?.[1];
+          if (live && live !== mine && screenRef.current === "home") location.reload();
+        })
+        .catch(() => {});
+    };
+    const id = setInterval(check, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    check();
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, []);
+
   const { form } = formFor(formStep(save));
   const fighter = fighterOf(save, form);
   const pickFighter = (id?: string) => {
@@ -151,10 +177,10 @@ function Game({ fontClass }: { fontClass: string }) {
   }
 
   /** A revision fight he chooses: a rematch against a boss already met, harder, more zénis. */
-  function startPractice() {
+  function startPractice(targeted: boolean) {
     sfx.unlock();
     const boss = rematchFor(formStep(save), save.progress.beaten, save.progress.practices ?? 0);
-    setScreen({ s: "versus", boss, fight: practiceFight(save) });
+    setScreen({ s: "versus", boss, fight: practiceFight(save, targeted) });
     speak([boss.name, L.attacks]);
   }
 
@@ -406,7 +432,7 @@ function Home({
   save: Save;
   onTrain: () => void;
   onBoss: () => void;
-  onPractice: () => void;
+  onPractice: (targeted: boolean) => void;
   onParent: () => void;
   onPick: (g: string) => void;
   onShop: () => void;
@@ -469,7 +495,9 @@ function Home({
           </div>
           <span className="lz-hint-kid">
             {focus && focusRound.round > 0 ? (
-              <>Points {roundName} · lettre {GRAPHEME[focus]?.display ?? ""}</>
+              <>
+                Lettre {GRAPHEME[focus]?.display ?? ""} : points {roundName === "or" ? "d'or" : "diamant"} {focusRound.dots}/3
+              </>
             ) : next ? (
               <>
                 Prochain pouvoir : {next.name}{focus ? ` · réussis la lettre ${GRAPHEME[focus]?.display ?? ""}` : ""}
@@ -529,18 +557,28 @@ function Home({
               {fight.kind === "revision" ? "Révision" : "Boss"} : {boss.name}
             </button>
           )}
-          {/* The targeted challenge is always there while the parent has it on; the plain revision only without a story boss. */}
-          {(target || !(fight && boss)) && (
-            // No story boss waiting: a revision fight (a rematch) is always there, harder and worth more.
+          {/* No story boss waiting: a revision fight (a rematch, with the letter being worked on) is always there. */}
+          {!(fight && boss) && (
             <button
               className="lz-cta lz-cta-boss is-revision is-practice"
-              onClick={onPractice}
+              onClick={() => onPractice(false)}
               title={`Prochain boss de l'histoire : réussis une lettre · grande révision dans ${toRevision} lettre${toRevision > 1 ? "s" : ""}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={ASSET(rematch.sprite)} alt="" className="lz-cta-face" />
               <span className="lz-practice-label">
-                {target ? `Défi ${targetLabel(target.must)}` : "Révision"}
+                Révision
+                <small>zénis ×3</small>
+              </span>
+            </button>
+          )}
+          {/* The targeted challenge, only on the parent's letters, while the parent has it on. */}
+          {target && (
+            <button className="lz-cta lz-cta-boss is-revision is-practice is-target" onClick={() => onPractice(true)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ASSET(rematch.sprite)} alt="" className="lz-cta-face" />
+              <span className="lz-practice-label">
+                Défi {targetLabel(target.must)}
                 <small>zénis ×3</small>
               </span>
             </button>

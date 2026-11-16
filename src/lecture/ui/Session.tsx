@@ -37,7 +37,7 @@ const TRAINING_BGS = ["bg_papaya.png", "bg_namek.png", "bg_road.png"];
 const SECTION_LABEL: Record<string, string> = {
   warm: "Échauffement",
   train: "Entraînement",
-  defi: "Défi",
+  defi: "Round final",
   boss: "Combat",
 };
 
