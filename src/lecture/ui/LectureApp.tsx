@@ -74,7 +74,11 @@ function Game({ fontClass }: { fontClass: string }) {
     vv?.addEventListener("resize", setVh);
     window.addEventListener("resize", setVh);
     window.addEventListener("orientationchange", setVh);
+    // Some browsers (Windows tablets) resize the window without a timely resize event: watch the page too.
+    const ro = new ResizeObserver(setVh);
+    ro.observe(document.documentElement);
     return () => {
+      ro.disconnect();
       document.documentElement.style.overflow = prev;
       vv?.removeEventListener("resize", setVh);
       window.removeEventListener("resize", setVh);
@@ -365,6 +369,28 @@ function Home({
     return () => clearTimeout(t);
   }, [armed]);
 
+  // Shrink the home column when the screen is too short for it (Windows tablets with the browser bar,
+  // small laptops): every button, the boss one included, must stay on screen without scrolling.
+  const mainRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.zoom = "";
+      if (getComputedStyle(el).display === "contents") return; // phone portrait: one column, scrolls
+      const avail = el.parentElement!.clientHeight; // the column's own padding keeps the tablet bottom margin
+      const need = el.scrollHeight;
+      if (need > avail) el.style.zoom = String(Math.max(0.55, avail / need));
+    };
+    fit();
+    document.fonts?.ready.then(fit);
+    // The screen's size, and the column's own (sizes follow --vh); the fit ends on the same zoom, so no loop.
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.parentElement!);
+    for (const c of el.children) ro.observe(c);
+    return () => ro.disconnect();
+  });
+
   return (
     <div className="lz-home" style={{ backgroundImage: `url(${ASSET(equipped(save, "scene")?.img ?? "bg_papaya.png")})` }}>
       <div className="lz-home-shade" />
@@ -375,7 +401,7 @@ function Home({
           <img className="lz-companion" src={ASSET((form.kid && companion.imgKid) || companion.img)} alt={companion.name} />
         )}
       </div>
-      <div className="lz-home-main">
+      <div className="lz-home-main" ref={mainRef}>
         <h1 className="lz-brand">
           Lecture <span>Z</span>
         </h1>

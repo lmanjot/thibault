@@ -20,7 +20,8 @@
   position: fixed;
   inset: 0;
   /* The visible height (iPad/iPhone Safari: without the toolbar), measured by the game. */
-  height: calc(100 * var(--vh, 1vh));
+  /* Never taller than the window, even if the measure lags behind a resize (Windows tablets). */
+  height: min(100%, calc(100 * var(--vh, 1vh)));
   bottom: auto;
   z-index: 100;
   overflow: hidden;
@@ -436,6 +437,8 @@
   inset: 0;
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  /* One row exactly as tall as the screen: a tall Goku must never push the buttons below it. */
+  grid-template-rows: minmax(0, 100%);
   align-items: end;
   background-size: cover;
   background-position: center 62%;
@@ -1782,6 +1785,7 @@
 @media (max-width: 760px), (orientation: portrait) {
   .lz-home {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     align-items: start;
   }
   .lz-home-hero {
