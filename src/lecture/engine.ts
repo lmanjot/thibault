@@ -515,19 +515,26 @@ function syllablesWith(s: Save, g: string): string[] {
  * About 7 of 11 on the letter, 4 on the others.
  */
 export function buildSession(s: Save): Ex[] {
-  // Targeted revision on: training works only the parent's letters too.
   const target = activeTarget(s);
-  if (target) return targetExercises(s, target, 11, (i) => (i < 2 ? "warm" : i < 9 ? "train" : "defi"));
-  const out: Ex[] = [];
   const f = focusSound(s);
+  // Targeted revision on, and no other letter being learned: training works only the parent's letters.
+  if (target && (!f || target.must.includes(f))) return targetExercises(s, target, 11, (i) => (i < 2 ? "warm" : i < 9 ? "train" : "defi"));
+  const out: Ex[] = [];
   const learned = knownSounds(s).filter((g) => g !== f);
   const syls = availableSyllables(s);
   const pastSyls = f ? syls.filter((x) => !sylHas(x, f)) : syls;
-  const pastPool = [...learned.map(gid), ...pastSyls];
+  // While a letter is being learned (f), it stays the heart of the session; with a targeted revision
+  // on, the review part (warm-up, one training question, one challenge) is the parent's letters.
+  const ts = target ? targetSave(s, target) : s;
+  const reviewSyls = target ? targetSyllables(s, target) : pastSyls;
+  const reviewLetters = target ? target.must : learned;
+  const pastPool = [...reviewLetters.map(gid), ...reviewSyls];
+  const review = (id: string, section: Section, bump = 0) =>
+    target ? itemEx(ts, id, target.must.find((g) => gid(g) !== id) ?? null, section, bump) : itemEx(s, id, f, section, bump);
 
   // 1. Échauffement — 2 things learned before (a syllable first when there are some)
-  const warm = pastSyls.length >= 2 ? [...pickReview(s, pastSyls, 1), ...pickReview(s, learned.map(gid), 1)] : pickReview(s, pastPool, 2);
-  out.push(...warm.map((id) => itemEx(s, id, f, "warm")));
+  const warm = reviewSyls.length >= 2 ? [...pickReview(ts, reviewSyls, 1), ...pickReview(ts, reviewLetters.map(gid), 1)] : pickReview(ts, pastPool, 2);
+  out.push(...warm.map((id) => review(id, "warm")));
 
   // 2. Entraînement
   const train: Ex[] = [];
@@ -543,8 +550,8 @@ export function buildSession(s: Save): Ex[] {
     for (let i = fsyl.length; i < 2; i++) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t)); // 6 of 7 on the letter
     // The other known letters fill the rest (at least one), or more of the letter when it is the only one.
     const rest = Math.max(1, 7 - train.length);
-    const past = pastPool.length ? pickReview(s, pastPool, rest) : [];
-    past.forEach((id) => train.push(itemEx(s, id, f, "train")));
+    const past = pastPool.length ? pickReview(ts, pastPool, rest) : [];
+    past.forEach((id) => train.push(review(id, "train")));
     for (let i = past.length; i < rest; i++) train.push(soundEx(s, f, f, "train"));
   }
   out.push(...spread(shuffle(train)));
@@ -555,7 +562,7 @@ export function buildSession(s: Save): Ex[] {
     out.push(fs.length && Math.random() < 0.5 ? sylEx(s, pickReview(s, fs, 1)[0], "defi", 2) : soundEx(s, f, f, "defi", 2));
   }
   const mixed = [...pastPool, ...(f ? [] : syls)];
-  if (mixed.length) out.push(itemEx(s, pickReview(s, mixed, 1)[0], f, "defi", 2));
+  if (mixed.length) out.push(review(pickReview(ts, mixed, 1)[0], "defi", 2));
   else if (f) out.push(soundEx(s, f, f, "defi", 2));
   return out;
 }
