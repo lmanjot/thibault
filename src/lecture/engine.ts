@@ -33,6 +33,8 @@ export interface Settings {
   weekSounds: string[];
   weekStart: string;
   font: "script" | "cursive";
+  /** Set only on the copy of the save a targeted fight is built from (never stored). */
+  targeted?: boolean;
   focus?: string; // letter picked on the home screen
   target?: Target; // targeted revision, set by the parent
 }
@@ -320,7 +322,7 @@ function choices(s: Save, target: string, focus: string | null, n: number): stri
   // Same kind first: a vowel among vowels is harder to spot than among consonants.
   const kind = GRAPHEME[target].kind;
   shuffle(known.filter((x) => GRAPHEME[x].kind === kind)).forEach(add);
-  const targeted = !!s.settings.target?.on; // targeted revision: only the chosen letters, fewer choices if need be
+  const targeted = !!s.settings.targeted; // inside a targeted fight: only the chosen letters, fewer choices if need be
   if (kind === "v" && !targeted) shuffle(SPICE_VOWELS).forEach(add);
   shuffle(known).forEach(add);
   if (!targeted) shuffle(SPICE_VOWELS).forEach(add);
@@ -518,26 +520,16 @@ function syllablesWith(s: Save, g: string): string[] {
  * About 7 of 11 on the letter, 4 on the others.
  */
 export function buildSession(s: Save): Ex[] {
-  const target = activeTarget(s);
   const f = focusSound(s);
-  // Targeted revision on, and no other letter being learned: training works only the parent's letters.
-  if (target && (!f || target.must.includes(f))) return targetExercises(s, target, 11, (i) => (i < 2 ? "warm" : i < 9 ? "train" : "defi"));
   const out: Ex[] = [];
   const learned = knownSounds(s).filter((g) => g !== f);
   const syls = availableSyllables(s);
   const pastSyls = f ? syls.filter((x) => !sylHas(x, f)) : syls;
-  // While a letter is being learned (f), it stays the heart of the session; with a targeted revision
-  // on, the review part (warm-up, one training question, one challenge) is the parent's letters.
-  const ts = target ? targetSave(s, target) : s;
-  const reviewSyls = target ? targetSyllables(s, target) : pastSyls;
-  const reviewLetters = target ? target.must : learned;
-  const pastPool = [...reviewLetters.map(gid), ...reviewSyls];
-  const review = (id: string, section: Section, bump = 0) =>
-    target ? itemEx(ts, id, target.must.find((g) => gid(g) !== id) ?? null, section, bump) : itemEx(s, id, f, section, bump);
+  const pastPool = [...learned.map(gid), ...pastSyls];
 
   // 1. Échauffement — 2 things learned before (a syllable first when there are some)
-  const warm = reviewSyls.length >= 2 ? [...pickReview(ts, reviewSyls, 1), ...pickReview(ts, reviewLetters.map(gid), 1)] : pickReview(ts, pastPool, 2);
-  out.push(...warm.map((id) => review(id, "warm")));
+  const warm = pastSyls.length >= 2 ? [...pickReview(s, pastSyls, 1), ...pickReview(s, learned.map(gid), 1)] : pickReview(s, pastPool, 2);
+  out.push(...warm.map((id) => itemEx(s, id, f, "warm")));
 
   // 2. Entraînement
   const train: Ex[] = [];
@@ -553,8 +545,8 @@ export function buildSession(s: Save): Ex[] {
     for (let i = fsyl.length; i < 2; i++) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t)); // 6 of 7 on the letter
     // The other known letters fill the rest (at least one), or more of the letter when it is the only one.
     const rest = Math.max(1, 7 - train.length);
-    const past = pastPool.length ? pickReview(ts, pastPool, rest) : [];
-    past.forEach((id) => train.push(review(id, "train")));
+    const past = pastPool.length ? pickReview(s, pastPool, rest) : [];
+    past.forEach((id) => train.push(itemEx(s, id, f, "train")));
     for (let i = past.length; i < rest; i++) train.push(soundEx(s, f, f, "train"));
   }
   out.push(...spread(shuffle(train)));
@@ -565,7 +557,7 @@ export function buildSession(s: Save): Ex[] {
     out.push(fs.length && Math.random() < 0.5 ? sylEx(s, pickReview(s, fs, 1)[0], "defi", 2) : soundEx(s, f, f, "defi", 2));
   }
   const mixed = [...pastPool, ...(f ? [] : syls)];
-  if (mixed.length) out.push(review(pickReview(ts, mixed, 1)[0], "defi", 2));
+  if (mixed.length) out.push(itemEx(s, pickReview(s, mixed, 1)[0], f, "defi", 2));
   else if (f) out.push(soundEx(s, f, f, "defi", 2));
   return out;
 }
@@ -617,7 +609,7 @@ export function starsFor(ok: number, total: number): number {
 function targetSave(s: Save, t: Target): Save {
   const known = knownSounds(s);
   const traps = t.must.flatMap((g) => CONFUSE[g] ?? []).filter((g) => known.includes(g));
-  return { ...s, settings: { ...s.settings, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
+  return { ...s, settings: { ...s.settings, targeted: true, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
 }
 
 /** Syllables of a targeted revision: each one has a "must" letter (« lu », « re » for e, u + l, r). */
