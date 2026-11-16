@@ -4496,3 +4496,23 @@
   opacity: 1;
   filter: none;
 }
+
+/* Phones: five choices (or wide ones like « ou », « nou ») go on two lines instead of overflowing. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-options.n5,
+  .lz-options.n6 {
+    flex-wrap: wrap;
+    row-gap: 14px;
+  }
+  .lz-options.n5 .lz-tile,
+  .lz-options.n6 .lz-tile {
+    flex: 0 0 calc((100% - 16px) / 3);
+    max-width: 104px;
+  }
+  .lz-options .lz-tile {
+    white-space: nowrap;
+  }
+  .lz-options.n4 .lz-tile.syl {
+    font-size: 34px;
+  }
+}

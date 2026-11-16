@@ -313,9 +313,11 @@ function choices(s: Save, target: string, focus: string | null, n: number): stri
   // Same kind first: a vowel among vowels is harder to spot than among consonants.
   const kind = GRAPHEME[target].kind;
   shuffle(known.filter((x) => GRAPHEME[x].kind === kind)).forEach(add);
-  if (kind === "v") shuffle(SPICE_VOWELS).forEach(add);
+  const targeted = !!s.settings.target?.on; // targeted revision: only the chosen letters, fewer choices if need be
+  if (kind === "v" && !targeted) shuffle(SPICE_VOWELS).forEach(add);
   shuffle(known).forEach(add);
-  shuffle(SPICE_VOWELS).forEach(add);
+  if (!targeted) shuffle(SPICE_VOWELS).forEach(add);
+  else for (const x of shuffle(SPICE_VOWELS)) if (out.length < 3) add(x); // never fewer than 3 choices
   return shuffle(out);
 }
 
@@ -591,16 +593,20 @@ export function starsFor(ok: number, total: number): number {
 
 /**
  * The save as seen by a targeted revision: only its letters are "known" (choices, syllables), plus
- * the look-alikes of the "must" letters as traps (e: é, è · u: n, ou), never asked themselves.
+ * the look-alikes of the "must" letters he already knows as traps (e: é, è), never asked themselves.
+ * Letters he has not learned yet (« ou » for u) never show up.
  */
 function targetSave(s: Save, t: Target): Save {
-  const traps = t.must.flatMap((g) => CONFUSE[g] ?? []);
+  const known = knownSounds(s);
+  const traps = t.must.flatMap((g) => CONFUSE[g] ?? []).filter((g) => known.includes(g));
   return { ...s, settings: { ...s.settings, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
 }
 
 /** Syllables of a targeted revision: each one has a "must" letter (« lu », « re » for e, u + l, r). */
 export function targetSyllables(s: Save, t: Target): string[] {
-  return availableSyllables(targetSave(s, t)).filter((id) => t.must.some((g) => sylHas(id, g)));
+  // Only the chosen letters build the syllables asked (the traps are only wrong answers).
+  const own: Save = { ...s, settings: { ...s.settings, classSounds: [...t.extra, ...t.must] } };
+  return availableSyllables(own).filter((id) => t.must.some((g) => sylHas(id, g)));
 }
 
 /**
