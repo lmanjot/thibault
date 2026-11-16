@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { GRAPHEME, GRAPHEMES } from "../content";
-import { availableSyllables, gid, level, newSave, today, type Save } from "../engine";
+import { activeTarget, availableSyllables, gid, level, newSave, parseSyl, sylText, targetSyllables, today, type Save, type Target } from "../engine";
 import { hasRecording, loadRecordings, saveRecording, speak, soundPart } from "../audio";
 import { Icon, Pips } from "./bits";
 import { VoiceLines } from "./VoiceLines";
@@ -164,6 +164,8 @@ export function Parent({ save, onChange, onClose }: { save: Save; onChange: (s: 
           </div>
         </section>
 
+        <TargetPanel save={save} set={set} />
+
         <section>
           <h3>Écriture</h3>
           <div className="lz-seg">
@@ -288,6 +290,62 @@ function SyncPanel({ save, onChange }: { save: Save; onChange: (s: Save) => void
         </>
       )}
       {msg && <p className="lz-hint lz-sync-msg">{msg}</p>}
+    </section>
+  );
+}
+
+/**
+ * Targeted revision: while on, the home revision fight works only the chosen letters.
+ * Touch a letter: once = obligatoire (in every question), twice = d'appoint (helps build syllables), three times = off.
+ */
+function TargetPanel({ save, set }: { save: Save; set: (patch: Partial<Save["settings"]>) => void }) {
+  const t: Target = save.settings.target ?? { on: false, must: [], extra: [] };
+  const put = (patch: Partial<Target>) => set({ target: { ...t, ...patch } });
+  function cycle(g: string) {
+    if (t.must.includes(g)) put({ must: t.must.filter((x) => x !== g), extra: [...t.extra, g] });
+    else if (t.extra.includes(g)) put({ extra: t.extra.filter((x) => x !== g) });
+    else put({ must: [...t.must, g] });
+  }
+  const active = activeTarget({ ...save, settings: { ...save.settings, target: { ...t, on: true } } });
+  const syls = active ? targetSyllables(save, active) : [];
+  const word = (id: string) => {
+    const { c, v } = parseSyl(id);
+    return sylText(c, v);
+  };
+  return (
+    <section>
+      <h3>Révision ciblée</h3>
+      <p className="lz-hint">
+        Quand c&apos;est activé, le bouton « Révision » de l&apos;accueil devient un défi sur ces lettres seulement (zénis ×3).
+        Touchez une lettre : une fois = <b className="lz-tag-must">obligatoire</b> (dans chaque question), deux fois = <b className="lz-tag-extra">d&apos;appoint</b> (pour former
+        les syllabes), trois fois = retirée.
+      </p>
+      <div className="lz-seg">
+        <button className={!t.on ? "on" : ""} onClick={() => put({ on: false })}>
+          Désactivée
+        </button>
+        <button className={t.on ? "on" : ""} onClick={() => put({ on: true })}>
+          Activée
+        </button>
+      </div>
+      <div className="lz-palette lz-target-palette">
+        {GRAPHEMES.map((g) => (
+          <button
+            key={g.id}
+            className={`lz-read kind-${g.kind} ${t.must.includes(g.id) ? "is-must" : t.extra.includes(g.id) ? "is-extra" : ""}`}
+            onClick={() => cycle(g.id)}
+          >
+            {g.display}
+          </button>
+        ))}
+      </div>
+      <p className="lz-hint">
+        {!active
+          ? "Choisissez au moins une lettre obligatoire."
+          : syls.length
+            ? `${syls.length} syllabe${syls.length > 1 ? "s" : ""} : ${syls.map(word).join(", ")}.`
+            : "Pas de syllabe possible : ajoutez une consonne (ou une voyelle) d'appoint. Le défi fera seulement les lettres et les mots."}
+      </p>
     </section>
   );
 }

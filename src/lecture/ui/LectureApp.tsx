@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ASSET, attackFor, bossFor, formFor, GRAPHEME, rematchFor, type Boss } from "../content";
 import {
+  activeTarget,
   nextFight,
   practiceFight,
   lettersToRevision,
@@ -218,7 +219,9 @@ function Game({ fontClass }: { fontClass: string }) {
             </div>
           </div>
           <p className="lz-reward-kicker lz-vs-kind">
-            {screen.fight.practice
+            {screen.fight.target
+              ? `Défi des lettres ${targetLabel(screen.fight.letters)} · zénis ×3`
+              : screen.fight.practice
               ? "Combat de révision · zénis ×3"
               : screen.fight.kind === "revision"
                 ? "Grande révision"
@@ -353,6 +356,7 @@ function Home({
   const fight = nextFight(save);
   const boss = fight ? bossFor(formStep(save), fight.kind, save.progress.beaten) : undefined;
   const toRevision = lettersToRevision(save);
+  const target = activeTarget(save);
   const rematch = rematchFor(formStep(save), save.progress.beaten, save.progress.practices ?? 0);
   const week = save.settings.weekSounds.filter((g) => GRAPHEME[g]);
   const focus = focusSound(save);
@@ -487,7 +491,7 @@ function Home({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={ASSET(rematch.sprite)} alt="" className="lz-cta-face" />
               <span className="lz-practice-label">
-                Révision
+                {target ? `Défi ${targetLabel(target.must)}` : "Révision"}
                 <small>zénis ×3</small>
               </span>
             </button>
@@ -598,4 +602,9 @@ function Bonus({
       </div>
     );
   return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
+}
+
+/** « e · u » */
+function targetLabel(letters: string[] = []): string {
+  return letters.map((g) => GRAPHEME[g]?.display ?? g).join(" · ");
 }

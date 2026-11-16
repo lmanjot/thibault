@@ -51,5 +51,41 @@
   },
   "è": {
     "say": "è."
+  },
+  "rè": {
+    "say": "raie",
+    "word": true
+  },
+  "mè": {
+    "say": "mais",
+    "word": true
+  },
+  "sè": {
+    "say": "c'est",
+    "word": true
+  },
+  "fè": {
+    "say": "fait",
+    "word": true
+  },
+  "chè": {
+    "say": "chai",
+    "word": true
+  },
+  "jè": {
+    "say": "jet",
+    "word": true
+  },
+  "zè": {
+    "say": "zai",
+    "word": true
+  },
+  "pè": {
+    "say": "paix",
+    "word": true
+  },
+  "dè": {
+    "say": "dais",
+    "word": true
   }
 }

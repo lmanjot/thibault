@@ -30,21 +30,21 @@ export const GRAPHEMES: Grapheme[] = [
   g("é", "v", { say: "é" }),
   g("è", "v", { say: "è" }),
   // Continuous consonants first (easier to blend: "mmmm-a")
-  g("l", "c"),
+  g("l", "c", { noVowels: ["è"] }), // the voice cannot say « lè » (it says « lé »)
   g("r", "c"),
   g("m", "c"),
   g("s", "c"),
   g("f", "c"),
   g("ch", "c"),
-  g("v", "c"),
-  g("n", "c"),
+  g("v", "c", { noVowels: ["è"] }), // the voice cannot say « vè » (it says « vé »)
+  g("n", "c", { noVowels: ["è"] }), // the voice cannot say « nè » (it says « né »)
   g("j", "c"),
   g("z", "c"),
   // Stop consonants
   g("p", "c"),
-  g("t", "c"),
+  g("t", "c", { noVowels: ["è"] }), // the voice cannot say « tè » (it says « té »)
   g("d", "c"),
-  g("b", "c"),
+  g("b", "c", { noVowels: ["è"] }), // the voice cannot say « bè » (it says « bé »)
   g("c", "c", { phon: "k", noVowels: ["i", "e", "é", "è", "in"] }),
   g("g", "c", { noVowels: ["i", "e", "é", "è", "u", "in"] }),
   // Complex vowels
@@ -520,10 +520,9 @@ export function rematchFor(step: number, beaten: string[] = [], turn = 0): Boss 
 }
 
 /**
- * Vowels never used to build syllables. The voice cannot say a syllable with « è » apart from « é »
- * (« pè » comes out as « pé »), which confuses a child; « è » is still practised with words and
- * the letter itself.
+ * Vowels never used to build syllables (none now). « è » syllables are said through a word that
+ * sounds the same (« lè » → « lait », see voice-tuning.json), since the voice says a bare « lè » as « lé ».
  */
-export const NO_SYLLABLE_VOWELS = ["è"];
+export const NO_SYLLABLE_VOWELS: string[] = [];
 
 export const ASSET = (name: string) => `/assets/dbz/ready/${name}`;

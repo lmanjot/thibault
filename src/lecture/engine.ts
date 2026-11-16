@@ -19,6 +19,18 @@ export interface Settings {
   weekStart: string;
   font: "script" | "cursive";
   focus?: string; // letter picked on the home screen
+  target?: Target; // targeted revision, set by the parent
+}
+
+/**
+ * Targeted revision (parent space): while on, the home revision fight works only these letters.
+ * Every question has at least one "must" letter; the "extra" letters only help build syllables
+ * and serve as look-alike wrong answers.
+ */
+export interface Target {
+  on: boolean;
+  must: string[];
+  extra: string[];
 }
 
 export interface Progress {
@@ -45,6 +57,7 @@ export interface Fight {
   letter?: string; // the letter just cleared (letter bosses)
   letters?: string[]; // the letters covered (revision bosses)
   practice?: boolean; // a rematch chosen from the home screen: revision questions, no story progress
+  target?: boolean; // targeted revision: only the parent's chosen letters
 }
 
 /** A revision boss comes after this many cleared letters. */
@@ -209,8 +222,18 @@ export function availableSyllables(s: Save, onlyConsonant?: string): string[] {
   return out;
 }
 
-/** A revision fight available any time: the last letters learned, and everything before. */
+/** The targeted revision's letters when it is on and has at least one "must" letter. */
+export function activeTarget(s: Save): Target | null {
+  const t = s.settings.target;
+  if (!t?.on) return null;
+  const must = t.must.filter((g) => GRAPHEME[g]);
+  return must.length ? { on: true, must, extra: t.extra.filter((g) => GRAPHEME[g] && !must.includes(g)) } : null;
+}
+
+/** A revision fight available any time: the last letters learned and everything before, or the targeted letters. */
 export function practiceFight(s: Save): Fight {
+  const t = activeTarget(s);
+  if (t) return { kind: "revision", practice: true, target: true, letters: t.must };
   return { kind: "revision", practice: true, letters: knownSounds(s).slice(-3) };
 }
 
@@ -268,6 +291,10 @@ function choices(s: Save, target: string, focus: string | null, n: number): stri
   };
   add(focus ?? undefined);
   shuffle((CONFUSE[target] ?? []).filter((x) => known.includes(x))).forEach(add);
+  // Same kind first: a vowel among vowels is harder to spot than among consonants.
+  const kind = GRAPHEME[target].kind;
+  shuffle(known.filter((x) => GRAPHEME[x].kind === kind)).forEach(add);
+  if (kind === "v") shuffle(SPICE_VOWELS).forEach(add);
   shuffle(known).forEach(add);
   shuffle(SPICE_VOWELS).forEach(add);
   return shuffle(out);
@@ -510,6 +537,10 @@ export function buildSession(s: Save): Ex[] {
  *   with more choices and syllables when there are some.
  */
 export function buildBoss(s: Save, fight: Fight): Ex[] {
+  if (fight.target) {
+    const t = activeTarget(s);
+    if (t) return buildTarget(s, t);
+  }
   const f = focusSound(s);
   if (fight.kind === "letter" && fight.letter) {
     const g = fight.letter;
@@ -534,4 +565,40 @@ export function starsFor(ok: number, total: number): number {
   if (!total) return 1;
   const r = ok / total;
   return r >= 0.9 ? 3 : r >= 0.7 ? 2 : 1;
+}
+
+/**
+ * The save as seen by a targeted revision: only its letters are "known" (choices, syllables), plus
+ * the look-alikes of the "must" letters as traps (e: é, è · u: n, ou), never asked themselves.
+ */
+function targetSave(s: Save, t: Target): Save {
+  const traps = t.must.flatMap((g) => CONFUSE[g] ?? []);
+  return { ...s, settings: { ...s.settings, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
+}
+
+/** Syllables of a targeted revision: each one has a "must" letter (« lu », « re » for e, u + l, r). */
+export function targetSyllables(s: Save, t: Target): string[] {
+  return availableSyllables(targetSave(s, t)).filter((id) => t.must.some((g) => sylHas(id, g)));
+}
+
+/**
+ * A targeted revision fight: 12 questions, each on a "must" letter. About half are syllables made
+ * with it (when the letters allow), the rest letter exercises (hear it, find it, complete a word),
+ * the other "must" letters always among the choices so they have to be told apart (e / u).
+ */
+function buildTarget(s: Save, t: Target): Ex[] {
+  const ts = targetSave(s, t);
+  const syls = targetSyllables(s, t);
+  const ids: string[] = [];
+  if (syls.length) {
+    const want = 6;
+    while (ids.length < want) ids.push(...pickReview(ts, syls, Math.min(want - ids.length, syls.length)));
+  }
+  for (let i = 0; ids.length < 12; i++) ids.push(gid(t.must[i % t.must.length]));
+  const rival = (id: string) => {
+    const own = id.startsWith("g:") ? id.slice(2) : null;
+    const others = t.must.filter((g) => g !== own);
+    return others.length ? rnd(others) : null;
+  };
+  return spread(shuffle(ids).map((id) => itemEx(ts, id, rival(id), "boss", 1)));
 }

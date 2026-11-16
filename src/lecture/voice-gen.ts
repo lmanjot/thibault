@@ -15,6 +15,7 @@ export interface Tuning {
   say?: string; // exact text sent to the voice (to fix a word or the rhythm)
   expression?: number; // 0 calm … 1 very lively
   speed?: number; // 0.8 slow … 1.1 fast
+  word?: boolean; // say it like a word (« lè » said as the word « lait »)
 }
 
 export const DEFAULT_LINE = { expression: 0.7, speed: 0.95 };
@@ -85,6 +86,7 @@ function withPauses(text: string): string {
 export function request(clip: Clip, tuning: Tuning = {}) {
   if (clip.short) {
     const text = tuning.say ?? clip.text;
+    if (tuning.word) clip = { ...clip, word: true };
     return {
       text: clip.word && !/[.!?]$/.test(text) ? `${text}.` : text,
       model_id: MODEL,

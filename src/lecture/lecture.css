@@ -4321,3 +4321,25 @@
     font-size: clamp(24px, calc(4.6 * var(--vh, 1vh)), 40px);
   }
 }
+
+/* ——— Parent space: targeted revision ——— */
+.lz-target-palette button.is-must {
+  border: 3px solid var(--gi);
+  background: #ffe3c7;
+  box-shadow: 0 3px 0 var(--gi-dark);
+}
+.lz-target-palette button.is-extra {
+  border: 3px solid var(--navy-2);
+  background: #e3ecfb;
+}
+.lz-tag-must,
+.lz-tag-extra {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #ffe3c7;
+  border: 2px solid var(--gi);
+}
+.lz-tag-extra {
+  background: #e3ecfb;
+  border-color: var(--navy-2);
+}
