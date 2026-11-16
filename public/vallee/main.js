@@ -4,7 +4,7 @@ import {
   CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
-import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES } from './math.js';
+import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS } from './math.js';
 import * as A from './art.js';
 import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
 
@@ -38,7 +38,7 @@ function newState() {
     orders: [], creatures: {}, badges: {},
     stats: { correct: 0, wrong: 0, planted: 0, watered: 0, harvests: 0, sold: 0, bought: 0, orders: 0, bois: 0, pierre: 0, cristal: 0, fish: 0, measureOK: 0, maxStreak: 0, made: {}, harvested: {}, battles: 0, caught: 0, fed: 0, collected: 0, perfectReviews: 0 },
     streak: 0, mastery: {}, objDone: {}, daily: {},
-    animals: [], barnSlots: 4, found: {}, stars: {}, defis: {}, ease: {}, easeRun: {},
+    animals: [], barnSlots: 4, found: {}, stars: {}, defis: {}, ease: {}, easeRun: {}, skills: {}, concepts: {}, lessons: {},
     pos: { ...START },
     settings: { sound: true, grade: 8, diff: 0, cats: {}, pin: '' },
   };
@@ -352,39 +352,134 @@ const themeOn = (cat) => !((S.settings.cats || {})[mKey(cat)] || {}).off;
 /** The theme to ask: the requested one, or another switched-on theme if the parents turned it off. */
 function themeFor(cat) {
   if (!cat || themeOn(cat)) return cat;
-  const on = Object.keys(CATS).filter(themeOn);
+  const on = liveCats();
   if (!on.length) return cat;
   return on.includes('calc') && Math.random() < 0.5 ? 'calc' : pick(on);
 }
-function diffFor(cat, off = 0) {
-  const fx = fixedLevel(cat);
-  if (fx) return fx;
-  const m = S.mastery[mKey(cat)];
-  let adj = 0;
-  adj += (S.ease || {})[mKey(cat)] || 0; // the child said "too hard" in this theme
-  if (!m || m.n < 3) adj -= 1; // warm-up: the first problems of a new theme are a bit easier
-  else if (m.r.length >= 6) {
-    const last = m.r.slice(-6), rate = last.filter(Boolean).length / last.length;
-    if (rate >= 0.84) adj = 1; else if (rate <= 0.34) adj = -1;
-  }
-  return clamp(Math.round(baseD() + off + adj), 1, 5);
+// ---- Skills: each operation ("calc:sub") and each theme climbs its own ladder of levels, up to a ceiling.
+// 4 right answers out of the last 5 at the working level: one level up. At the ceiling, the skill is mastered:
+// it then comes back less often (skills still being learned and the new 8H notions take its place).
+// 3 misses out of the last 4: one level down. The ceiling is higher in « Dur » mode and moves with the overall difficulty.
+const CALC_OPS = ['add', 'sub', 'mul', 'div', 'mental'];
+const NEW_ORDER = Object.keys(NEW_CONCEPTS);
+const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme'];
+// Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers in Normal mode. Themes not listed: [3, 4].
+const CAPS = { 'calc:add': [3, 3], 'calc:sub': [2, 3], 'calc:mul': [3, 4], 'calc:div': [3, 4], 'calc:mental': [3, 4], enigme: [4, 5] };
+const isCalc = (cat) => !cat || cat === 'calc' || cat === 'add' || cat === 'mul';
+const keyOf = (cat, op) => (op ? 'calc:' + op : mKey(cat));
+const catOf = (key) => (key.startsWith('calc:') ? 'calc' : key);
+const opOf = (key) => (key.startsWith('calc:') ? key.slice(5) : null);
+const isNew = (key) => NEW_ORDER.includes(key);
+const skillTitle = (key) => (opOf(key) ? OP_NAMES[opOf(key)].replace(/^./, (c) => c.toUpperCase()) : CATS[key] || key);
+function capFor(key) {
+  const diff = S.settings.diff || 0;
+  if (isNew(key)) return clamp(3 + Math.min(0, diff), 1, 3);
+  const c = CAPS[key] || [3, 4];
+  return clamp(c[S.settings.grade === 8 ? 1 : 0] + diff, 1, 5);
 }
-/** Ease key: a calculation's operation ("calc:sub"), or the theme. */
-const easeKey = (p) => (p.op ? 'calc:' + p.op : mKey(p.cat));
-const easeLabel = (p) => (p.op ? OP_NAMES[p.op] : (CATS[p.cat] || '').toLowerCase());
-const opEase = () => Object.fromEntries(Object.entries(S.ease || {}).filter(([k]) => k.startsWith('calc:')).map(([k, v]) => [k.slice(5), v]));
-function record(p, ok) {
-  // after "too hard", 4 first-try right answers in a row bring the level one step back up
-  const ek = easeKey(p);
-  S.ease = S.ease || {}; S.easeRun = S.easeRun || {};
-  if (S.ease[ek] < 0) {
-    S.easeRun[ek] = ok ? (S.easeRun[ek] || 0) + 1 : 0;
-    if (S.easeRun[ek] >= 4) { S.ease[ek]++; S.easeRun[ek] = 0; if (!S.ease[ek]) delete S.ease[ek]; }
+// A new skill starts a step below the player's level (an old save keeps the "too hard" steps it had).
+const startLv = (key) => clamp(isNew(key) ? 1 : Math.round(baseD()) - 1 + ((S.ease || {})[key] || 0), 1, capFor(key));
+function skillOf(key) {
+  S.skills = S.skills || {};
+  if (!S.skills[key]) S.skills[key] = { lv: startLv(key), r: [], n: 0, ok: 0, acq: 0 };
+  return S.skills[key];
+}
+/** Level shown in the panels, without creating the skill. */
+const shownLv = (key) => Math.min(((S.skills || {})[key] || { lv: startLv(key) }).lv, capFor(key));
+const isAcquis = (key) => { const s = (S.skills || {})[key]; return !!(s && s.acq && s.lv >= capFor(key)); };
+/** Working level of a skill. off: a harder action asks a bit above it, never above the ceiling. */
+function levelFor(key, off = 0) {
+  const fx = fixedLevel(catOf(key));
+  if (fx) return fx;
+  const cap = capFor(key);
+  return clamp(Math.min(cap, Math.min(skillOf(key).lv, cap) + off), 1, 5);
+}
+const unlockedConcepts = () => NEW_ORDER.filter((k) => (S.concepts || {})[k]);
+/** Skills that can be asked now: the basics and the 8H notions already unlocked, unless the parents switched them off. */
+const liveSkills = () => [...BASE_SKILLS, ...unlockedConcepts()].filter((k) => themeOn(catOf(k)));
+const liveCats = () => [...new Set(liveSkills().map(catOf))];
+function wpick(list, w) {
+  const ws = list.map(w);
+  let r = Math.random() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < list.length; i++) { r -= ws[i]; if (r < 0) return list[i]; }
+  return list[list.length - 1];
+}
+/**
+ * What to ask for a requested theme. A calculation picks its operation (the ones still being learned come more often).
+ * Unless noSwap, a mastered skill often gives way to one still being learned, and a new 8H notion gets introduced.
+ */
+function pickSkill(reqCat, op, noSwap) {
+  const cat = themeFor(reqCat || 'calc');
+  if (isCalc(cat)) {
+    const ops = cat === 'add' ? ['add', 'sub'] : cat === 'mul' ? ['mul', 'div'] : CALC_OPS;
+    op = op && ops.includes(op) ? op : wpick(ops, (o) => (isAcquis('calc:' + o) ? 1 : 3));
+  } else op = null;
+  let key = keyOf(cat, op);
+  if (!noSwap) {
+    const fresh = unlockedConcepts().filter((k) => themeOn(k) && skillOf(k).n < 5);
+    if (fresh.length && Math.random() < 0.3) key = pick(fresh);
+    else if (isAcquis(key) && Math.random() < 0.7) {
+      const alt = liveSkills().filter((k) => !isAcquis(k));
+      if (alt.length) key = wpick(alt, (k) => (isNew(k) ? 3 : 1));
+    }
   }
+  return { key, cat: catOf(key), op: opOf(key) };
+}
+/** The next 8H notion unlocks when enough skills are mastered and the previous notion has been practised. */
+function checkConcepts() {
+  if (S.lvl < 4) return;
+  S.concepts = S.concepts || {};
+  const got = unlockedConcepts();
+  if (got.length >= NEW_ORDER.length) return;
+  const prev = got[got.length - 1];
+  if (prev && themeOn(prev) && skillOf(prev).n < 8) return;
+  const acq = [...BASE_SKILLS, ...got].filter(isAcquis).length;
+  if (acq < (S.settings.grade === 8 ? 3 : 4) + got.length) return;
+  const k = NEW_ORDER.find((c) => !S.concepts[c]);
+  S.concepts[k] = now();
+  toast(`Nouvelle notion de 8H : ${CATS[k]} ! Elle arrive bientôt dans tes problèmes.`, 'gold');
+}
+function record(p, ok) {
+  const key = p.key || keyOf(p.cat, p.op);
+  const s = skillOf(key), cap = capFor(key);
+  s.n++; if (ok) s.ok++;
   const k = mKey(p.cat);
   const m = (S.mastery[k] = S.mastery[k] || { ok: 0, n: 0, r: [] });
   m.n++; if (ok) m.ok++;
   m.r.push(ok ? 1 : 0); if (m.r.length > 8) m.r.shift();
+  if (s.lv > cap) s.lv = cap;
+  // only problems at the working level move the ladder (not a level fixed by the parents, nor a harder action)
+  if (!fixedLevel(catOf(key)) && p.d === s.lv) {
+    s.r.push(ok ? 1 : 0); if (s.r.length > 5) s.r.shift();
+    if (s.r.length >= 5 && s.r.reduce((a, b) => a + b, 0) >= 4) {
+      s.r = [];
+      if (s.lv < cap) s.lv++;
+      else if (!s.acq) { s.acq = now(); toast(`${skillTitle(key)} : maîtrisé ! Place à d’autres défis.`, 'gold'); }
+    } else if (s.r.length >= 4 && s.r.slice(-4).reduce((a, b) => a + b, 0) <= 1) {
+      s.r = []; s.acq = 0;
+      if (s.lv > 1) s.lv--;
+    }
+  }
+  checkConcepts();
+}
+
+/** A lesson card: the notion, how to do it, a worked example. intro: shown before the first problem of a new notion. */
+function showLesson(key, intro) {
+  const les = LESSONS[key];
+  return new Promise((resolve) => {
+    if (!les) { resolve(); return; }
+    const card = h('div', { class: 'lesson win' },
+      h('div', { class: 'les-tag' }, intro ? `Nouvelle notion · ${CATS[key] || ''}` : 'Leçon de Maître Hibou'),
+      h('h2', null, les.title),
+      h('div', { class: 'les-lines' }, les.lines.map((l) => h('p', { html: renderQ(l) }))),
+      h('div', { class: 'les-ex' }, h('b', null, 'Exemple'), les.ex.map((l) => h('p', { html: renderQ(l) }))),
+      h('button', { class: 'btn big', onclick: () => fin() }, intro ? 'J’ai compris, à moi !' : 'J’ai compris'));
+    const wrap = h('div', { class: 'layer modal top' }, card);
+    wrap.addEventListener('pointerdown', (e) => { if (e.target === wrap) fin(); });
+    let closed = false;
+    const fin = () => { if (closed) return; closed = true; popLayer(L); resolve(); };
+    const L = pushLayer(wrap, { onA: fin, onB: fin, onKey: (e) => { if (['Enter', ' ', 'Escape'].includes(e.key)) { fin(); return true; } return false; } });
+  });
 }
 
 function unlocksAt(L) {
@@ -619,17 +714,31 @@ const PRAISE = ['Bravo !', 'Super !', 'Génial !', 'Excellent !', 'Parfait !', '
  */
 async function askMath(opts) {
   let o = opts;
+  if (!o.problem) {
+    const sk = pickSkill(o.cat, o.op, o.noSwap);
+    o = { ...o, cat: sk.cat, op: sk.op, key: sk.key };
+    // the first time a new 8H notion comes up, Maître Hibou explains it
+    if (isNew(sk.key) && !(S.lessons || {})[sk.key]) {
+      S.lessons = S.lessons || {};
+      S.lessons[sk.key] = now(); save();
+      await showLesson(sk.key, true);
+    }
+  }
   for (;;) {
     const r = await askOnce(o);
     if (!r.easier) return r;
-    o = { ...o, cat: r.cat, op: r.op, d: r.op ? o.d : Math.max(1, r.d - 1) };
+    if (o.d) o = { ...o, d: Math.max(1, o.d - 1) };
   }
 }
 function askOnce(opts) {
   return new Promise((resolve) => {
-    const cat = opts.problem ? opts.problem.cat : themeFor(opts.cat || 'calc');
-    const dUsed = fixedLevel(cat) || (cat === opts.cat && opts.d) || diffFor(cat);
-    const p = opts.problem || makeProblem(cat, dUsed, opEase(), opts.op);
+    const p0 = opts.problem;
+    const cat = p0 ? p0.cat : opts.cat;
+    const skKey = p0 ? keyOf(p0.cat, p0.op) : opts.key;
+    const dUsed = p0 ? p0.d || 1 : fixedLevel(cat) || (opts.d ? Math.min(opts.d, capFor(skKey)) : levelFor(skKey, opts.off || 0));
+    const p = p0 || makeProblem(cat, dUsed, {}, opts.op);
+    if (!p0) { p.d = dUsed; p.key = skKey; }
+    let paused = false; // a lesson is open over the problem
     window.__lastP = p; // read by the test helpers in the console
     let tries = 0, input = '', locked = false;
     const hintCost = 5 + 5 * dUsed;
@@ -645,17 +754,22 @@ function askOnce(opts) {
       hintBtn.disabled = true; hintBtn.textContent = 'Indice acheté';
     } }, 'Indice · ', coinImg('coin sm'), ` ${hintCost}`);
     // "Trop dur" lowers this theme (or this operation) a step and asks an easier problem instead
-    const easier = (p.op ? true : p.cat !== 'argent' || !opts.problem) && !opts.problem && !fixedLevel(cat);
+    const easier = !p0 && !fixedLevel(cat);
     const hardBtn = easier ? h('button', { class: 'm-hard', onclick: () => {
       if (locked || tries > 0) return;
-      const ek = easeKey(p);
-      S.ease = S.ease || {};
-      S.ease[ek] = Math.max(-3, (S.ease[ek] || 0) - 1);
-      S.easeRun[ek] = 0;
-      toast(`D’accord ! Les ${easeLabel(p)} seront un peu plus faciles.`, 'blue');
+      const s = skillOf(skKey);
+      if (s.lv > 1) s.lv--;
+      s.r = []; s.acq = 0;
+      toast(`D’accord ! « ${skillTitle(skKey)} » : un peu plus facile.`, 'blue');
       save();
-      finish({ easier: true, cat, op: p.op || null, d: dUsed });
+      finish({ easier: true });
     } }, 'Trop dur ?') : null;
+    // « Comprendre »: the lesson of this notion, free, at any moment
+    const lesKey = LESSONS[p.lesson] ? p.lesson : LESSONS[skKey] ? skKey : LESSONS[mKey(cat)] ? mKey(cat) : null;
+    const learnBtn = lesKey ? h('button', { class: 'm-learn', onclick: async () => {
+      if (paused) return;
+      paused = true; await showLesson(lesKey, false); paused = false;
+    } }, 'Comprendre') : null;
     const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
     const ansVal = h('span', { class: 'm-val' });
     const ansRow = p.choices ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
@@ -665,7 +779,7 @@ function askOnce(opts) {
       h('span', { class: 'm-cat' }, CATS[p.cat] || 'Calcul'),
       h('span', { class: 'm-title' }, opts.title || ''),
       S.streak >= 2 ? h('span', { class: 'm-streak' }, `Série ×${S.streak}`) : null);
-    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, h('div', { class: 'm-hintrow' }, hardBtn, hintBtn), tip, ansRow, fb, pad);
+    const box = h('div', { class: 'mathbox win' + (opts.mount ? ' inline' : '') }, head, qEl, h('div', { class: 'm-hintrow' }, learnBtn, hardBtn, hintBtn), tip, ansRow, fb, pad);
     function paint() { ansVal.textContent = input || '?'; ansVal.classList.toggle('empty', !input); }
     function key(k) {
       if (locked) return;
@@ -678,7 +792,7 @@ function askOnce(opts) {
       if (activeMath === mathA) activeMath = null;
       document.removeEventListener('keydown', onDocKey, true);
       if (L) popLayer(L); else box.remove();
-      resolve(res);
+      resolve({ ...res, d: dUsed });
     }
     function submit(val) {
       if (locked) return;
@@ -736,6 +850,7 @@ function askOnce(opts) {
     }
     if (!opts.noQuit) box.append(h('button', { class: 'm-quit', onclick: () => { if (!locked) finish({ ok: false, quit: true }); } }, 'Plus tard'));
     function onDocKey(e) {
+      if (paused) return;
       if (locked && e.key === 'Enter' && pad.querySelector('.btn')) { pad.querySelector('.btn').click(); e.preventDefault(); e.stopPropagation(); return; }
       if (p.choices) {
         if (['ArrowRight', 'ArrowDown'].includes(e.key)) { moveSel(1); e.preventDefault(); e.stopPropagation(); return; }
@@ -787,7 +902,7 @@ async function askSeries(steps, title, needAll = true, off = 0) {
   let ok = 0, firsts = 0;
   for (let i = 0; i < steps.length; i++) {
     const st = typeof steps[i] === 'string' ? { cat: steps[i] } : steps[i];
-    const r = await askMath({ cat: st.cat, d: st.d || diffFor(st.cat, off), title: steps.length > 1 ? `${title} · ${i + 1}/${steps.length}` : title });
+    const r = await askMath({ cat: st.cat, off: st.off ?? off, title: steps.length > 1 ? `${title} · ${i + 1}/${steps.length}` : title });
     if (r.quit) return { ok, n: steps.length, firsts, quit: true, all: false };
     if (r.ok) { ok++; if (r.first) firsts++; } else if (needAll) return { ok, n: steps.length, firsts, quit: false, all: false };
   }
@@ -921,7 +1036,7 @@ async function waterMenu(i) {
       if (!(await confirm(`Encore ${fmtTime(remaining(p))}. Arroser encore ?`, 'Oui, encore', 'Non merci'))) return;
     }
   } else if (opts[k] && opts[k].startsWith('Arroser tout')) {
-    const r = await askSeries([{ cat: 'calc', d: diffFor('calc', 1) }, waterCat(), 'enigme'], 'Arroser tout le potager', false);
+    const r = await askSeries([{ cat: 'calc', off: 1 }, waterCat(), 'enigme'], 'Arroser tout le potager', false);
     if (r.ok >= 2) {
       let n = 0;
       S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.ok === 3 ? 0.75 : 0.45)); n++; } });
@@ -1426,10 +1541,11 @@ async function onFountain() {
 async function onOwl() {
   const who = 'Maître Hibou';
   const nStars = Object.values(S.defis).reduce((t, v) => t + v, 0);
-  const opts = [`Défis de l’Hibou (${nStars}/${DEFIS.length * 3} étoiles)`, 'Réviser un thème (gagne des récompenses)', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
+  const opts = [`Défis de l’Hibou (${nStars}/${DEFIS.length * 3} étoiles)`, 'Réviser un thème (gagne des récompenses)', 'Leçons : Maître Hibou explique', S.daily.hibou !== today() ? 'Défi du jour (5 questions)' : null, 'Mes progrès', 'Au revoir'].filter(Boolean);
   const k = await choose('Hou hou ! Que veux-tu faire, jeune calculateur ?', opts, who);
   const o = opts[k];
   if (o && o.startsWith('Défis de')) return defiLadder();
+  if (o && o.startsWith('Leçons')) return lessonsPanel();
   if (o && o.startsWith('Réviser')) {
     let cat = null;
     const P = panel('Réviser avec Maître Hibou', (body) => {
@@ -1440,14 +1556,13 @@ async function onOwl() {
         h('span', null, '• 5 sur 5 : gros bonus + engrais'),
         h('span', null, '• premier 5 sur 5 d’un thème : une étoile d’or et 100 pièces')));
       const nStars = Object.keys(S.stars).length;
-      body.append(h('p', { class: 'small' }, `Étoiles d’or : ${nStars} / ${Object.keys(CATS).length}`));
+      body.append(h('p', { class: 'small' }, `Étoiles d’or : ${nStars} / ${liveCats().length}`));
       const grid = h('div', { class: 'cats' });
-      for (const [k2, label] of Object.entries(CATS)) {
-        if (!themeOn(k2)) continue;
-        const m = S.mastery[k2];
-        grid.append(h('button', { class: 'catbtn' + (S.stars[k2] ? ' star' : ''), onclick: () => { cat = k2; P.close(); } },
+      for (const k2 of liveCats()) {
+        const label = CATS[k2];
+        grid.append(h('button', { class: 'catbtn' + (S.stars[k2] ? ' star' : '') + (isNew(k2) ? ' new' : ''), onclick: () => { cat = k2; P.close(); } },
           h('b', null, label, S.stars[k2] ? h('span', { class: 'gold' }, ' ★') : null),
-          h('small', null, m ? `${Math.round((m.ok / m.n) * 100)} % réussi` : 'Pas encore essayé')));
+          h('small', null, catLevelTxt(k2))));
       }
       body.append(grid);
     });
@@ -1463,6 +1578,29 @@ async function onOwl() {
       await celebrate({ title: 'Défi réussi !', lines: [`${score}/5 bonnes réponses`, `+${c} pièces, +2 engrais, +50 XP`], icons: [A.coinURL(), A.iconURL('engrais')] });
     } else if (score !== null) await say(`${score}/5. Pas mal ! Tu pourras retenter demain. Continue à t’entraîner !`, who);
   } else if (o === 'Mes progrès') return carnetPanel('progres');
+}
+/** "Niveau 2/3", "Maîtrisé", or for calculations how many operations are mastered. */
+function catLevelTxt(cat) {
+  if (cat === 'calc') { const n = CALC_OPS.filter((o) => isAcquis('calc:' + o)).length; return `${n}/${CALC_OPS.length} opérations maîtrisées`; }
+  if (isAcquis(cat)) return 'Maîtrisé';
+  return (S.skills || {})[cat] ? `Niveau ${shownLv(cat)}/${capFor(cat)}` : isNew(cat) ? 'Nouvelle notion' : 'Pas encore essayé';
+}
+async function lessonsPanel() {
+  let chosen = null;
+  const P = panel('Leçons de Maître Hibou', (body) => {
+    body.append(h('p', { class: 'small' }, 'Choisis une leçon : Maître Hibou t’explique, avec un exemple. Pendant un problème, le bouton « Comprendre » ouvre aussi la leçon.'));
+    const grid = h('div', { class: 'cats' });
+    for (const k of liveSkills()) {
+      if (!LESSONS[k]) continue;
+      grid.append(h('button', { class: 'catbtn' + (isNew(k) ? ' new' : ''), onclick: () => { chosen = k; P.close(); } },
+        h('b', null, LESSONS[k].title), h('small', null, isNew(k) ? 'Notion de 8H' : skillTitle(k))));
+    }
+    body.append(grid);
+    const left = NEW_ORDER.length - unlockedConcepts().length;
+    if (left) body.append(h('p', { class: 'small' }, `Encore ${left} notion${left > 1 ? 's' : ''} de 8H à découvrir : elles arrivent quand tu maîtrises tes compétences.`));
+  });
+  await P.done;
+  if (chosen) { await showLesson(chosen, false); return lessonsPanel(); }
 }
 // ---- Challenge ladder: 30 challenges of 5 problems, each a bit harder, with 1 to 3 stars.
 const DEFI_PACKS = [
@@ -1496,8 +1634,10 @@ async function defiLadder() {
   const df = chosen, d = defiD(df);
   let score = 0, won = 0;
   for (let i = 0; i < 5; i++) {
-    const cat = df.cats[i % df.cats.length] === 'enigme' || Math.random() < 0.15 ? (Math.random() < 0.5 ? 'enigme' : df.cats[i % df.cats.length]) : df.cats[i % df.cats.length];
-    const r = await askMath({ cat, d, title: `Défi ${df.n} · ${df.name} · ${i + 1}/5` });
+    const mix = df.name === 'Le grand mélange' ? [...df.cats, ...unlockedConcepts()] : null;
+    const base = mix ? pick(mix) : df.cats[i % df.cats.length];
+    const cat = base === 'enigme' || Math.random() < 0.15 ? (Math.random() < 0.5 ? 'enigme' : base) : base;
+    const r = await askMath({ cat, d, noSwap: true, title: `Défi ${df.n} · ${df.name} · ${i + 1}/5` });
     if (r.quit) { if (i === 0) return defiLadder(); break; }
     if (r.ok && r.first) { score++; const g = 4 + 2 * d; won += g; addCoins(g); }
     else if (r.ok) { won += 1; addCoins(1); }
@@ -1529,13 +1669,13 @@ async function defiLadder() {
 
 async function series(cat, n, off, title, mixed) {
   let score = 0, won = 0;
-  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme', 'enigme'];
+  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme', 'enigme', ...unlockedConcepts()];
   for (let i = 0; i < n; i++) {
     const c = mixed ? pick(pool) : cat;
-    const d = diffFor(c, off);
-    const r = await askMath({ cat: c, d, title: `${title} · ${i + 1}/${n}` });
+    // a revision stays on the chosen theme; the daily challenge mixes everything
+    const r = await askMath({ cat: c, off, noSwap: !mixed, title: `${title} · ${i + 1}/${n}` });
     if (r.quit) return i === 0 ? null : score;
-    const gain = r.ok ? (r.first ? 5 + 3 * d : 2) : 0;
+    const gain = r.ok ? (r.first ? 5 + 3 * r.d : 2) : 0;
     if (r.ok && r.first) score++;
     if (gain) { won += gain; addCoins(gain); }
     updateHud();
@@ -1656,7 +1796,7 @@ async function onRock(o) {
 async function onCrystal(o) {
   if (respawning(o)) return say(`Le cristal repousse lentement… (encore ${fmtTime(S.res[o.id] - now())})`);
   const cat = pick(['frac', 'conv', 'masse', 'contenance', 'geo']);
-  const r = await askSeries([{ cat, d: diffFor(cat, 1) }, 'enigme'], 'Récolter un cristal');
+  const r = await askSeries([{ cat, off: 1 }, 'enigme'], 'Récolter un cristal');
   if (!r.all) return;
   addItem('cristal', 1); S.stats.cristal++;
   S.res[o.id] = now() + 360000;
@@ -1750,16 +1890,19 @@ async function carnetPanel(tab) {
         h('div', null, h('b', null, S.stats.maxStreak), h('small', null, 'meilleure série')),
         h('div', null, h('b', null, S.stats.harvests), h('small', null, 'récoltes'))));
       if (nx) body.append(h('p', { class: 'note' }, 'Prochain déblocage — ' + nx));
-      body.append(h('h3', null, 'Par thème'));
+      body.append(h('h3', null, 'Mes compétences'));
       const tbl = h('div', { class: 'mastery' });
-      for (const [k, label] of Object.entries(CATS)) {
-        const m = S.mastery[k];
-        const pct = m ? Math.round((m.ok / m.n) * 100) : 0;
-        const stars = !m ? 0 : m.n < 5 ? 1 : pct >= 85 ? 3 : pct >= 60 ? 2 : 1;
-        tbl.append(h('div', { class: 'mrow' }, h('span', { class: 'mlabel' }, label), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })), h('span', { class: 'mpct' }, m ? `${pct} % (${m.n})` : '—'), h('span', { class: 'stars' }, '★'.repeat(stars) + '☆'.repeat(3 - stars))));
+      for (const k of liveSkills()) {
+        const s = (S.skills || {})[k], cap = capFor(k), acq = isAcquis(k);
+        const lv = s ? Math.min(s.lv, cap) : 0;
+        const pct = acq ? 100 : s ? Math.min(95, Math.round(((lv - 1 + s.r.filter(Boolean).length / 4) / cap) * 100)) : 0;
+        tbl.append(h('div', { class: 'mrow' + (acq ? ' acq' : '') }, h('span', { class: 'mlabel' }, skillTitle(k)), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })),
+          h('span', { class: 'mpct' }, acq ? 'Maîtrisé' : s ? `Niveau ${lv}/${cap}` : '—'), h('span', { class: 'stars' }, acq ? '★' : '')));
       }
       body.append(tbl);
-      body.append(h('p', { class: 'small' }, `Mode de jeu : ${S.settings.grade === 8 ? 'Dur' : 'Normal'}. Les problèmes s’adaptent tout seuls : plus tu réussis un thème, plus il devient difficile.`));
+      const left = NEW_ORDER.length - unlockedConcepts().length;
+      if (left) body.append(h('p', { class: 'note' }, `Encore ${left} notion${left > 1 ? 's' : ''} de 8H à découvrir. Maîtrise d’autres compétences pour les débloquer !`));
+      body.append(h('p', { class: 'small' }, `Mode de jeu : ${S.settings.grade === 8 ? 'Dur' : 'Normal'}. Une compétence monte d’un niveau quand tu réussis 4 questions sur 5. Une fois maîtrisée, elle revient moins souvent, pour laisser la place à d’autres.`));
     }
   }, { tabs: [['badges', 'Badges'], ['creatures', 'Créatures'], ['progres', 'Progrès']], tab }).done;
 }
@@ -1813,23 +1956,26 @@ async function parentPanel() {
         h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, 'Dur'))),
       h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté générale'),
         h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
-        h('small', null, `Niveau de base actuel : ${clamp(Math.round(baseD()), 1, 5)} sur 5 (selon le niveau du joueur, la classe et ce réglage). En « Auto », chaque thème s’adapte ensuite aux réussites.`)),
+        h('small', null, 'En « Auto », chaque compétence monte d’un niveau après 4 bonnes réponses sur 5, jusqu’à un plafond (plus haut en mode Dur et avec une difficulté plus élevée). Une fois maîtrisée, elle revient moins souvent et les notions de 8H se débloquent une à une, avec une petite leçon.')),
       h('h3', null, 'Par thème'),
-      h('p', { class: 'small' }, 'Fixez un niveau de 1 (très facile) à 5 (très difficile), ou laissez « Auto ». Décochez un thème pas encore vu en classe : il ne sera plus demandé.'));
+      h('p', { class: 'small' }, 'Fixez un niveau de 1 (très facile) à 5 (très difficile), ou laissez « Auto ». Décochez un thème pas encore vu en classe : il ne sera plus demandé. Les notions de 8H peuvent être débloquées à la main.'));
     const list = h('div', { class: 'pcats' });
     for (const [k, label] of Object.entries(CATS)) {
       const c = S.settings.cats[k] || {};
       const mm = S.mastery[k];
-      const now_ = fixedLevel(k) || diffFor(k);
+      const locked = isNew(k) && !(S.concepts || {})[k];
+      const max = isNew(k) ? 3 : 5;
+      const auto = k === 'calc' ? CALC_OPS.map((o) => `${o === 'add' ? '+' : o === 'sub' ? '−' : o === 'mul' ? '×' : o === 'div' ? '÷' : 'tête'} ${shownLv('calc:' + o)}/${capFor('calc:' + o)}${isAcquis('calc:' + o) ? ' ✓' : ''}`).join(' · ') : `niveau ${shownLv(k)}/${capFor(k)}${isAcquis(k) ? ' · maîtrisé' : ''}`;
       const setLvl = (v) => { S.settings.cats[k] = { ...c, lvl: v === 'auto' ? undefined : Number(v) }; delete examples[k]; save(); api.refresh(); };
       const sel = h('select', { class: 'psel', onchange: (e) => setLvl(e.target.value) },
-        h('option', { value: 'auto', selected: c.lvl == null }, `Auto (${now_})`),
-        [1, 2, 3, 4, 5].map((v) => h('option', { value: v, selected: c.lvl === v }, `Niveau ${v}`)));
-      list.append(h('div', { class: 'prow' + (c.off ? ' off' : '') },
-        h('label', { class: 'pon' }, h('input', { type: 'checkbox', checked: !c.off, onchange: (e) => { S.settings.cats[k] = { ...c, off: !e.target.checked }; save(); api.refresh(); } }), h('b', null, label)),
-        h('small', { class: 'pstat' }, mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé'),
-        sel,
-        h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || diffFor(k)); api.refresh(); } }, 'Exemple'),
+        h('option', { value: 'auto', selected: c.lvl == null }, 'Auto'),
+        Array.from({ length: max }, (_, i) => i + 1).map((v) => h('option', { value: v, selected: c.lvl === v }, `Niveau ${v}`)));
+      const exOp = k === 'calc' ? pick(CALC_OPS) : null;
+      list.append(h('div', { class: 'prow' + (c.off ? ' off' : '') + (locked ? ' locked' : '') },
+        h('label', { class: 'pon' }, h('input', { type: 'checkbox', checked: !c.off, onchange: (e) => { S.settings.cats[k] = { ...c, off: !e.target.checked }; save(); api.refresh(); } }), h('b', null, label, isNew(k) ? h('span', { class: 'p8h' }, ' 8H') : null)),
+        h('small', { class: 'pstat' }, locked ? 'pas encore débloquée' : (fixedLevel(k) ? '' : auto + ' · ') + (mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé')),
+        locked ? h('button', { class: 'btn sm', onclick: () => { S.concepts = S.concepts || {}; S.concepts[k] = now(); save(); api.refresh(); } }, 'Débloquer') : sel,
+        h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || (exOp ? shownLv('calc:' + exOp) : shownLv(k)), {}, exOp); api.refresh(); } }, 'Exemple'),
         examples[k] ? h('div', { class: 'pex', html: renderQ(examples[k].q) + ` <i>→ ${examples[k].choices ? examples[k].a : fmt(examples[k].a) + ' ' + examples[k].u}</i>` }) : null));
     }
     body.append(list,
@@ -1973,7 +2119,7 @@ async function battle(zone, id) {
   const off = c.rare ? 1 : 0;
   while (hp > 0 && energy > 0) {
     const cat = pick(cats);
-    const r = await askMath({ cat, d: diffFor(cat, off), title: `Attaque contre ${c.name}`, mount: bottom, noQuit: true });
+    const r = await askMath({ cat, off, title: `Attaque contre ${c.name}`, mount: bottom, noQuit: true });
     if (r.ok) {
       hp--; sfx.hit();
       foeImg.classList.remove('hit'); void foeImg.offsetWidth; foeImg.classList.add('hit');
@@ -2345,7 +2491,7 @@ requestAnimationFrame(loop);
 // debug helpers for testing in the console
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
-  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel },
   ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
   world, pl, walkable, objById, objAt: () => objAt };

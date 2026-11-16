@@ -493,3 +493,20 @@ button.row:hover { background: #f1f4ff; }
 .m-hintrow { gap: 8px; }
 .m-hard { font-size: 14px; padding: 5px 10px; border-radius: 8px; border: 2px solid #8aa8d8; background: #eef4ff; box-shadow: 0 2px 0 #8aa8d8; color: #2a4a8a; }
 .m-choice.sel { border-color: var(--frame); box-shadow: 0 4px 0 var(--frame), inset 0 0 0 2px var(--gold); background: #fffbe6; }
+
+/* ---------- lessons, mastered skills, 8H notions ---------- */
+.m-hintrow { flex-wrap: wrap; }
+.m-learn { font-size: 14px; padding: 5px 10px; border-radius: 8px; border: 2px solid #58a048; background: #eefbe8; box-shadow: 0 2px 0 #58a048; color: #2c6a20; margin-right: auto; }
+.lesson { width: min(520px, 94vw); max-height: 92vh; max-height: 92dvh; overflow-y: auto; padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 10px; animation: pop 0.2s ease-out; }
+.lesson h2 { margin: 0; font-size: 22px; }
+.les-tag { align-self: flex-start; background: #58a048; color: #fff; font-size: 13px; padding: 3px 9px; border-radius: 6px; }
+.les-lines p, .les-ex p { margin: 0 0 6px; font-family: var(--read); font-size: 18px; line-height: 1.45; color: #22242f; }
+.les-ex { background: #fff8d8; border: 2px dashed #e0a020; border-radius: 10px; padding: 10px 12px 4px; }
+.les-ex b { display: block; margin-bottom: 4px; color: #a06800; font-size: 14px; }
+.lesson .frac { font-size: 0.9em; }
+.catbtn.new { border-color: #58a048; box-shadow: 0 3px 0 #58a048; background: #f2fbee; }
+.mrow.acq .mbar i { background: linear-gradient(90deg, #e0b020, #f8d030); }
+.mrow.acq .mpct { color: #a07800; font-weight: bold; }
+.mrow .stars { color: #e0a800; }
+.prow.locked { opacity: 0.75; }
+.p8h { font-size: 11px; background: #58a048; color: #fff; border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: middle; }

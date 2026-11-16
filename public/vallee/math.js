@@ -40,8 +40,10 @@ const HINTS = {
   enigme: 'Lis l’énigme deux fois, et fais un petit dessin ou un calcul à la fois.',
 };
 
-function P(cat, q, a, u, ex, hint) {
-  return { cat, q, a: r3(a), u: u || '', ex, hint: hint || HINTS[cat] };
+function P(cat, q, a, u, ex, hint, lesson) {
+  const p = { cat, q, a: r3(a), u: u || '', ex, hint: hint || HINTS[cat] };
+  if (lesson) p.lesson = lesson; // a lesson other than the theme's (decimal additions → decimals)
+  return p;
 }
 function C(cat, q, right, wrongs, ex, hint) {
   const choices = shuffle([right, ...wrongs.filter((w) => w !== right).slice(0, 3)]);
@@ -57,7 +59,7 @@ function add(d) {
   else if (d === 4) { a = R(105, 899) / 10; b = R(15, 399) / 10; }
   else { a = R(1005, 8999) / 100; b = R(105, 999) / 10; }
   return P('calc', `${fmt(a)} + ${fmt(b)} = @`, a + b, '', `${fmt(a)} + ${fmt(b)} = ${fmt(a + b)}`,
-    d >= 4 ? 'Aligne bien les virgules : les dixièmes sous les dixièmes.' : null);
+    d >= 4 ? 'Aligne bien les virgules : les dixièmes sous les dixièmes.' : null, d >= 4 ? 'decimaux' : null);
 }
 function sub(d) {
   let a, b;
@@ -67,7 +69,7 @@ function sub(d) {
   else if (d === 4) { a = R(200, 999) / 10; b = R(15, Math.floor(a * 10) - 20) / 10; }
   else { a = R(50, 300); b = R(105, a * 10 - 50) / 10; if (Math.random() < 0.5) { a = R(1000, 4000) / 100; b = R(105, Math.floor(a * 10) - 30) / 10; } }
   return P('calc', `${fmt(a)} − ${fmt(b)} = @`, a - b, '', `${fmt(a)} − ${fmt(b)} = ${fmt(a - b)}`,
-    d >= 4 ? 'Aligne bien les virgules. Tu peux ajouter un 0 à droite : 25 = 25,0.' : null);
+    d >= 4 ? 'Aligne bien les virgules. Tu peux ajouter un 0 à droite : 25 = 25,0.' : null, d >= 4 ? 'decimaux' : null);
 }
 function mul(d) {
   let a, b, ex = null;
@@ -393,6 +395,205 @@ T.enigme = [
   }],
 ];
 
+// ---------- 8H notions: unlocked one at a time once the basics are mastered (levels 1 to 3) ----------
+const tag = (cat, p) => { p.cat = cat; if (!p.hint || p.hint === HINTS.calc) p.hint = HINTS[cat]; delete p.lesson; return p; };
+const NC = {};
+NC.arrondi = (d) => {
+  if (d <= 1) {
+    const n = R(12, 989), r = Math.round(n / 10) * 10, u = n % 10;
+    return P('arrondi', `Arrondis ${n} à la dizaine : @`, r, '', `Le chiffre des unités est ${u} : ${u >= 5 ? 'on monte' : 'on garde'} → ${fmt(r)}`);
+  }
+  if (d === 2) {
+    if (Math.random() < 0.5) { const n = R(1010, 9989), r = Math.round(n / 100) * 100, c = Math.floor(n / 10) % 10; return P('arrondi', `Arrondis ${fmt(n)} à la centaine : @`, r, '', `Le chiffre des dizaines est ${c} : ${c >= 5 ? 'on monte' : 'on garde'} → ${fmt(r)}`); }
+    const n = R(1100, 49900), r = Math.round(n / 1000) * 1000, c = Math.floor(n / 100) % 10;
+    return P('arrondi', `Arrondis ${fmt(n)} au millier : @`, r, '', `Le chiffre des centaines est ${c} : ${c >= 5 ? 'on monte' : 'on garde'} → ${fmt(r)}`);
+  }
+  if (Math.random() < 0.5) { const t = R(105, 999), n = t / 10, r = Math.round(n), c = t % 10; return P('arrondi', `Arrondis ${fmt(n)} à l’unité : @`, r, '', `Le chiffre des dixièmes est ${c} : ${c >= 5 ? 'on monte' : 'on garde'} → ${r}`); }
+  const t = R(1005, 9999), n = t / 100, r = Math.round(t / 10) / 10, c = t % 10;
+  return P('arrondi', `Arrondis ${fmt(n)} au dixième : @`, r, '', `Le chiffre des centièmes est ${c} : ${c >= 5 ? 'on monte' : 'on garde'} → ${fmt(r)}`);
+};
+NC.decimaux = (d) => {
+  if (d <= 1) return tag('decimaux', pick([add, sub])(4));
+  if (d === 2) {
+    if (Math.random() < 0.5) { const a = R(101, 999) / 100, b = pick([10, 100]); return P('decimaux', `${fmt(a)} × ${b} = @`, a * b, '', `× ${b} : la virgule avance de ${String(b).length - 1} rang(s) vers la droite → ${fmt(a * b)}`, 'Multiplier par 10, c’est avancer la virgule d’un rang vers la droite.'); }
+    const i = R(2, 9), a = R(5, 9);
+    const s = (x) => fmt(r3(x));
+    const right = s(i + a / 10), w = [s(i + ((a - 1) * 100 + R(1, 9) * 10 + R(1, 9)) / 1000), s(i + (a - 1) / 10 + R(1, 9) / 100), s(i - 1 + 0.9 + R(1, 9) / 100)];
+    return C('decimaux', 'Quel est le plus grand nombre ?', right, w, `${right} : les unités sont pareilles (${i}), et ${a} dixièmes, c’est le plus`, 'Compare les unités, puis les dixièmes, puis les centièmes. Ce n’est pas le plus long qui gagne !');
+  }
+  if (Math.random() < 0.34) { const a = R(15, 45) / 10, b = R(3, 9); return P('decimaux', `${fmt(a)} × ${b} = @`, a * b, '', `${fmt(a)} × ${b} = ${Math.round(a * 10)} × ${b} ÷ 10 = ${Math.round(a * 10) * b} ÷ 10 = ${fmt(a * b)}`, 'Calcule sans la virgule, puis remets-la : un chiffre après la virgule.'); }
+  return tag('decimaux', pick([add, sub])(5));
+};
+NC.priorites = (d) => {
+  if (d <= 1) {
+    const a = R(2, 20), b = R(2, 9), c = R(2, 9);
+    if (Math.random() < 0.5) return P('priorites', `${a} + ${b} × ${c} = @`, a + b * c, '', `D’abord ${b} × ${c} = ${b * c}, puis ${a} + ${b * c} = ${a + b * c}`);
+    const big = b * c, s = R(1, Math.min(20, big - 1));
+    return P('priorites', `${b} × ${c} − ${s} = @`, big - s, '', `D’abord ${b} × ${c} = ${big}, puis ${big} − ${s} = ${big - s}`);
+  }
+  if (d === 2) {
+    const a = R(2, 9), b = R(2, 9), c = R(2, 6), e = R(2, 6);
+    if (Math.random() < 0.5) return P('priorites', `(${a} + ${b}) × ${c} = @`, (a + b) * c, '', `D’abord la parenthèse : ${a} + ${b} = ${a + b}, puis ${a + b} × ${c} = ${(a + b) * c}`);
+    return P('priorites', `${a} × ${c} + ${b} × ${e} = @`, a * c + b * e, '', `${a} × ${c} = ${a * c} et ${b} × ${e} = ${b * e}, puis ${a * c} + ${b * e} = ${a * c + b * e}`);
+  }
+  const a = R(2, 9), b = R(5, 12), c = R(1, b - 2), e = R(2, 6), f = R(2, 9), v = a * (b - c) + f;
+  return P('priorites', `${a} × (${b} − ${c}) + ${e * f} ÷ ${e} = @`, v, '', `Parenthèse : ${b} − ${c} = ${b - c}. Puis ${a} × ${b - c} = ${a * (b - c)} et ${e * f} ÷ ${e} = ${f}. Enfin ${a * (b - c)} + ${f} = ${v}`);
+};
+NC.fracplus = (d) => {
+  if (d <= 1) {
+    const b = R(5, 12), a1 = R(1, b - 2), a2 = R(1, b - 1 - a1);
+    if (Math.random() < 0.6) return P('fracplus', `[${a1}/${b}] + [${a2}/${b}] = [@/${b}]`, a1 + a2, '', `Même nombre en bas : on additionne le haut. ${a1} + ${a2} = ${a1 + a2}, donc [${a1 + a2}/${b}]`);
+    return P('fracplus', `[${a1 + a2}/${b}] − [${a1}/${b}] = [@/${b}]`, a2, '', `Même nombre en bas : on soustrait le haut. ${a1 + a2} − ${a1} = ${a2}, donc [${a2}/${b}]`);
+  }
+  if (d === 2) {
+    const [a, b] = pick([[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [5, 6], [3, 8], [5, 8], [7, 10]]), m = R(2, 5);
+    return P('fracplus', `Simplifie : [${a * m}/${b * m}] = [@/${b}]`, a, '', `${b * m} ÷ ${m} = ${b}, donc on fait aussi ${a * m} ÷ ${m} = ${a}`, 'On divise le haut et le bas par le même nombre.');
+  }
+  const b = pick([2, 3, 4, 5]), k = pick([2, 3]), B = b * k, a1 = R(1, b - 1), a2 = R(1, Math.max(1, B - a1 * k - 1));
+  return P('fracplus', `[${a1}/${b}] + [${a2}/${B}] = [@/${B}]`, a1 * k + a2, '', `[${a1}/${b}] = [${a1 * k}/${B}] (× ${k} en haut et en bas). Puis ${a1 * k} + ${a2} = ${a1 * k + a2}`, `Change d’abord [${a1}/${b}] pour avoir ${B} en bas.`);
+};
+NC.pourcent = (d) => {
+  if (d <= 1) {
+    const k = R(1, 3);
+    if (k === 1) { const n = 2 * R(5, 60); return P('pourcent', `50 % de ${n} = @`, n / 2, '', `50 %, c’est la moitié : ${n} ÷ 2 = ${n / 2}`); }
+    if (k === 2) { const n = 10 * R(2, 40); return P('pourcent', `10 % de ${n} = @`, n / 10, '', `10 %, c’est diviser par 10 : ${n} ÷ 10 = ${n / 10}`); }
+    const n = 4 * R(3, 40); return P('pourcent', `25 % de ${n} = @`, n / 4, '', `25 %, c’est le quart : ${n} ÷ 4 = ${n / 4}`);
+  }
+  if (d === 2) {
+    const k = R(1, 3);
+    if (k === 1) { const p = pick([20, 30, 40, 60, 70]), n = 10 * R(2, 30); return P('pourcent', `${p} % de ${n} = @`, (n / 10) * (p / 10), '', `10 % de ${n} = ${n / 10}, donc ${p} % = ${n / 10} × ${p / 10} = ${(n / 10) * (p / 10)}`); }
+    if (k === 2) { const n = 4 * R(3, 30); return P('pourcent', `75 % de ${n} = @`, (n / 4) * 3, '', `25 % = ${n} ÷ 4 = ${n / 4}, donc 75 % = ${n / 4} × 3 = ${(n / 4) * 3}`); }
+    const n = 20 * R(2, 20); return P('pourcent', `5 % de ${n} = @`, n / 20, '', `10 % = ${n / 10}, et 5 %, c’est la moitié : ${n / 20}`);
+  }
+  if (Math.random() < 0.5) {
+    const [thing, price, pr] = pick([['Un vélo', 20 * R(6, 20), 'il'], ['Un ballon', 4 * R(5, 15), 'il'], ['Une trottinette', 20 * R(4, 12), 'elle'], ['Un jeu', 4 * R(10, 20), 'il']]);
+    const p = price % 20 === 0 ? pick([10, 20, 25, 50]) : pick([25, 50]), off = (price * p) / 100;
+    return P('pourcent', `${thing} coûte ${price} CHF. C’est les soldes : −${p} %. Combien coûte-t-${pr} maintenant ?`, price - off, 'CHF', `${p} % de ${price} = ${off} CHF. ${price} − ${off} = ${price - off} CHF`, 'Calcule d’abord la réduction, puis enlève-la du prix.');
+  }
+  const n = pick([20, 25, 30, 40]), p = n === 25 ? pick([20, 40, 60]) : pick([10, 20, 30, 50]);
+  return P('pourcent', `Dans une classe de ${n} élèves, ${p} % viennent à vélo. Combien d’élèves viennent à vélo ?`, (n * p) / 100, 'élèves', `${p} % de ${n} = ${n} × ${p} ÷ 100 = ${(n * p) / 100} élèves`);
+};
+NC.moyenne = (d) => {
+  if (d <= 1) {
+    const m = R(5, 15), x = R(1, 4), vals = shuffle([m - x, m, m + x]);
+    return P('moyenne', `Les poules ont pondu ${vals.join(', ')} œufs en 3 jours. Combien d’œufs par jour en moyenne ?`, m, 'œufs', `${vals.join(' + ')} = ${3 * m}, puis ${3 * m} ÷ 3 = ${m}`);
+  }
+  if (d === 2) {
+    if (Math.random() < 0.5) {
+      const notes = Array.from({ length: 4 }, () => R(3, 6)), s = notes.reduce((a, b) => a + b, 0);
+      return P('moyenne', `${pick(KIDS)} a eu ces notes : ${notes.join(', ')}. Quelle est sa moyenne ?`, s / 4, '', `${notes.join(' + ')} = ${s}, puis ${s} ÷ 4 = ${fmt(s / 4)}`);
+    }
+    const m = R(10, 30), x = R(1, 5), y = R(1, 5), vals = shuffle([m - x, m + x, m - y, m + y, m]);
+    return P('moyenne', `En 5 jours, le marché a vendu ${vals.join(', ')} pains. Combien de pains par jour en moyenne ?`, m, 'pains', `${vals.join(' + ')} = ${5 * m}, puis ${5 * m} ÷ 5 = ${m}`);
+  }
+  const k = pick(KIDS), m = R(13, 18), known = [R(m - 3, m + 4), R(m - 3, m + 4), R(m - 3, m + 4)], s = known.reduce((a, b) => a + b, 0), need = 4 * m - s;
+  return P('moyenne', `${k} a fait ${known.join(', ')} points en 3 parties. Combien de points doit faire ${k} à la 4e partie pour avoir ${m} points de moyenne ?`, need, 'points', `Il faut 4 × ${m} = ${4 * m} points en tout. ${4 * m} − ${s} = ${need}`, 'Moyenne × nombre de parties = le total qu’il faut.');
+};
+NC.aires = (d) => {
+  if (d <= 1) {
+    const a = 2 * R(2, 8), b = R(3, 10);
+    return P('aires', `Un potager a la forme d’un triangle rectangle. Les deux côtés de l’angle droit mesurent ${a} m et ${b} m. Quelle est son aire ?`, (a * b) / 2, 'm²', `C’est la moitié d’un rectangle de ${a} m sur ${b} m : ${a * b} ÷ 2 = ${(a * b) / 2} m²`);
+  }
+  if (d === 2) {
+    const b = 2 * R(4, 15), hh = R(3, 14);
+    if (Math.random() < 0.6) return P('aires', `Un triangle a une base de ${b} m et une hauteur de ${hh} m. Quelle est son aire ?`, (b * hh) / 2, 'm²', `${b} × ${hh} = ${b * hh}, puis ${b * hh} ÷ 2 = ${(b * hh) / 2} m²`);
+    return P('aires', `Un triangle a une aire de ${(b * hh) / 2} m² et une base de ${b} m. Quelle est sa hauteur ?`, hh, 'm', `${(b * hh) / 2} × 2 = ${b * hh}, puis ${b * hh} ÷ ${b} = ${hh} m`, 'Aire × 2 = base × hauteur.');
+  }
+  const L = 2 * R(3, 6), l = R(3, 8), hh = R(2, 5);
+  return P('aires', `Le mur d’une cabane est un rectangle de ${L} m sur ${l} m, avec un toit en triangle de ${L} m de base et ${hh} m de haut. Quelle est l’aire totale du mur ?`, L * l + (L * hh) / 2, 'm²', `Rectangle : ${L} × ${l} = ${L * l}. Triangle : ${L} × ${hh} ÷ 2 = ${(L * hh) / 2}. Total : ${L * l + (L * hh) / 2} m²`);
+};
+NC.diviseurs = (d) => {
+  if (d <= 1) {
+    const k = R(3, 9), right = k * R(3, 12);
+    const wr = [right + 1, right - 1, right + (k > 3 ? 2 : 4), right + k + 1].filter((x) => x % k !== 0 && x > 0);
+    return C('diviseurs', `Lequel de ces nombres est un multiple de ${k} ?`, String(right), wr.map(String), `${right} = ${k} × ${right / k} : il est dans la table de ${k}`, `Cherche le nombre qui est dans la table de ${k}.`);
+  }
+  if (d === 2) {
+    const k = pick([3, 3, 9]), right = k * R(Math.ceil(110 / k), Math.floor(990 / k));
+    const wr = new Set(); while (wr.size < 3) { const x = R(110, 990); if (x % k) wr.add(x); }
+    const ds = String(right).split('').map(Number);
+    return C('diviseurs', `Lequel de ces nombres est divisible par ${k} ?`, String(right), [...wr].map(String), `${ds.join(' + ')} = ${ds.reduce((a, b) => a + b, 0)}, qui est dans la table de ${k}`, `Additionne les chiffres : si la somme est dans la table de ${k}, c’est divisible par ${k}.`);
+  }
+  const [a, b, l] = pick([[4, 6, 12], [6, 8, 24], [4, 10, 20], [6, 9, 18], [10, 15, 30], [8, 12, 24], [6, 10, 30]]);
+  return P('diviseurs', `Un bus passe toutes les ${a} minutes et un autre toutes les ${b} minutes. Ils partent ensemble à 8 h 00. Dans combien de minutes repartent-ils ensemble ?`, l, 'min', `Table de ${a} : ${[1, 2, 3, 4, 5].map((i) => a * i).join(', ')}… Table de ${b} : ${[1, 2, 3].map((i) => b * i).join(', ')}… Le premier nombre commun : ${l}`, `Écris la table de ${a} et la table de ${b}, et cherche le premier nombre commun.`);
+};
+NC.volume = (d) => {
+  if (d <= 1) {
+    const a = R(2, 5), b = R(2, 4), c = R(2, 4);
+    return P('volume', `Une boîte est remplie de petits cubes : ${a} cubes de long, ${b} de large et ${c} de haut. Combien de cubes en tout ?`, a * b * c, 'cubes', `${a} × ${b} = ${a * b} cubes par étage, × ${c} étages = ${a * b * c} cubes`);
+  }
+  if (d === 2) {
+    if (Math.random() < 0.35) { const c = R(2, 6); return P('volume', `Un cube a des côtés de ${c} cm. Quel est son volume ?`, c ** 3, 'cm³', `${c} × ${c} × ${c} = ${c ** 3} cm³`); }
+    const a = R(4, 12), b = R(2, 6), c = R(2, 5);
+    return P('volume', `Une caisse mesure ${a} cm de long, ${b} cm de large et ${c} cm de haut. Quel est son volume ?`, a * b * c, 'cm³', `${a} × ${b} × ${c} = ${a * b * c} cm³`);
+  }
+  if (Math.random() < 0.5) { const a = R(3, 8), b = R(2, 5), c = R(2, 4); return P('volume', `Un bac à eau mesure ${a} dm × ${b} dm × ${c} dm. Combien de litres d’eau peut-il contenir ?`, a * b * c, 'L', `${a} × ${b} × ${c} = ${a * b * c} dm³, et 1 dm³ = 1 L : ${a * b * c} L`); }
+  const a = 10 * R(3, 8), b = 10 * R(2, 4), c = 10 * R(2, 4);
+  return P('volume', `Un aquarium mesure ${a} cm × ${b} cm × ${c} cm. Combien de litres d’eau contient-il ?`, (a * b * c) / 1000, 'L', `${a} × ${b} × ${c} = ${fmt(a * b * c)} cm³. 1 L = 1000 cm³, donc ${fmt(a * b * c)} ÷ 1000 = ${(a * b * c) / 1000} L`);
+};
+NC.echelle = (d) => {
+  if (d <= 1) {
+    const [u, unit] = pick([[100, 'm'], [50, 'm'], [200, 'm'], [2, 'km'], [5, 'km']]), n = R(2, 9);
+    return P('echelle', `Sur la carte, 1 cm représente ${u} ${unit}. Le chemin mesure ${n} cm sur la carte. Quelle est sa vraie longueur ?`, n * u, unit, `${n} × ${u} = ${n * u} ${unit}`);
+  }
+  if (d === 2) {
+    if (Math.random() < 0.5) { const u = pick([50, 100, 200]), n = R(2, 9); return P('echelle', `Sur le plan, 1 cm représente ${u} m. Un champ mesure ${n * u} m en vrai. Combien de cm sur le plan ?`, n, 'cm', `${n * u} ÷ ${u} = ${n} cm`); }
+    const sc = pick([100, 1000]), n = R(2, 9);
+    return P('echelle', `Un plan est à l’échelle 1 : ${fmt(sc)}. Une maison mesure ${n} cm sur le plan. Combien de mètres en vrai ?`, (n * sc) / 100, 'm', `${n} × ${fmt(sc)} = ${fmt(n * sc)} cm = ${fmt((n * sc) / 100)} m`, `1 cm sur le plan = ${fmt(sc)} cm en vrai. Puis convertis en m (÷ 100).`);
+  }
+  const v = pick([12, 18, 24, 30, 36]), hh = R(1, 3), m = pick([20, 30, 40]);
+  return P('echelle', `Un cycliste roule à ${v} km/h. Quelle distance parcourt-il en ${hh} h ${m} min ?`, v * hh + (v * m) / 60, 'km', `En ${hh} h : ${v} × ${hh} = ${v * hh} km. En ${m} min : ${v} × ${m} ÷ 60 = ${(v * m) / 60} km. Total : ${v * hh + (v * m) / 60} km`, `${v} km/h = ${v} km en 60 min. Calcule pour les heures, puis pour les minutes.`);
+};
+/** 8H notions, in the order they unlock. */
+export const NEW_CONCEPTS = {
+  arrondi: 'Arrondir', decimaux: 'Nombres à virgule', priorites: 'Priorités de calcul', fracplus: 'Fractions (suite)', pourcent: 'Pourcentages',
+  moyenne: 'Moyennes', aires: 'Aires de triangles', diviseurs: 'Multiples et diviseurs', volume: 'Volumes', echelle: 'Échelles et vitesses',
+};
+Object.assign(CATS, NEW_CONCEPTS);
+Object.assign(HINTS, {
+  arrondi: 'Regarde le chiffre juste à droite : de 0 à 4 on garde, de 5 à 9 on monte.',
+  decimaux: 'Aligne bien les virgules. Tu peux ajouter des 0 : 2,5 = 2,50.',
+  priorites: 'D’abord les parenthèses, puis × et ÷, puis + et −.',
+  fracplus: 'Avec le même nombre en bas, on calcule seulement avec les nombres du haut.',
+  pourcent: '50 % = la moitié, 25 % = le quart, 10 % = diviser par 10.',
+  moyenne: 'Additionne tout, puis divise par le nombre de valeurs.',
+  aires: 'Aire du triangle = base × hauteur ÷ 2.',
+  diviseurs: 'Un multiple de 6 est dans la table de 6.',
+  volume: 'Volume = longueur × largeur × hauteur. 1 dm³ = 1 L.',
+  echelle: '1 cm sur la carte vaut toujours la même longueur en vrai : multiplie.',
+});
+MEASURE_CATS.push('aires', 'volume', 'echelle');
+
+/** Short lessons: what the notion is, how to do it, a worked example. Keys: "calc:add"… or the theme. */
+export const LESSONS = {
+  'calc:add': { title: 'L’addition posée', lines: ['On écrit les nombres l’un sous l’autre : unités sous unités, dizaines sous dizaines.', 'On commence à droite, par les unités.', 'Si ça fait 10 ou plus, on écrit les unités et on garde 1 en retenue pour la colonne d’à côté.'], ex: ['478 + 256', 'Unités : 8 + 6 = 14 → j’écris 4, je retiens 1', 'Dizaines : 7 + 5 + 1 = 13 → j’écris 3, je retiens 1', 'Centaines : 4 + 2 + 1 = 7 → 734'] },
+  'calc:sub': { title: 'La soustraction posée', lines: ['Le grand nombre en haut, unités sous unités.', 'On commence par les unités. Si le chiffre du haut est trop petit, il gagne 10, et on ajoute 1 en bas dans la colonne suivante (la retenue).', 'Pour vérifier : réponse + nombre enlevé = nombre de départ.'], ex: ['532 − 187', 'Unités : 2 − 7, impossible → 12 − 7 = 5, retenue 1', 'Dizaines : 3 − (8 + 1), impossible → 13 − 9 = 4, retenue 1', 'Centaines : 5 − (1 + 1) = 3 → 345', 'Vérification : 345 + 187 = 532'] },
+  'calc:mul': { title: 'La multiplication', lines: ['Multiplier, c’est ajouter plusieurs fois le même nombre : 4 × 3 = 4 + 4 + 4.', 'Pour un grand nombre, coupe-le en dizaines et unités, multiplie chaque morceau, puis additionne.', '× 10 : on ajoute un 0 à la fin (ou la virgule avance d’un rang).'], ex: ['36 × 7 = 30 × 7 + 6 × 7', '= 210 + 42 = 252'] },
+  'calc:div': { title: 'La division', lines: ['Diviser, c’est partager en parts égales.', 'Pour 56 ÷ 8, cherche dans la table de 8 : 8 × ? = 56.', 'Pour un grand nombre, coupe-le en morceaux faciles à partager.'], ex: ['56 ÷ 8 = 7, car 7 × 8 = 56', '96 ÷ 4 = 80 ÷ 4 + 16 ÷ 4 = 20 + 4 = 24'] },
+  'calc:mental': { title: 'Le calcul de tête', lines: ['Le double = × 2. La moitié = ÷ 2.', 'Pour aller à 100 : va d’abord à la dizaine, puis à 100.', '× 5 = × 10 puis ÷ 2. × 25 = × 100 puis ÷ 4.'], ex: ['37 + ? = 100 : 37 → 40 (+3), 40 → 100 (+60). Réponse : 63', '18 × 5 = 180 ÷ 2 = 90'] },
+  frac: { title: 'Les fractions', lines: ['Dans [3/4], le nombre du bas dit en combien de parts on coupe, celui du haut combien de parts on prend.', 'Pour calculer [3/4] de 20 : on divise par le bas, puis on multiplie par le haut.'], ex: ['[3/4] de 20 : 20 ÷ 4 = 5, puis 5 × 3 = 15'] },
+  conv: { title: 'Les conversions', lines: ['km → m : × 1000 · m → cm : × 100 · cm → mm : × 10', 'kg → g : × 1000 · L → dL : × 10 · L → cL : × 100 · L → mL : × 1000', 'Vers une unité plus petite, le nombre grandit (×). Vers une plus grande, il rapetisse (÷).', '1 h = 60 min'], ex: ['3,5 m = 3,5 × 100 = 350 cm', '2400 g = 2400 ÷ 1000 = 2,4 kg'] },
+  masse: { title: 'Les masses', lines: ['1 t = 1000 kg · 1 kg = 1000 g', 'Avant de calculer, mets toutes les masses dans la même unité.', 'Regarde bien l’unité demandée dans la question.'], ex: ['2 kg − 350 g = 2000 g − 350 g = 1650 g'] },
+  contenance: { title: 'Les contenances', lines: ['1 L = 10 dL = 100 cL = 1000 mL', 'Une bouteille de 75 cL, c’est 0,75 L.'], ex: ['1,5 L moins 2 verres de 25 cL : 150 cL − 50 cL = 100 cL'] },
+  longueur: { title: 'Les longueurs', lines: ['1 km = 1000 m · 1 m = 100 cm · 1 cm = 10 mm', 'Mets tout dans la même unité avant de calculer.'], ex: ['2,4 m − 65 cm = 240 cm − 65 cm = 175 cm'] },
+  duree: { title: 'Les durées', lines: ['1 h = 60 min (et pas 100 !).', 'Pour ajouter des minutes à une heure, avance d’abord jusqu’à l’heure pile, puis ajoute le reste.'], ex: ['9 h 45 + 30 min : 9 h 45 → 10 h 00 (15 min), il reste 15 min → 10 h 15'] },
+  recette: { title: 'La proportionnalité', lines: ['Deux fois plus de gâteaux, c’est deux fois plus de chaque ingrédient.', 'Astuce : calcule d’abord pour 1, puis multiplie.'], ex: ['4 crêpes : 100 g de farine. 1 crêpe : 100 ÷ 4 = 25 g. 6 crêpes : 25 × 6 = 150 g'] },
+  argent: { title: 'L’argent', lines: ['1 franc = 100 centimes : 3,50 CHF = 3 francs et 50 centimes.', 'Monnaie rendue : calcule d’abord le total, puis fais billet − total.'], ex: ['2 pains à 3,50 CHF : 7 CHF. Avec 20 CHF, on te rend 20 − 7 = 13 CHF'] },
+  geo: { title: 'Périmètre et aire', lines: ['Le périmètre, c’est le tour : on additionne tous les côtés (en m).', 'L’aire, c’est la surface : longueur × largeur (en m²).', 'Rectangle : périmètre = (longueur + largeur) × 2.'], ex: ['Rectangle de 6 m sur 4 m : périmètre (6 + 4) × 2 = 20 m, aire 6 × 4 = 24 m²'] },
+  animaux: { title: 'Les problèmes de la ferme', lines: ['Cherche d’abord combien pour UN animal (ou UN jour).', 'Puis multiplie pour plusieurs, ou divise pour partager.'], ex: ['Une poule pond 5 œufs par semaine. 3 poules : 5 × 3 = 15 œufs'] },
+  enigme: { title: 'Résoudre une énigme', lines: ['1. Lis l’énigme deux fois.', '2. Cherche ce qu’on te demande.', '3. Une étape à la fois (un petit dessin aide souvent).', '4. Vérifie que ta réponse a du sens.'], ex: ['Tom a 20 CHF et achète 3 cahiers à 4 CHF : 3 × 4 = 12, puis 20 − 12 = 8 CHF'] },
+  arrondi: { title: 'Arrondir un nombre', lines: ['Arrondir, c’est remplacer un nombre par un nombre « rond » tout proche.', 'Regarde le chiffre juste à droite de celui qu’on arrondit : de 0 à 4, on garde ; de 5 à 9, on monte.'], ex: ['347 à la dizaine : le 7 fait monter → 350', '1249 à la centaine : le 4 garde → 1200', '6,8 à l’unité : le 8 fait monter → 7'] },
+  decimaux: { title: 'Les nombres à virgule', lines: ['Après la virgule : les dixièmes, puis les centièmes. 2,5 = 2,50.', 'Pour additionner ou soustraire, on aligne les virgules (on peut ajouter des 0).', 'Pour comparer : les unités d’abord, puis les dixièmes, puis les centièmes.'], ex: ['3,7 + 1,45 = 3,70 + 1,45 = 5,15', '2,5 est plus grand que 2,45 : 5 dixièmes, c’est plus que 4 dixièmes'] },
+  priorites: { title: 'Les priorités de calcul', lines: ['1. D’abord ce qui est entre parenthèses.', '2. Puis les × et les ÷.', '3. Enfin les + et les −, de gauche à droite.'], ex: ['3 + 4 × 5 = 3 + 20 = 23 (et pas 35 !)', '(3 + 4) × 5 = 7 × 5 = 35'] },
+  fracplus: { title: 'Calculer avec les fractions', lines: ['Même nombre en bas ? On additionne seulement les nombres du haut : [2/7] + [3/7] = [5/7].', 'Simplifier : on divise le haut et le bas par le même nombre : [6/8] = [3/4].', 'Bas différents : on change une fraction pour avoir le même bas : [1/2] = [2/4].'], ex: ['[1/2] + [1/4] = [2/4] + [1/4] = [3/4]'] },
+  pourcent: { title: 'Les pourcentages', lines: ['% veut dire « sur 100 » : 30 % = [30/100].', '50 % = la moitié · 25 % = le quart · 10 % = diviser par 10.', 'Pour 30 % : calcule 10 %, puis multiplie par 3.'], ex: ['30 % de 70 : 10 % = 7, donc 30 % = 7 × 3 = 21', 'Soldes −25 % sur 80 CHF : 80 ÷ 4 = 20, puis 80 − 20 = 60 CHF'] },
+  moyenne: { title: 'La moyenne', lines: ['Additionne toutes les valeurs, puis divise par le nombre de valeurs.', 'Pour trouver une valeur qui manque : moyenne × nombre de valeurs = le total qu’il faut.'], ex: ['4, 6 et 8 : 4 + 6 + 8 = 18, puis 18 ÷ 3 = 6'] },
+  aires: { title: 'L’aire du triangle', lines: ['Un triangle, c’est la moitié d’un rectangle.', 'Aire du triangle = base × hauteur ÷ 2.', 'La hauteur part du sommet et tombe tout droit sur la base.'], ex: ['Base 6 m, hauteur 4 m : 6 × 4 = 24, puis 24 ÷ 2 = 12 m²'] },
+  diviseurs: { title: 'Multiples et diviseurs', lines: ['Les multiples de 6 sont dans la table de 6 : 6, 12, 18, 24…', 'Divisible par 2 : finit par 0, 2, 4, 6 ou 8. Par 5 : finit par 0 ou 5.', 'Divisible par 3 : la somme des chiffres est dans la table de 3 (par 9 : dans la table de 9).'], ex: ['471 : 4 + 7 + 1 = 12, dans la table de 3 → 471 est divisible par 3'] },
+  volume: { title: 'Les volumes', lines: ['Le volume, c’est la place que prend un objet. On compte en petits cubes : cm³, dm³.', 'Pavé (une boîte) : longueur × largeur × hauteur.', '1 dm³ = 1 L = 1000 cm³'], ex: ['Boîte de 4 cm × 3 cm × 2 cm = 24 cm³', 'Bac de 5 dm × 4 dm × 3 dm = 60 dm³ = 60 L'] },
+  echelle: { title: 'Échelles et vitesses', lines: ['Sur une carte, l’échelle dit ce que vaut 1 cm en vrai.', 'Échelle 1 : 1000 → 1 cm sur le plan = 1000 cm = 10 m en vrai.', 'Vitesse : 60 km/h veut dire 60 km en 1 heure, donc 30 km en 30 min.'], ex: ['1 cm = 50 m, donc 4 cm = 4 × 50 = 200 m', '18 km/h pendant 1 h 20 : 18 + 6 = 24 km'] },
+};
+
 function theme(name, d) {
   const list = T[name].filter(([a, b]) => d >= a && d <= b);
   const all = list.length ? list : T[name];
@@ -419,6 +620,7 @@ export function makeProblem(cat, d, opAdj = {}, op = null) {
   }
   if (cat === 'frac') return frac(d);
   if (cat === 'conv') return conv(d);
+  if (NC[cat]) return NC[cat](Math.min(3, d));
   if (T[cat]) return theme(cat, d);
   return pick(CALC_POOLS[d])(d);
 }
