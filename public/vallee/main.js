@@ -334,8 +334,8 @@ function effElapsed(p) { return (now() - p.at) * speedMult() + p.skip; }
 function progress(p) { return p.crop ? Math.min(1, effElapsed(p) / p.grow) : 0; }
 function remaining(p) { return Math.max(0, p.grow - effElapsed(p)) / speedMult(); }
 
-// Problem difficulty, 1 (easy) to 5. It climbs slowly with the player's level, 8H is a half step
-// ahead of 7H, the Options setting moves it by hand, and each theme adapts to recent answers.
+// Problem difficulty, 1 (easy) to 5. It climbs slowly with the player's level, the « Dur » mode
+// (settings.grade 8) is a half step ahead of « Normal » (7), the Options setting moves it by hand, and each theme adapts to recent answers.
 const DIFF_STEPS = [[-2, 'Très facile'], [-1, 'Facile'], [0, 'Normal'], [1, 'Difficile'], [2, 'Très difficile']];
 function baseD() {
   const L = S.lvl;
@@ -1759,7 +1759,7 @@ async function carnetPanel(tab) {
         tbl.append(h('div', { class: 'mrow' }, h('span', { class: 'mlabel' }, label), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })), h('span', { class: 'mpct' }, m ? `${pct} % (${m.n})` : '—'), h('span', { class: 'stars' }, '★'.repeat(stars) + '☆'.repeat(3 - stars))));
       }
       body.append(tbl);
-      body.append(h('p', { class: 'small' }, `Niveau des problèmes : ${S.settings.grade}H. Les problèmes s’adaptent tout seuls : plus tu réussis un thème, plus il devient difficile.`));
+      body.append(h('p', { class: 'small' }, `Mode de jeu : ${S.settings.grade === 8 ? 'Dur' : 'Normal'}. Les problèmes s’adaptent tout seuls : plus tu réussis un thème, plus il devient difficile.`));
     }
   }, { tabs: [['badges', 'Badges'], ['creatures', 'Créatures'], ['progres', 'Progrès']], tab }).done;
 }
@@ -1808,9 +1808,9 @@ async function parentPanel() {
   const examples = {};
   await panel('Espace parents', (body, api) => {
     body.append(
-      h('div', { class: 'opt' }, h('b', null, 'Classe'), h('div', null,
-        h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, '7H'), ' ',
-        h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, '8H'))),
+      h('div', { class: 'opt' }, h('b', null, 'Mode de jeu'), h('div', null,
+        h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, 'Normal'), ' ',
+        h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, 'Dur'))),
       h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté générale'),
         h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
         h('small', null, `Niveau de base actuel : ${clamp(Math.round(baseD()), 1, 5)} sur 5 (selon le niveau du joueur, la classe et ce réglage). En « Auto », chaque thème s’adapte ensuite aux réussites.`)),
@@ -2314,10 +2314,10 @@ function titleScreen() {
   });
   function newGame() {
     btns.innerHTML = '';
-    btns.append(h('p', { class: 'ask' }, 'Tu es en quelle classe ?'),
+    btns.append(h('p', { class: 'ask' }, 'Choisis ton mode de jeu'),
       h('div', { class: 'row2' },
-        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 7; begin(s); } }, '7H'),
-        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 8; begin(s); } }, '8H')));
+        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 7; begin(s); } }, 'Normal'),
+        h('button', { class: 'btn big', onclick: () => { const s = newState(); s.settings.grade = 8; begin(s); } }, 'Dur')));
   }
 }
 function startWorld() {
