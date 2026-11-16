@@ -87,5 +87,12 @@
   "dè": {
     "say": "dais",
     "word": true
+  },
+  "Les sept boules de cristal ! Shenron exauce ton vœu !": {
+    "say": "Les sept boules de cristal ! Shenrone exauce ton voeu !",
+    "expression": 1
+  },
+  "Incroyable ! Ta lettre est en diamant ! Tu gagnes une boule de cristal !": {
+    "expression": 1
   }
 }

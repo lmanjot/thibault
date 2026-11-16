@@ -4407,3 +4407,92 @@
     grid-row: 3;
   }
 }
+
+/* ——— Letter rounds: silver, then gold, then diamond ——— */
+.lz-pips i.on,
+.lz-pips.round-0 i.on {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #c4ccd8 55%, #8a94a6);
+  box-shadow: 0 0 6px rgba(196, 204, 216, 0.9);
+}
+.lz-pips.round-1 i {
+  box-shadow: inset 0 0 0 2px rgba(160, 170, 186, 0.8); /* the silver round, done */
+}
+.lz-pips.round-1 i.on {
+  background: radial-gradient(circle at 35% 30%, #fff6c2, #ffc21a 55%, #c98a00);
+  box-shadow: 0 0 7px rgba(255, 194, 26, 0.95);
+}
+.lz-pips.round-2 i {
+  box-shadow: inset 0 0 0 2px rgba(240, 168, 0, 0.85); /* the gold round, done */
+}
+.lz-pips.round-2 i.on {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #8fefff 45%, #27a9d6);
+  box-shadow: 0 0 8px rgba(111, 227, 255, 0.95);
+}
+.lz-week-star.is-done.round-0 {
+  background: linear-gradient(160deg, #e4e9f0, #8a94a6);
+}
+.lz-week-star.is-done.round-1 {
+  background: linear-gradient(160deg, #ffd84a, #c98a00);
+}
+.lz-week-star.is-done.round-2 {
+  background: linear-gradient(160deg, #b9f6ff, #27a9d6);
+}
+.lz-gauge.round-0 > div {
+  background: linear-gradient(90deg, #8a94a6, #d5dbe4, #ffffff);
+  box-shadow: 0 0 12px rgba(213, 219, 228, 0.9);
+}
+.lz-gauge.round-1 > div {
+  background: linear-gradient(90deg, #c98a00, #ffc21a, #fff6c2);
+  box-shadow: 0 0 12px var(--ki);
+}
+.lz-gauge.round-2 > div {
+  background: linear-gradient(90deg, #27a9d6, #8fefff, #ffffff);
+  box-shadow: 0 0 12px rgba(111, 227, 255, 0.9);
+}
+
+/* Result screen: a letter in gold or diamond */
+.lz-medal {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.85);
+  animation: lz-pop 0.5s 0.3s both;
+}
+.lz-medal-tile {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  font-size: 46px;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+.lz-medal.is-or .lz-medal-tile {
+  background: linear-gradient(160deg, #ffe680, #f0a800 60%, #b87700);
+  box-shadow: 0 0 18px rgba(255, 194, 26, 0.9);
+}
+.lz-medal.is-diamant .lz-medal-tile {
+  background: linear-gradient(160deg, #e6fcff, #6fe3ff 50%, #1d8fc0);
+  box-shadow: 0 0 22px rgba(111, 227, 255, 0.95);
+}
+.lz-medal-title {
+  font-family: var(--lz-display), Impact, sans-serif;
+  font-size: 30px;
+  color: var(--navy);
+}
+.lz-medal-balls {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.lz-medal-balls span {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+.lz-medal-balls span.is-got {
+  opacity: 1;
+  filter: none;
+}

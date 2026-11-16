@@ -30,17 +30,17 @@ import { pullNewer, pushSave } from "../sync";
 import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
-import { FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
+import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
 import { MINI_GAMES, MiniGame, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { chooseFighter, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, ITEM, LETTER_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { chooseFighter, DIAMOND_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
   | { s: "home" }
   | { s: "versus"; boss: Boss; fight: Fight }
   | { s: "session"; exercises: Ex[]; boss?: Boss; fight?: Fight }
-  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[] }
+  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[]; medal?: Medal }
   | { s: "reward"; letters: string[] }
   | { s: "bonus"; game?: GameId; cleared: string[]; extra?: number }
   | { s: "shop" }
@@ -60,6 +60,9 @@ function Game({ fontClass }: { fontClass: string }) {
     // Dev shortcut to try a mini-game directly: /lecture?jeu=nuage
     const jeu = process.env.NODE_ENV === "development" ? new URLSearchParams(location.search).get("jeu") : null;
     if (jeu === "choix") return { s: "bonus", cleared: [] }; // the game picker
+    // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
+    if (jeu === "or" || jeu === "diamant" || jeu === "voeu")
+      return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu" } };
     return MINI_GAMES.some((g) => g.id === jeu) ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
@@ -167,13 +170,30 @@ function Game({ fontClass }: { fontClass: string }) {
     const worked = fight ? (fight.letter ?? null) : focusSound(save);
     const before = worked ? roundOf(level(save, gid(worked))) : null;
     const cleared = applySession(s, r.answers, worked);
-    // A yellow or red round finished (3 more dots): as many zénis as clearing the letter.
+    // A gold or diamond round finished (3 more dots): a big bonus, and a dragon ball for diamond.
     const after = worked ? roundOf(level(s, gid(worked))) : null;
     const roundDone = !!before && !!after && isCleared(save, worked!) && (after.round > before.round || (after.dots === 3 && before.dots < 3));
+    let medal: Medal | undefined;
+    let medalBonus = 0;
+    if (roundDone && worked) {
+      const kind = doneRound(level(s, gid(worked))) === 2 ? "diamant" : "or";
+      medal = { letter: worked, kind };
+      medalBonus = kind === "or" ? GOLD_BONUS : DIAMOND_BONUS;
+      if (kind === "diamant") {
+        const balls = (s.progress.letterBalls ?? 0) + 1;
+        medal.balls = balls;
+        if (balls >= 7) {
+          medal.wish = true;
+          medalBonus += WISH_BONUS;
+          s.progress.wishes = (s.progress.wishes ?? 0) + 1;
+          s.progress.letterBalls = 0;
+        } else s.progress.letterBalls = balls;
+      }
+    }
     const stars = starsFor(r.ok, r.total);
     // Zénis: the answers, plus a bonus for finishing, for a perfect session and for each letter cleared.
     const bossBonus = fight ? (fight.practice ? PRACTICE_BOSS_BONUS : fight.kind === "revision" ? REVISION_BOSS_BONUS : LETTER_BOSS_BONUS) : 0;
-    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + (cleared.length + (roundDone ? 1 : 0)) * LETTER_BONUS + bossBonus;
+    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + cleared.length * LETTER_BONUS + medalBonus + bossBonus;
     s.progress.zeni = zeni(s) + earned;
     if (fight?.practice) {
       s.progress.practices = (s.progress.practices ?? 0) + 1; // next time, another opponent
@@ -183,8 +203,17 @@ function Game({ fontClass }: { fontClass: string }) {
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
     }
     update(s);
-    setScreen({ s: "result", stars, earned, boss, cleared });
-    speak(boss ? [boss.name, L.beaten] : [stars === 3 ? L.perfect : L.trainingDone]);
+    setScreen({ s: "result", stars, earned, boss, cleared, medal });
+    if (medal) sfx.power();
+    speak(
+      medal
+        ? medal.wish
+          ? [L.diamondDone, L.wish]
+          : [medal.kind === "or" ? L.goldDone : L.diamondDone]
+        : boss
+          ? [boss.name, L.beaten]
+          : [stars === 3 ? L.perfect : L.trainingDone],
+    );
   }
 
   return (
@@ -266,6 +295,7 @@ function Game({ fontClass }: { fontClass: string }) {
           <div className="lz-panel">
             <h2 className="lz-title-sm">{screen.boss ? "Victoire !" : "Bravo !"}</h2>
             <Stars n={screen.stars} size={72} />
+            {screen.medal && <MedalBanner medal={screen.medal} />}
             <p className="lz-kigain">
               +{screen.earned} <Zeni size={40} />
             </p>
@@ -370,7 +400,7 @@ function Home({
   // The gauge follows the current letter's dots: green (clearing it brings the next power), then yellow, then red.
   const focusRound = focus ? roundOf(level(save, gid(focus))) : { round: 0, dots: 0 };
   const gauge = focus ? focusRound.dots / 3 : next ? 0 : 1;
-  const roundName = ["", "jaunes", "rouges"][focusRound.round];
+  const roundName = ["", "or", "diamant"][focusRound.round];
   const companion = equipped(save, "companion");
 
   // Shrink the home column when the screen is too short for it (Windows tablets with the browser bar,
@@ -609,4 +639,33 @@ function targetLabel(letters: string[] = []): string {
 function doneRound(lvl: number): number {
   const { round, dots } = roundOf(lvl);
   return dots === 3 ? round : round - 1;
+}
+
+/** A gold or diamond letter, shown on the result screen (with the dragon balls won so far). */
+interface Medal {
+  letter: string;
+  kind: "or" | "diamant";
+  balls?: number; // dragon balls collected with diamond letters, this one included
+  wish?: boolean; // the seventh: Shenron's wish
+}
+
+function MedalBanner({ medal }: { medal: Medal }) {
+  const got = medal.wish ? 7 : (medal.balls ?? 0);
+  return (
+    <div className={`lz-medal is-${medal.kind}`}>
+      <span className="lz-medal-tile lz-read">{GRAPHEME[medal.letter]?.display}</span>
+      <div>
+        <p className="lz-medal-title">{medal.wish ? "Shenron exauce ton vœu !" : medal.kind === "or" ? "Lettre en or !" : "Lettre en diamant !"}</p>
+        {medal.kind === "diamant" && (
+          <div className="lz-medal-balls" aria-label={`${got} boules de cristal sur 7`}>
+            {Array.from({ length: 7 }, (_, i) => (
+              <span key={i} className={i < got ? "is-got" : ""}>
+                <DragonBall stars={i + 1} size={32} />
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

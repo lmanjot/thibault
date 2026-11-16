@@ -8,11 +8,12 @@ import { CONFUSE, GRAPHEME, GRAPHEMES, WORDS, segment, wordAmbiguous, wordHas, t
 export const CLEARED = 4;
 
 /**
- * Then two more rounds of 3 good sessions make it really solid: green dots (1 → 4, cleared),
- * yellow dots (4 → 7), red dots (7 → 10, mastered). Only the letter being worked on climbs them.
+ * Then two more rounds of 3 good sessions make it really solid: silver dots (1 → 4, cleared),
+ * gold dots (4 → 7), diamond dots (7 → 10, mastered). Only the letter being worked on climbs them.
+ * Finishing gold earns a big zéni bonus; finishing diamond earns a dragon ball (7 = a wish).
  */
 export const MASTERED = 10;
-export const ROUNDS = ["vert", "jaune", "rouge"] as const;
+export const ROUNDS = ["argent", "or", "diamant"] as const;
 
 /** The round a letter level is in (0 green, 1 yellow, 2 red) and its dots done in that round (0-3). */
 export function roundOf(level: number): { round: number; dots: number } {
@@ -63,6 +64,8 @@ export interface Progress {
   fights?: Fight[]; // bosses waiting to be fought, oldest first
   beaten?: string[]; // names of the bosses beaten, so the story moves on
   practices?: number; // revision fights chosen from the home screen (rematches)
+  letterBalls?: number; // dragon balls won with diamond letters, toward the next wish (0-6)
+  wishes?: number; // wishes made with 7 of those balls
 }
 
 /** A boss fight earned by reading: after each cleared letter, and a revision every few letters. */

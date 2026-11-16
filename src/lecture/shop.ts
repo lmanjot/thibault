@@ -27,6 +27,12 @@ export function zeniFor(ex: Ex, firstTry: boolean, boss: boolean): number {
 export const SESSION_BONUS = 5;
 export const PERFECT_BONUS = 10;
 export const LETTER_BONUS = 25;
+/** A letter's gold round finished (3 more good sessions after clearing it). */
+export const GOLD_BONUS = 60;
+/** Its diamond round finished: a dragon ball too. */
+export const DIAMOND_BONUS = 100;
+/** Seven dragon balls from diamond letters: Shenron's wish. */
+export const WISH_BONUS = 500;
 export const LETTER_BOSS_BONUS = 15;
 export const REVISION_BOSS_BONUS = 40;
 /** A revision fight he chooses himself (a rematch): harder, and it pays well. */

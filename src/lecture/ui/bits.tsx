@@ -128,7 +128,7 @@ export function Stars({ n, of = 3, size = 28 }: { n: number; of?: number; size?:
 export function Pips({ level }: { level: number }) {
   const { round, dots } = roundOf(level);
   return (
-    <span className={`lz-pips round-${round} ${round === 2 && dots === 3 ? "is-mastered" : ""}`} aria-label={`${dots} réussites sur 3 (points ${ROUNDS[round]}s)`}>
+    <span className={`lz-pips round-${round} ${round === 2 && dots === 3 ? "is-mastered" : ""}`} aria-label={`${dots} réussites sur 3 (points ${ROUNDS[round]})`}>
       {[1, 2, 3].map((i) => (
         <i key={i} className={i <= dots ? "on" : ""} />
       ))}
