@@ -108,9 +108,9 @@ export function DragonBall({ stars, size = 30, className = "" }: { stars: number
   );
 }
 
-export function Stars({ n, of = 3, size = 28 }: { n: number; of?: number; size?: number }) {
+export function Stars({ n, of = 3, size = 28, perfect }: { n: number; of?: number; size?: number; perfect?: boolean }) {
   return (
-    <span className="lz-stars" aria-label={`${n} étoiles sur ${of}`}>
+    <span className={`lz-stars ${perfect ? "is-perfect" : ""}`} aria-label={perfect ? "Sans-faute : étoiles bleues" : `${n} étoiles sur ${of}`}>
       {Array.from({ length: of }, (_, i) => (
         <svg key={i} width={size} height={size} viewBox="0 0 24 24" className={i < n ? "on" : "off"} style={{ animationDelay: `${0.25 + i * 0.3}s` }}>
           <path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" />

@@ -15,9 +15,12 @@ export const MINI_GAMES = [
   { id: "kame", name: "Kaméhaméha", img: "saibaman.png", tip: "Touche les ennemis !" },
   { id: "bulles", name: "Boules magiques", img: "kikoha.png", tip: "Touche les boules avec la bonne lettre !" },
   { id: "memoire", name: "Memory des amis", img: "bulma_kid.png", tip: "Trouve les paires d'amis !" },
-  { id: "route", name: "Route du Serpent", img: "goku_kid_staff.png", tip: "Saute par-dessus les rochers !" },
+  { id: "route", name: "Route du Serpent", img: "goku.png", tip: "Saute par-dessus les rochers !" },
+  { id: "baton", name: "Bâton magique", img: "goku_kid_staff.png", tip: "Fais grandir le bâton pour passer d'un pilier à l'autre !" },
 ] as const;
-export type GameId = (typeof MINI_GAMES)[number]["id"];
+/** The secret game: opened only by a session without a single mistake. */
+export const SECRET_GAME = { id: "instinct", name: "Ultra Instinct", img: "goku_ui.png" } as const;
+export type GameId = (typeof MINI_GAMES)[number]["id"] | typeof SECRET_GAME.id;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 let nextId = 1;
@@ -842,6 +845,322 @@ function Route({ onDone, level, seconds, goku }: GameProps & { goku: string }) {
   );
 }
 
+// ——— 6. Bâton magique: hold to make the staff grow, let go: it falls and makes a bridge ———
+
+interface Pillar {
+  id: number;
+  x: number; // left edge, in screen widths (world)
+  w: number;
+}
+type BatonMode = "ready" | "grow" | "fall" | "walk" | "slip" | "drop" | "rescue" | "slide";
+interface BatonW {
+  time: number;
+  score: number;
+  mode: BatonMode;
+  t: number; // when the mode began
+  pillars: Pillar[]; // [where Goku stands, the next one, one more]
+  gx: number; // Goku's position (world)
+  gy: number; // how far he fell (screen heights)
+  len: number; // the staff's length (screen widths)
+  angle: number; // 0 = upright, 90 = lying flat
+  cam: number;
+  streak: number;
+  pops: { id: number; x: number; y: number; t: number; text: string; good: boolean }[];
+}
+
+const STAFF_SPEED = 0.42; // screen widths per second while held
+const WALK = 0.75;
+
+function nextPillar(after: Pillar, level: number): Pillar {
+  const gap = rand(0.12, 0.3 + 0.06 * level);
+  return { id: nextId++, x: after.x + after.w + gap, w: rand(Math.max(0.06, 0.15 - 0.025 * level), 0.2 - 0.02 * level) };
+}
+
+function Baton({ onDone, level, seconds }: GameProps) {
+  const pace = paceOf(level);
+  const { world, setWorld, phase, count } = useGame<BatonW>(
+    () => {
+      const first = { id: nextId++, x: 0.05, w: 0.2 };
+      const second = nextPillar(first, level);
+      return { time: 0, score: 0, mode: "ready", t: 0, pillars: [first, second, nextPillar(second, level)], gx: 0.25, gy: 0, len: 0, angle: 0, cam: 0, streak: 0, pops: [] };
+    },
+    (w, dt) => {
+      let { mode, t, gx, gy, len, angle, cam, score, streak, pillars } = w;
+      const pops = w.pops.filter((p) => w.time - p.t < 0.8);
+      const [cur, next] = pillars;
+      const edge = cur.x + cur.w;
+      const tip = edge + len;
+      const go = (m: BatonMode) => {
+        mode = m;
+        t = w.time;
+      };
+      if (mode === "grow") len = Math.min(0.95, len + STAFF_SPEED * Math.sqrt(pace) * dt);
+      else if (mode === "fall") {
+        angle = Math.min(90, angle + 300 * dt);
+        if (angle === 90) {
+          const ok = tip >= next.x && tip <= next.x + next.w;
+          if (ok) {
+            const center = Math.abs(tip - (next.x + next.w / 2)) < 0.018;
+            streak += 1;
+            const gain = level * (center ? 3 : 1) + Math.min(streak - 1, 4);
+            score += gain;
+            sfx.good();
+            pops.push({ id: nextId++, x: next.x + next.w / 2 - cam, y: 0.55, t: w.time, text: center ? `Pile au milieu ! +${gain}` : `+${gain}`, good: true });
+            go("walk");
+          } else {
+            streak = 0;
+            sfx.bad();
+            go("slip");
+          }
+        }
+      } else if (mode === "walk") {
+        gx = Math.min(next.x + next.w - 0.03, gx + WALK * dt);
+        if (gx >= next.x + next.w - 0.03) go("slide");
+      } else if (mode === "slip") {
+        // Walks to the end of a staff that is too short (or too long), and drops off it.
+        gx = Math.min(tip, gx + WALK * dt);
+        if (gx >= tip) go("drop");
+      } else if (mode === "drop") {
+        gy = Math.min(0.5, gy + 1.6 * dt);
+        if (w.time - t > 0.6) {
+          sfx.hit();
+          go("rescue");
+        }
+      } else if (mode === "rescue") {
+        // The flying cloud brings him back up, onto the next pillar: never a game over.
+        const k = Math.min(1, (w.time - t) / 1.1);
+        gy = 0.5 * (1 - k) - Math.sin(k * Math.PI) * 0.25;
+        gx = gx + (next.x + next.w - 0.03 - gx) * Math.min(1, dt * 4);
+        if (k >= 1) {
+          gy = 0;
+          gx = next.x + next.w - 0.03;
+          go("slide");
+        }
+      } else if (mode === "slide") {
+        len = 0;
+        angle = 0;
+        const target = next.x + next.w - 0.25;
+        cam += (target - cam) * Math.min(1, dt * 7);
+        if (Math.abs(target - cam) < 0.003) {
+          cam = target;
+          pillars = [next, pillars[2], nextPillar(pillars[2], level)];
+          go("ready");
+        }
+      }
+      return { ...w, mode, t, gx, gy, len, angle, cam, score, streak, pillars, pops };
+    },
+    seconds,
+  );
+
+  const press = () => {
+    if (phase !== "play") return;
+    setWorld((w) => (w.mode === "ready" ? { ...w, mode: "grow", t: w.time, len: 0.01 } : w));
+  };
+  const release = () =>
+    setWorld((w) => {
+      if (w.mode !== "grow") return w;
+      sfx.tap();
+      return { ...w, mode: "fall", t: w.time };
+    });
+
+  const { pillars, cam } = world;
+  const edge = pillars[0].x + pillars[0].w;
+  const rescuing = world.mode === "rescue";
+  const gokuImg = rescuing ? "goku_kid_cloud.png" : "goku_kid_staff.png";
+
+  return (
+    <div
+      className="lz-game lz-game-baton"
+      style={{ backgroundImage: `url(${ASSET("bg_papaya.png")})` }}
+      onPointerDown={press}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onPointerLeave={release}
+    >
+      <Hud score={world.score} time={world.time} icon="★" seconds={seconds} />
+      {pillars.map((p, i) => (
+        <span key={p.id} className="lz-pillar" style={{ left: `${(p.x - cam) * 100}%`, width: `${p.w * 100}%` }} aria-hidden>
+          {i > 0 && <i className="lz-pillar-mark" />}
+        </span>
+      ))}
+      {world.len > 0 && (
+        <span className="lz-staff" style={{ left: `${(edge - cam) * 100}%`, height: `${world.len * 100}vw`, transform: `rotate(${world.angle}deg)` }} aria-hidden />
+      )}
+      <div
+        className={`lz-batonboy ${world.mode === "grow" ? "is-grow" : ""} ${world.mode === "walk" || world.mode === "slip" ? "is-walk" : ""} ${rescuing ? "is-rescue" : ""}`}
+        style={{ left: `${(world.gx - cam) * 100}%`, bottom: `calc(30% - ${world.gy * 100}%)` }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={ASSET(gokuImg)} alt="" draggable={false} />
+      </div>
+      {world.pops.map((p) => (
+        <span key={p.id} className={`lz-catch ${p.good ? "good" : "bad"}`} style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
+          {p.good && <span className="lz-sparks" aria-hidden />}
+          <span className="lz-pop-text">{p.text}</span>
+        </span>
+      ))}
+      {phase === "play" && world.time < 6 && (
+        <span className="lz-route-tip">Appuie pour faire grandir le bâton, lâche pour le poser !</span>
+      )}
+      <Overlay phase={phase} count={count} score={world.score} game="baton" onDone={onDone} />
+    </div>
+  );
+}
+
+// ——— Secret: Ultra Instinct (only after a perfect session): touch every attack before it lands ———
+
+interface Threat {
+  id: number;
+  a: number; // angle it comes from
+  d: number; // distance from Goku (in shares of the screen's short side)
+  v: number;
+  kind: "blast" | "foe" | "ball";
+  sprite: string;
+  stars: number;
+}
+interface InstinctW {
+  time: number;
+  score: number;
+  threats: Threat[];
+  spawn: number;
+  combo: number;
+  dodge: number; // when Goku last dodged (afterimage)
+  pops: { id: number; x: number; y: number; t: number; text: string; good: boolean }[];
+}
+
+const UI_FOES = ["jiren.png", "goku_black.png", "frieza_new.png", "broly.png"];
+const UI_CENTER = { x: 0.5, y: 0.56 };
+
+function Instinct({ onDone, level, seconds }: GameProps) {
+  const pace = paceOf(level);
+  const box = useRef<HTMLDivElement>(null);
+  const far = useRef(0.9); // spawn distance: just off the screen's long side
+  useEffect(() => {
+    const r = box.current?.getBoundingClientRect();
+    if (r) far.current = (Math.max(r.width, r.height) / Math.min(r.width, r.height)) * 0.62;
+  }, []);
+
+  const { world, setWorld, phase, count } = useGame<InstinctW>(
+    () => ({ time: 0, score: 0, threats: [], spawn: 0.6, combo: 0, dodge: -9, pops: [] }),
+    (w, dt) => {
+      let { spawn, combo, dodge } = w;
+      const pops = w.pops.filter((p) => w.time - p.t < 0.7);
+      const threats: Threat[] = [];
+      for (const th of w.threats) {
+        const d = th.d - th.v * dt;
+        if (d < 0.09) {
+          // It reached him: Ultra Instinct dodges by itself, but the combo is lost.
+          if (th.kind !== "ball") {
+            combo = 0;
+            dodge = w.time;
+            sfx.beam();
+          }
+          continue;
+        }
+        threats.push({ ...th, d });
+      }
+      spawn -= dt;
+      if (spawn <= 0) {
+        spawn = (rand(0.55, 0.95) - Math.min(0.3, w.time * 0.006)) / pace;
+        const roll = Math.random();
+        const kind = roll < 0.12 ? "ball" : roll < 0.4 ? "foe" : "blast";
+        threats.push({
+          id: nextId++,
+          a: rand(0, Math.PI * 2),
+          d: far.current,
+          v: (kind === "foe" ? 0.2 : 0.28) * pace * (1 + w.time * 0.01),
+          kind,
+          sprite: kind === "foe" ? UI_FOES[Math.floor(Math.random() * UI_FOES.length)] : "kikoha.png",
+          stars: 1 + Math.floor(Math.random() * 7),
+        });
+      }
+      return { ...w, spawn, combo, dodge, threats, pops };
+    },
+    seconds,
+  );
+
+  // Touch (or swipe across) an attack to send it away.
+  const pressed = useRef(false);
+  const strike = (e: RPointerEvent) => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r || phase !== "play") return;
+    const m = Math.min(r.width, r.height);
+    const px = (e.clientX - (r.left + r.width * UI_CENTER.x)) / m;
+    const py = (e.clientY - (r.top + r.height * UI_CENTER.y)) / m;
+    setWorld((w) => {
+      const hit = w.threats.find((th) => Math.hypot(Math.cos(th.a) * th.d - px, Math.sin(th.a) * th.d - py) < (th.kind === "foe" ? 0.13 : 0.11));
+      if (!hit) return w;
+      const combo = w.combo + 1;
+      const gain = hit.kind === "ball" ? 5 * level : level + Math.floor(combo / 5);
+      sfx.good();
+      const x = UI_CENTER.x + (Math.cos(hit.a) * hit.d * m) / r.width;
+      const y = UI_CENTER.y + (Math.sin(hit.a) * hit.d * m) / r.height;
+      return {
+        ...w,
+        combo,
+        score: w.score + gain,
+        threats: w.threats.filter((th) => th !== hit),
+        pops: [...w.pops, { id: nextId++, x, y, t: w.time, text: combo >= 5 && hit.kind !== "ball" ? `Combo ${combo} ! +${gain}` : `+${gain}`, good: true }],
+      };
+    });
+  };
+
+  const dodging = world.time - world.dodge < 0.45;
+
+  return (
+    <div
+      ref={box}
+      className="lz-game lz-game-instinct"
+      style={{ backgroundImage: `url(${ASSET("bg_gods.png")})` }}
+      onPointerDown={(e) => {
+        pressed.current = true;
+        strike(e);
+      }}
+      onPointerMove={(e) => pressed.current && strike(e)}
+      onPointerUp={() => (pressed.current = false)}
+      onPointerCancel={() => (pressed.current = false)}
+    >
+      <Hud score={world.score} time={world.time} icon="✦" seconds={seconds} />
+      <div className={`lz-ui-goku ${dodging ? "is-dodge" : ""}`} style={{ left: `${UI_CENTER.x * 100}%`, top: `${UI_CENTER.y * 100}%` }}>
+        <span className="lz-ui-aura" aria-hidden />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={ASSET("goku_ui.png")} alt="Goku Ultra Instinct" draggable={false} />
+        {dodging && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="lz-ui-ghost" src={ASSET("goku_ui.png")} alt="" draggable={false} />
+        )}
+      </div>
+      {world.threats.map((th) => (
+        <span
+          key={th.id}
+          className={`lz-ui-threat is-${th.kind}`}
+          style={{
+            left: `calc(${UI_CENTER.x * 100}% + ${Math.cos(th.a) * th.d} * var(--m))`,
+            top: `calc(${UI_CENTER.y * 100}% + ${Math.sin(th.a) * th.d} * var(--m))`,
+          }}
+          aria-hidden
+        >
+          {th.kind === "ball" ? (
+            <DragonBall stars={th.stars} size={56} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={ASSET(th.sprite)} alt="" draggable={false} />
+          )}
+        </span>
+      ))}
+      {world.combo >= 5 && <span className="lz-ui-combo">Combo ×{world.combo}</span>}
+      {world.pops.map((p) => (
+        <span key={p.id} className="lz-catch good" style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
+          <span className="lz-sparks" aria-hidden />
+          <span className="lz-pop-text">{p.text}</span>
+        </span>
+      ))}
+      {phase === "play" && world.time < 5 && <span className="lz-route-tip">Touche les attaques avant qu&apos;elles arrivent !</span>}
+      <Overlay phase={phase} count={count} score={world.score} game="instinct" onDone={onDone} />
+    </div>
+  );
+}
+
 export function MiniGame({
   id,
   letters,
@@ -864,5 +1183,7 @@ export function MiniGame({
   if (id === "kame") return <Kame onDone={onDone} level={level} seconds={seconds} goku={goku} beam={beam} />;
   if (id === "memoire") return <Memoire onDone={onDone} level={level} seconds={seconds} />;
   if (id === "route") return <Route onDone={onDone} level={level} seconds={seconds} goku={goku} />;
+  if (id === "baton") return <Baton onDone={onDone} level={level} seconds={seconds} />;
+  if (id === "instinct") return <Instinct onDone={onDone} level={level} seconds={seconds} />;
   return <Boules letters={letters} onDone={onDone} level={level} seconds={seconds} />;
 }

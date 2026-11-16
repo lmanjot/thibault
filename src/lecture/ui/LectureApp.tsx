@@ -31,16 +31,16 @@ import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
 import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
-import { MINI_GAMES, MiniGame, type GameId } from "./games";
+import { MINI_GAMES, MiniGame, SECRET_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { chooseFighter, DIAMOND_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
   | { s: "home" }
   | { s: "versus"; boss: Boss; fight: Fight }
   | { s: "session"; exercises: Ex[]; boss?: Boss; fight?: Fight }
-  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[]; medal?: Medal }
+  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[]; medal?: Medal; perfect?: boolean; secret?: boolean }
   | { s: "reward"; letters: string[] }
   | { s: "bonus"; game?: GameId; cleared: string[]; extra?: number }
   | { s: "shop" }
@@ -60,10 +60,14 @@ function Game({ fontClass }: { fontClass: string }) {
     // Dev shortcut to try a mini-game directly: /lecture?jeu=nuage
     const jeu = process.env.NODE_ENV === "development" ? new URLSearchParams(location.search).get("jeu") : null;
     if (jeu === "choix") return { s: "bonus", cleared: [] }; // the game picker
+    // /lecture?jeu=trace: drawing letters (a, e, u, ch).
+    if (jeu === "trace")
+      return { s: "session", exercises: ["a", "e", "u", "ch"].map((g) => ({ t: "trace", section: "train", item: `g:${g}`, g }) as Ex) };
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
+    if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };
     if (jeu === "or" || jeu === "diamant" || jeu === "voeu")
       return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu" } };
-    return MINI_GAMES.some((g) => g.id === jeu) ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
+    return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
   useEffect(() => {
@@ -191,9 +195,12 @@ function Game({ fontClass }: { fontClass: string }) {
       }
     }
     const stars = starsFor(r.ok, r.total);
+    // Not a single mistake: blue stars, and the secret game (after training or a letters challenge).
+    const perfect = r.total > 0 && r.ok === r.total && r.answers.every((a) => a.ok);
+    const secret = perfect && (!boss || !!fight?.target);
     // Zénis: the answers, plus a bonus for finishing, for a perfect session and for each letter cleared.
     const bossBonus = fight ? (fight.practice ? PRACTICE_BOSS_BONUS : fight.kind === "revision" ? REVISION_BOSS_BONUS : LETTER_BOSS_BONUS) : 0;
-    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + cleared.length * LETTER_BONUS + medalBonus + bossBonus;
+    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + (perfect ? FLAWLESS_BONUS : 0) + cleared.length * LETTER_BONUS + medalBonus + bossBonus;
     s.progress.zeni = zeni(s) + earned;
     if (fight?.practice) {
       s.progress.practices = (s.progress.practices ?? 0) + 1; // next time, another opponent
@@ -203,16 +210,18 @@ function Game({ fontClass }: { fontClass: string }) {
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
     }
     update(s);
-    setScreen({ s: "result", stars, earned, boss, cleared, medal });
-    if (medal) sfx.power();
+    setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret });
+    if (medal || perfect) sfx.power();
     speak(
       medal
         ? medal.wish
           ? [L.diamondDone, L.wish]
           : [medal.kind === "or" ? L.goldDone : L.diamondDone]
         : boss
-          ? [boss.name, L.beaten]
-          : [stars === 3 ? L.perfect : L.trainingDone],
+          ? [boss.name, L.beaten, ...(perfect ? [L.flawless] : []), ...(secret ? [L.secretOpen] : [])]
+          : perfect
+            ? [L.flawless, ...(secret ? [L.secretOpen] : [])]
+            : [stars === 3 ? L.perfect : L.trainingDone],
     );
   }
 
@@ -294,11 +303,25 @@ function Game({ fontClass }: { fontClass: string }) {
         <div className="lz-result">
           <div className="lz-panel">
             <h2 className="lz-title-sm">{screen.boss ? "Victoire !" : "Bravo !"}</h2>
-            <Stars n={screen.stars} size={72} />
+            <Stars n={screen.stars} size={72} perfect={screen.perfect} />
+            {screen.perfect && <p className="lz-flawless">Sans-faute !</p>}
             {screen.medal && <MedalBanner medal={screen.medal} />}
             <p className="lz-kigain">
               +{screen.earned} <Zeni size={40} />
             </p>
+            {screen.secret && (
+              <button
+                className="lz-cta lz-cta-secret"
+                onClick={() => {
+                  stopSpeech();
+                  sfx.unlock();
+                  setScreen({ s: "bonus", game: SECRET_GAME.id, cleared: screen.cleared });
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ASSET(SECRET_GAME.img)} alt="" /> Jeu secret : {SECRET_GAME.name}
+              </button>
+            )}
             <div className="lz-row">
               <button
                 className="lz-cta lz-cta-alt"
@@ -613,6 +636,14 @@ function Bonus({
               </button>
             );
           })}
+          <div className="lz-gamecard is-locked is-secret" aria-label="Jeu secret">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={ASSET(SECRET_GAME.img)} alt="" />
+            <span className="lz-gamecard-name">Jeu secret</span>
+            <span className="lz-gamecard-lock">
+              <Icon name="lock" size={22} /> fais un sans-faute
+            </span>
+          </div>
         </div>
         <FighterPicker options={fighters(save, formFor(formStep(save)).form)} current={fighter.id} onPick={onFighter} />
         <div className="lz-row">
@@ -627,7 +658,7 @@ function Bonus({
         </div>
       </div>
     );
-  return <MiniGame key={game} id={game} letters={letters} level={gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
+  return <MiniGame key={game} id={game} letters={letters} level={game === SECRET_GAME.id ? 1 : gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
 }
 
 /** « e · u » */

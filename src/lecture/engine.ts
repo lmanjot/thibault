@@ -60,7 +60,7 @@ export interface Progress {
   owned?: string[]; // shop items bought
   equip?: { companion?: string; scene?: string; aura?: string; fighter?: string }; // fighter: a friend who fights instead of Goku
   senzu?: number; // beans in stock (+15 s on a mini-game)
-  levels?: Partial<Record<"nuage" | "kame" | "bulles" | "memoire" | "route", number>>; // mini-game level chosen
+  levels?: Partial<Record<"nuage" | "kame" | "bulles" | "memoire" | "route" | "baton", number>>; // mini-game level chosen
   fights?: Fight[]; // bosses waiting to be fought, oldest first
   beaten?: string[]; // names of the bosses beaten, so the story moves on
   practices?: number; // revision fights chosen from the home screen (rematches)
@@ -283,7 +283,11 @@ export type Ex =
   | { t: "hunt"; section: Section; item: string; g: string; letters: string[] }
   | { t: "lettre"; section: Section; item: string; g: string; word?: Word; options: string[] }
   | { t: "fusion"; section: Section; item: string; c: string; v: string; options: string[] }
-  | { t: "syllabe"; section: Section; item: string; options: string[] };
+  | { t: "syllabe"; section: Section; item: string; options: string[] }
+  | { t: "trace"; section: Section; item: string; g: string };
+
+/** "Trace la lettre": draw it with a finger over a faint model. */
+const trace = (g: string, section: Section): Ex => ({ t: "trace", section, item: gid(g), g });
 
 const rnd = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
@@ -528,8 +532,10 @@ export function buildSession(s: Save): Ex[] {
   // 2. Entraînement
   const train: Ex[] = [];
   if (f) {
-    // The letter being worked on: four times, in different exercises (the majority, with its syllables).
-    for (let i = 0; i < 4; i++) train.push(soundEx(s, f, f, "train", 0, train[i - 1]?.t));
+    // The letter being worked on: four times, in different exercises (the majority, with its syllables),
+    // one of them drawing it.
+    train.push(trace(f, "train"));
+    for (let i = 0; i < 3; i++) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t));
     // Two syllables with it: reading is blending, from the start.
     const focusSyls = syllablesWith(s, f);
     const fsyl = focusSyls.length ? pickReview(s, focusSyls, 2) : [];
@@ -628,10 +634,16 @@ function targetExercises(s: Save, t: Target, n: number, section: (i: number) => 
     const others = t.must.filter((g) => g !== own);
     return others.length ? rnd(others) : null;
   };
-  return spreadIds(shuffle(ids)).map((id, i) => {
+  const out = spreadIds(shuffle(ids)).map((id, i) => {
     const sec = section(i);
     return itemEx(ts, id, rival(id), sec, sec === "boss" ? 1 : sec === "defi" ? 2 : 0);
   });
+  // Training (not the fight): each "must" letter is drawn once too.
+  t.must.forEach((g) => {
+    const i = out.findIndex((e) => e.section === "train" && e.t !== "trace" && e.item === gid(g));
+    if (i >= 0) out[i] = trace(g, "train");
+  });
+  return out;
 }
 
 /** A targeted revision fight: 12 questions on the parent's letters, a little harder. */

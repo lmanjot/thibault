@@ -17,7 +17,7 @@ import { FORMS, type Form } from "./content";
 import type { Ex, Save } from "./engine";
 
 /** Zénis for a right answer, by exercise difficulty. */
-const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, lettre: 3, complete: 4, fusion: 4, syllabe: 5 };
+const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, lettre: 3, complete: 4, fusion: 4, syllabe: 5, trace: 4 };
 
 export function zeniFor(ex: Ex, firstTry: boolean, boss: boolean): number {
   const base = firstTry ? PAY[ex.t] : 1;
@@ -26,6 +26,8 @@ export function zeniFor(ex: Ex, firstTry: boolean, boss: boolean): number {
 
 export const SESSION_BONUS = 5;
 export const PERFECT_BONUS = 10;
+/** No mistake at all (every answer right the first time): blue stars, and the secret game. */
+export const FLAWLESS_BONUS = 20;
 export const LETTER_BONUS = 25;
 /** A letter's gold round finished (3 more good sessions after clearing it). */
 export const GOLD_BONUS = 60;
@@ -56,7 +58,7 @@ export interface ShopItem {
   era?: number; // Goku must have reached this step of the ladder
 }
 
-export type GameKey = "nuage" | "kame" | "bulles" | "memoire" | "route";
+export type GameKey = "nuage" | "kame" | "bulles" | "memoire" | "route" | "baton";
 
 export const SENZU_MAX = 5;
 export const SENZU_SECONDS = 15;
@@ -98,9 +100,10 @@ export const ITEMS: ShopItem[] = [
   { id: "g-kame", kind: "game", name: "Kaméhaméha", price: 120, img: "saibaman.png", game: "kame" },
   { id: "g-bulles", kind: "game", name: "Boules magiques", price: 180, img: "kikoha.png", game: "bulles" },
   { id: "g-memoire", kind: "game", name: "Memory des amis", price: 220, img: "bulma_kid.png", game: "memoire" },
-  { id: "g-route", kind: "game", name: "Route du Serpent", price: 260, img: "goku_kid_staff.png", game: "route" },
+  { id: "g-route", kind: "game", name: "Route du Serpent", price: 260, img: "goku.png", game: "route" },
+  { id: "g-baton", kind: "game", name: "Bâton magique", price: 300, img: "goku_kid_staff.png", game: "baton" },
 
-  ...(["nuage", "kame", "bulles", "memoire", "route"] as GameKey[]).flatMap((game) =>
+  ...(["nuage", "kame", "bulles", "memoire", "route", "baton"] as GameKey[]).flatMap((game) =>
     [2, 3].map((level) => ({ id: `l-${game}-${level}`, kind: "level" as const, name: `Niveau ${level}`, price: level === 2 ? 100 : 200, game, level })),
   ),
 
@@ -110,7 +113,7 @@ export const ITEMS: ShopItem[] = [
 export const ITEM: Record<string, ShopItem> = Object.fromEntries(ITEMS.map((i) => [i.id, i]));
 
 /** Mini-games unlock as letters are cleared (shown locked before, with when). */
-export const GAME_UNLOCK: Record<GameKey, number> = { nuage: 0, kame: 1, bulles: 2, memoire: 3, route: 4 };
+export const GAME_UNLOCK: Record<GameKey, number> = { nuage: 0, kame: 1, bulles: 2, memoire: 3, route: 4, baton: 5 };
 
 // ——— Wallet and inventory (functions change the save passed in) ———
 

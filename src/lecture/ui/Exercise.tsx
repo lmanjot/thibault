@@ -26,6 +26,8 @@ export function promptParts(ex: Ex): Part[] {
       const { c, v } = parseSyl(ex.item);
       return [L.show, sylPart(c, v)];
     }
+    case "trace":
+      return [L.trace, soundPart(ex.g)];
   }
 }
 
@@ -94,6 +96,7 @@ export function Exercise({ ex, onResult }: { ex: Ex; onResult: (ok: boolean) => 
   }
 
   if (ex.t === "hunt") return <Hunt ex={ex} onResult={onResult} />;
+  if (ex.t === "trace") return <Trace ex={ex} onResult={onResult} />;
 
   const speaker = (
     <button className="lz-round lz-speaker" onClick={() => speak(replayParts(ex))} aria-label="Réécouter">
@@ -437,3 +440,275 @@ function Hunt({ ex, onResult }: { ex: Extract<Ex, { t: "hunt" }>; onResult: (ok:
   );
 }
 
+
+// ——— Trace la lettre ———
+
+/** Drawing box, in canvas units (the canvas is scaled to fit the screen). */
+const BOX = 320;
+const PEN = BOX * 0.065; // the line drawn
+const REACH = BOX * 0.13; // how much of the letter one line covers, when scoring
+const SLACK = BOX * 0.05; // how far off the letter a line may stray
+
+type Pt = { x: number; y: number };
+
+interface Glyph {
+  font: string;
+  x: number;
+  y: number;
+  ink: Uint8Array; // the letter's pixels
+  near: Uint8Array; // the letter, widened by SLACK
+  inkCount: number;
+  spine: number; // the letter's length, traced along its middle (about half its outline)
+}
+
+function layoutGlyph(text: string, family: string): Glyph {
+  const c = document.createElement("canvas");
+  c.width = c.height = BOX;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.font = `100px ${family}`;
+  const m = ctx.measureText(text);
+  const w = Math.max(1, m.actualBoundingBoxLeft + m.actualBoundingBoxRight);
+  const h = Math.max(1, m.actualBoundingBoxAscent + m.actualBoundingBoxDescent);
+  const k = Math.min((BOX * 0.7) / w, (BOX * 0.72) / h);
+  const font = `${100 * k}px ${family}`;
+  const x = BOX / 2 - ((m.actualBoundingBoxRight - m.actualBoundingBoxLeft) * k) / 2;
+  const y = BOX / 2 + ((m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) * k) / 2;
+  const mask = (widen: number) => {
+    ctx.clearRect(0, 0, BOX, BOX);
+    ctx.font = font;
+    ctx.fillStyle = ctx.strokeStyle = "#000";
+    ctx.fillText(text, x, y);
+    if (widen) {
+      ctx.lineWidth = widen * 2;
+      ctx.lineJoin = "round";
+      ctx.strokeText(text, x, y);
+    }
+    const d = ctx.getImageData(0, 0, BOX, BOX).data;
+    const out = new Uint8Array(BOX * BOX);
+    for (let i = 0; i < out.length; i++) out[i] = d[i * 4 + 3] > 110 ? 1 : 0;
+    return out;
+  };
+  const ink = mask(0);
+  const near = mask(SLACK);
+  let inkCount = 0;
+  let edge = 0;
+  for (let i = 0; i < ink.length; i++) {
+    if (!ink[i]) continue;
+    inkCount++;
+    if (!ink[i - 1] || !ink[i + 1] || !ink[i - BOX] || !ink[i + BOX]) edge++;
+  }
+  return { font, x, y, ink, near, inkCount, spine: edge / 2 };
+}
+
+/** How much of the letter the lines cover, how much of the lines stay on it (0 to 1), and whether they stay tidy. */
+function scoreTrace(g: Glyph, lines: Pt[][]) {
+  const c = document.createElement("canvas");
+  c.width = c.height = BOX;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.strokeStyle = "#000";
+  const strokeAll = (width: number) => {
+    ctx.clearRect(0, 0, BOX, BOX);
+    ctx.lineWidth = width;
+    for (const line of lines) {
+      ctx.beginPath();
+      line.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      if (line.length === 1) ctx.lineTo(line[0].x + 0.1, line[0].y);
+      ctx.stroke();
+    }
+    return ctx.getImageData(0, 0, BOX, BOX).data;
+  };
+  // Points every few units along the lines: are they on the letter?
+  let pts = 0;
+  let on = 0;
+  for (const line of lines) {
+    for (let i = 0; i < line.length; i++) {
+      const a = line[i];
+      const b = line[i + 1] ?? a;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 3));
+      for (let j = 0; j < n; j++) {
+        const x = Math.round(a.x + ((b.x - a.x) * j) / n);
+        const y = Math.round(a.y + ((b.y - a.y) * j) / n);
+        pts++;
+        if (x >= 0 && y >= 0 && x < BOX && y < BOX && g.near[y * BOX + x]) on++;
+      }
+    }
+  }
+  const wide = strokeAll(REACH);
+  let covered = 0;
+  for (let i = 0; i < g.ink.length; i++) if (g.ink[i] && wide[i * 4 + 3] > 110) covered++;
+  // Scribbling all over the box covers the letter too: the ink laid down may not be much more
+  // than one line along the letter (going over it again, or a shaky line, is fine).
+  const pen = strokeAll(PEN);
+  let area = 0;
+  for (let i = 3; i < pen.length; i += 4) if (pen[i] > 110) area++;
+  return {
+    cover: covered / Math.max(1, g.inkCount),
+    stay: pts ? on / pts : 0,
+    tidy: area <= g.spine * PEN * 2.2,
+  };
+}
+
+/** "Trace la lettre": draw it with a finger over a faint model. Done as soon as it is well covered. */
+function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (ok: boolean) => void }) {
+  const text = GRAPHEME[ex.g].display;
+  const wrap = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const glyph = useRef<Glyph | null>(null);
+  const lines = useRef<Pt[][]>([]);
+  const drawing = useRef(false);
+  const misses = useRef(0);
+  const done = useRef(false);
+  const [state, setState] = useState<"ask" | "ok" | "ko">("ask");
+  const [inked, setInked] = useState(false);
+
+  const paint = (win = false) => {
+    const cv = canvas.current;
+    const g = glyph.current;
+    if (!cv || !g) return;
+    const ctx = cv.getContext("2d")!;
+    const k = cv.width / BOX;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.clearRect(0, 0, BOX, BOX);
+    ctx.font = g.font;
+    // The model: a pale letter with a dotted outline (gold once traced).
+    ctx.fillStyle = win ? "#ffd23f" : "rgba(29, 78, 163, 0.13)";
+    ctx.fillText(text, g.x, g.y);
+    if (!win) {
+      ctx.setLineDash([6, 7]);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "rgba(29, 78, 163, 0.45)";
+      ctx.strokeText(text, g.x, g.y);
+      ctx.setLineDash([]);
+    }
+    ctx.lineCap = ctx.lineJoin = "round";
+    ctx.lineWidth = PEN;
+    ctx.strokeStyle = win ? "rgba(244, 123, 32, 0.55)" : "#f47b20";
+    for (const line of lines.current) {
+      ctx.beginPath();
+      line.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      if (line.length === 1) ctx.lineTo(line[0].x + 0.1, line[0].y);
+      ctx.stroke();
+    }
+  };
+
+  // Lay the letter out in the game's reading font (script or cursive), once it is loaded.
+  useEffect(() => {
+    let alive = true;
+    const family = (wrap.current && getComputedStyle(wrap.current).fontFamily) || "sans-serif";
+    const ready = document.fonts?.load ? document.fonts.load(`100px ${family}`, text).catch(() => null) : Promise.resolve();
+    ready.then(() => {
+      if (!alive) return;
+      const cv = canvas.current;
+      if (cv) cv.width = cv.height = Math.round(BOX * Math.min(2, window.devicePixelRatio || 1));
+      glyph.current = layoutGlyph(text, family);
+      paint();
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+
+  const at = (e: RPointerEvent<HTMLCanvasElement>): Pt => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * BOX, y: ((e.clientY - r.top) / r.height) * BOX };
+  };
+
+  async function finish(ok: boolean) {
+    done.current = true;
+    setState(ok ? "ok" : "ko");
+    if (ok) {
+      paint(true);
+      sfx.good();
+      await speak([praise()]);
+    } else {
+      sfx.bad();
+      lines.current = [];
+      paint(true); // show the letter as it should be
+      await speak([L.itsThisOne, soundPart(ex.g)]);
+    }
+    await wait(ok ? 300 : 650);
+    onResult(ok);
+  }
+
+  function check(final: boolean) {
+    const g = glyph.current;
+    if (!g || done.current || !lines.current.length) return;
+    const { cover, stay, tidy } = scoreTrace(g, lines.current);
+    if (tidy && cover >= 0.8 && stay >= 0.85) return void finish(true);
+    if (!final) return;
+    if (tidy && cover >= 0.6 && stay >= 0.8) return void finish(true);
+    misses.current += 1;
+    if (misses.current >= 2) return void finish(false);
+    sfx.bad();
+    speak([L.traceMore]);
+    lines.current = [];
+    setInked(false);
+    paint();
+  }
+
+  return (
+    <div className="lz-ex lz-trace" ref={wrap}>
+      <div className="lz-prompt">
+        <button className="lz-round lz-speaker" onClick={() => speak(promptParts(ex))} aria-label="Réécouter">
+          <Icon name="speaker" size={36} />
+        </button>
+      </div>
+      <div className={`lz-trace-pad ${state === "ok" ? "is-ok" : state === "ko" ? "is-ko" : ""}`}>
+        <canvas
+          ref={canvas}
+          width={BOX}
+          height={BOX}
+          aria-label={`Trace la lettre ${text}`}
+          onPointerDown={(e) => {
+            if (done.current) return;
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // drawing still works without capture
+            }
+            drawing.current = true;
+            lines.current.push([at(e)]);
+            setInked(true);
+            paint();
+          }}
+          onPointerMove={(e) => {
+            if (!drawing.current || done.current) return;
+            const line = lines.current[lines.current.length - 1];
+            const p = at(e);
+            const last = line[line.length - 1];
+            if (Math.hypot(p.x - last.x, p.y - last.y) < 1.5) return;
+            line.push(p);
+            paint();
+          }}
+          onPointerUp={() => {
+            if (!drawing.current) return;
+            drawing.current = false;
+            check(false);
+          }}
+          onPointerCancel={() => {
+            drawing.current = false;
+          }}
+        />
+      </div>
+      <div className="lz-trace-tools">
+        <button
+          className="lz-round lz-trace-erase"
+          aria-label="Effacer"
+          disabled={!inked || state !== "ask"}
+          onClick={() => {
+            lines.current = [];
+            setInked(false);
+            paint();
+          }}
+        >
+          <Icon name="trash" size={32} />
+        </button>
+        <button className="lz-trace-done" aria-label="J'ai fini" disabled={!inked || state !== "ask"} onClick={() => check(true)}>
+          <Icon name="check" size={44} />
+        </button>
+      </div>
+    </div>
+  );
+}
