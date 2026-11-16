@@ -20,6 +20,7 @@ import {
   starsFor,
   startLetter,
   upcomingLetters,
+  roundOf,
   storeSave,
   type Ex,
   type Save,
@@ -163,11 +164,16 @@ function Game({ fontClass }: { fontClass: string }) {
   function finish(r: SessionResult, boss?: Boss, fight?: Fight) {
     const s = structuredClone(save!);
     // In a letter boss, that letter is the one being worked on; a revision clears nothing new.
-    const cleared = applySession(s, r.answers, fight ? (fight.letter ?? null) : focusSound(save));
+    const worked = fight ? (fight.letter ?? null) : focusSound(save);
+    const before = worked ? roundOf(level(save, gid(worked))) : null;
+    const cleared = applySession(s, r.answers, worked);
+    // A yellow or red round finished (3 more dots): as many zénis as clearing the letter.
+    const after = worked ? roundOf(level(s, gid(worked))) : null;
+    const roundDone = !!before && !!after && isCleared(save, worked!) && (after.round > before.round || (after.dots === 3 && before.dots < 3));
     const stars = starsFor(r.ok, r.total);
     // Zénis: the answers, plus a bonus for finishing, for a perfect session and for each letter cleared.
     const bossBonus = fight ? (fight.practice ? PRACTICE_BOSS_BONUS : fight.kind === "revision" ? REVISION_BOSS_BONUS : LETTER_BOSS_BONUS) : 0;
-    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + cleared.length * LETTER_BONUS + bossBonus;
+    const earned = r.zeni + SESSION_BONUS + (stars === 3 ? PERFECT_BONUS : 0) + (cleared.length + (roundDone ? 1 : 0)) * LETTER_BONUS + bossBonus;
     s.progress.zeni = zeni(s) + earned;
     if (fight?.practice) {
       s.progress.practices = (s.progress.practices ?? 0) + 1; // next time, another opponent
@@ -198,7 +204,7 @@ function Game({ fontClass }: { fontClass: string }) {
           }}
           onPick={(g) => {
             const s = structuredClone(save);
-            startLetter(s, g); // also adds a new letter after the known ones
+            startLetter(s, g); // a known letter (new letters are added by the parent)
             update(s);
           }}
           onShop={() => {
@@ -365,13 +371,6 @@ function Home({
   const focusDone = focus ? Math.min(3, level(save, gid(focus)) - 1) : 0;
   const gauge = next ? focusDone / 3 : 1;
   const companion = equipped(save, "companion");
-  // A new letter starts only on a second tap (a swipe across the row must not start one by accident).
-  const [armed, setArmed] = useState<string | null>(null);
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(null), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
 
   // Shrink the home column when the screen is too short for it (Windows tablets with the browser bar,
   // small laptops): every button, the boss one included, must stay on screen without scrolling.
@@ -439,31 +438,23 @@ function Home({
                   speak([namePart(g)]);
                 }}
               >
-                {isCleared(save, g) ? <span className="lz-week-star is-done">✓</span> : week.includes(g) && <span className="lz-week-star">★</span>}
+                {isCleared(save, g) ? (
+                  <span className={`lz-week-star is-done round-${doneRound(level(save, gid(g)))}`}>✓</span>
+                ) : (
+                  week.includes(g) && <span className="lz-week-star">★</span>
+                )}
                 <span className="lz-read">{GRAPHEME[g].display}</span>
                 <Pips level={level(save, gid(g))} />
               </button>
             ))}
-            {/* The next letters of the usual order: tap one to start it. */}
-            {upcomingLetters(save, 2).map((g) => (
-              <button
-                key={g}
-                className={`lz-weektile is-upcoming ${armed === g ? "is-armed" : ""}`}
-                aria-label={armed === g ? `Commencer la lettre ${GRAPHEME[g].display}` : `Nouvelle lettre : ${GRAPHEME[g].display}`}
-                onClick={() => {
-                  sfx.tap();
-                  speak([namePart(g)]);
-                  if (armed === g) {
-                    setArmed(null);
-                    onPick(g);
-                  } else setArmed(g);
-                }}
-              >
-                <span className="lz-week-star is-new">{armed === g ? "✓" : "+"}</span>
-                {armed === g && <span className="lz-arm-hint">Encore !</span>}
+            {/* The next letter of the usual order, locked: only the parent adds letters. */}
+            {upcomingLetters(save, 1).map((g) => (
+              <span key={g} className="lz-weektile is-upcoming is-locked" aria-label={`Bientôt : ${GRAPHEME[g].display}`}>
+                <span className="lz-week-star is-new">
+                  <Icon name="lock" size={16} />
+                </span>
                 <span className="lz-read">{GRAPHEME[g].display}</span>
-                <Pips level={1} />
-              </button>
+              </span>
             ))}
           </div>
         )}
@@ -607,4 +598,10 @@ function Bonus({
 /** « e · u » */
 function targetLabel(letters: string[] = []): string {
   return letters.map((g) => GRAPHEME[g]?.display ?? g).join(" · ");
+}
+
+/** The last round of dots finished: 0 green (cleared), 1 yellow, 2 red (mastered). */
+function doneRound(lvl: number): number {
+  const { round, dots } = roundOf(lvl);
+  return dots === 3 ? round : round - 1;
 }

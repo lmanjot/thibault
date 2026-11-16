@@ -4343,3 +4343,45 @@
   background: #e3ecfb;
   border-color: var(--navy-2);
 }
+
+/* ——— Letter rounds: green, then yellow, then red dots ——— */
+.lz-pips i.on,
+.lz-pips.round-0 i.on {
+  background: var(--ok);
+  box-shadow: 0 0 6px rgba(31, 157, 85, 0.7);
+}
+.lz-pips.round-1 i {
+  box-shadow: inset 0 0 0 2px rgba(31, 157, 85, 0.55); /* the green round, done */
+}
+.lz-pips.round-1 i.on {
+  background: #ffc21a;
+  box-shadow: 0 0 6px rgba(255, 194, 26, 0.9);
+}
+.lz-pips.round-2 i {
+  box-shadow: inset 0 0 0 2px rgba(255, 176, 0, 0.75); /* the yellow round, done */
+}
+.lz-pips.round-2 i.on {
+  background: #e0353b;
+  box-shadow: 0 0 6px rgba(224, 53, 59, 0.8);
+}
+.lz-pips.is-mastered i {
+  animation: lz-pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes lz-pulse-dot {
+  50% {
+    transform: scale(1.25);
+  }
+}
+.lz-week-star.is-done.round-1 {
+  background: #f0a800;
+}
+.lz-week-star.is-done.round-2 {
+  background: #e0353b;
+}
+.lz-weektile.is-locked {
+  cursor: default;
+  pointer-events: none;
+}
+.lz-weektile.is-locked .lz-read {
+  opacity: 0.4;
+}

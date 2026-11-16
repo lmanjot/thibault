@@ -1,6 +1,7 @@
 "use client";
 
 import { ASSET, type Form } from "../content";
+import { roundOf, ROUNDS } from "../engine";
 
 export function Goku({
   form,
@@ -120,12 +121,16 @@ export function Stars({ n, of = 3, size = 28 }: { n: number; of?: number; size?:
 }
 
 /** Good sessions toward clearing a letter (3 to clear). */
+/**
+ * A letter's dots: 3 per round, green, then yellow, then red (see roundOf). The dots of the
+ * finished rounds show as a small ring of their colour behind the current ones.
+ */
 export function Pips({ level }: { level: number }) {
-  const done = Math.max(0, Math.min(3, level - 1));
+  const { round, dots } = roundOf(level);
   return (
-    <span className={`lz-pips ${done >= 3 ? "is-cleared" : ""}`} aria-label={`${done} réussites sur 3`}>
+    <span className={`lz-pips round-${round} ${round === 2 && dots === 3 ? "is-mastered" : ""}`} aria-label={`${dots} réussites sur 3 (points ${ROUNDS[round]}s)`}>
       {[1, 2, 3].map((i) => (
-        <i key={i} className={i <= done ? "on" : ""} />
+        <i key={i} className={i <= dots ? "on" : ""} />
       ))}
     </span>
   );

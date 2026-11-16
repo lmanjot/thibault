@@ -4,8 +4,22 @@ import { CONFUSE, GRAPHEME, GRAPHEMES, WORDS, segment, wordAmbiguous, wordHas, t
 
 // ——— State ———
 
-/** A letter is cleared after this many good sessions (level 1 → 4). */
+/** A letter is cleared after this many good sessions (level 1 → 4): its boss and a new power. */
 export const CLEARED = 4;
+
+/**
+ * Then two more rounds of 3 good sessions make it really solid: green dots (1 → 4, cleared),
+ * yellow dots (4 → 7), red dots (7 → 10, mastered). Only the letter being worked on climbs them.
+ */
+export const MASTERED = 10;
+export const ROUNDS = ["vert", "jaune", "rouge"] as const;
+
+/** The round a letter level is in (0 green, 1 yellow, 2 red) and its dots done in that round (0-3). */
+export function roundOf(level: number): { round: number; dots: number } {
+  const done = Math.max(0, Math.min(MASTERED, level) - 1); // 0 … 9
+  const round = Math.min(2, Math.floor(done / 3));
+  return { round, dots: done - round * 3 };
+}
 
 export interface ItemStat {
   level: number; // 1 new · +1 per good session · 4 = cleared
@@ -152,11 +166,14 @@ export function applySession(s: Save, answers: { item: string; ok: boolean }[], 
     per.set(a.item, p);
   }
   const cleared: string[] = [];
+  const levelBefore = new Map([...per.keys()].map((id) => [id, level(s, id)]));
   for (const [id, { ok, tot }] of per) {
     const st = { ...stat(s, id), last: t };
-    // Only the letter being worked on can be cleared; letters mixed in stop one step short.
+    // Only the letter being worked on can be cleared, then climb the yellow and red rounds;
+    // letters mixed in stop one step short of being cleared, and do not climb once cleared.
     const isLetter = id.startsWith("g:");
-    const cap = isLetter && id.slice(2) !== focus && !isCleared(s, id.slice(2)) ? CLEARED - 1 : CLEARED;
+    const g = id.slice(2);
+    const cap = !isLetter ? CLEARED : g === focus ? MASTERED : isCleared(s, g) ? st.level : CLEARED - 1;
     if (tot >= 2 && ok / tot >= 0.8 && st.level < cap) {
       st.level += 1;
       if (st.level >= CLEARED && isLetter && !isCleared(s, id.slice(2))) cleared.push(id.slice(2));
@@ -174,15 +191,12 @@ export function applySession(s: Save, answers: { item: string; ok: boolean }[], 
       if (n % REVISION_EVERY === 0) fights.push({ kind: "revision", letters: done.slice(n - REVISION_EVERY, n) });
     }
     s.progress.fights = fights;
-    if (s.settings.focus && cleared.includes(s.settings.focus)) delete s.settings.focus; // move on to the next letter
-    // Everything known is cleared: bring in the next letter of the usual order, so play never stops.
-    if (knownSounds(s).every((g) => isCleared(s, g))) {
-      const next = upcomingLetters(s, 1)[0];
-      if (next) {
-        s.settings.classSounds = [...s.settings.classSounds, next];
-        s.progress.items[gid(next)] ??= { level: 1, good: 0, last: "" };
-      }
-    }
+  }
+  // A round finished (3 dots): move on to the weakest letter (new letters only come from the parent).
+  if (focus && s.settings.focus === focus) {
+    const before = roundOf(levelBefore.get(gid(focus)) ?? 1);
+    const after = roundOf(level(s, gid(focus)));
+    if (after.round > before.round || (after.dots === 3 && before.dots < 3)) delete s.settings.focus;
   }
   if (!s.progress.playDays.includes(t)) s.progress.playDays.push(t);
   return cleared;
@@ -245,13 +259,15 @@ export const lettersToRevision = (s: Save) => REVISION_EVERY - (clearedList(s).l
 
 /**
  * The letter being worked on: the one picked on the home screen, else the first of the week's
- * letters not yet cleared, else the first known letter not yet cleared.
+ * letters not yet cleared, else the first known letter not yet cleared, else the least solid one
+ * (fewest dots in the yellow and red rounds), so the basics keep coming back.
  */
 export function focusSound(s: Save): string | null {
   const known = knownSounds(s);
   if (s.settings.focus && known.includes(s.settings.focus)) return s.settings.focus;
   const open = known.filter((g) => !isCleared(s, g));
-  return open.find((g) => s.settings.weekSounds.includes(g)) ?? open[0] ?? known[known.length - 1] ?? null;
+  const weakest = known.filter((g) => level(s, gid(g)) < MASTERED).sort((a, b) => level(s, gid(a)) - level(s, gid(b)))[0];
+  return open.find((g) => s.settings.weekSounds.includes(g)) ?? open[0] ?? weakest ?? known[known.length - 1] ?? null;
 }
 
 // ——— Exercises ———
@@ -443,7 +459,7 @@ function pickReview(s: Save, pool: string[], n: number): string[] {
     const st = stat(s, id);
     const age = st.last ? daysBetween(st.last, t) : 7;
     const due = st.level >= CLEARED ? age >= 2 : true; // cleared letters still come back, less often
-    return { id, score: (due ? 10 : 0) + (CLEARED - st.level) * 3 + Math.min(age, 14) + Math.random() * 4 };
+    return { id, score: (due ? 10 : 0) + Math.max(0, CLEARED - st.level) * 3 + Math.min(age, 14) + Math.random() * 4 };
   });
   return scored.sort((a, b) => b.score - a.score).slice(0, n).map((x) => x.id);
 }
