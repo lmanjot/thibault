@@ -45,6 +45,8 @@ function newState() {
 }
 function migrate(s) {
   const d = newState();
+  if (s.skills && s.skillsV !== 2) { for (const sk of Object.values(s.skills)) { sk.lv = 1; sk.r = []; sk.acq = 0; } }
+  s.skillsV = 2;
   // First version kept the objective as an index: turn it into the list of finished ones.
   if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
@@ -363,8 +365,8 @@ function themeFor(cat) {
 const CALC_OPS = ['add', 'sub', 'mul', 'div', 'mental'];
 const NEW_ORDER = Object.keys(NEW_CONCEPTS);
 const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme'];
-// Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers in Normal mode. Themes not listed: [3, 4].
-const CAPS = { 'calc:add': [3, 3], 'calc:sub': [2, 3], 'calc:mul': [3, 4], 'calc:div': [3, 4], 'calc:mental': [3, 4], enigme: [4, 5] };
+// Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers with borrowing in Normal mode. Themes not listed: [3, 4].
+const CAPS = { 'calc:add': [4, 5], 'calc:sub': [4, 5], 'calc:mul': [3, 4], 'calc:div': [4, 5], 'calc:mental': [3, 4], enigme: [4, 5] };
 const isCalc = (cat) => !cat || cat === 'calc' || cat === 'add' || cat === 'mul';
 const keyOf = (cat, op) => (op ? 'calc:' + op : mKey(cat));
 const catOf = (key) => (key.startsWith('calc:') ? 'calc' : key);
@@ -377,8 +379,8 @@ function capFor(key) {
   const c = CAPS[key] || [3, 4];
   return clamp(c[S.settings.grade === 8 ? 1 : 0] + diff, 1, 5);
 }
-// A new skill starts a step below the player's level (an old save keeps the "too hard" steps it had).
-const startLv = (key) => clamp(isNew(key) ? 1 : Math.round(baseD()) - 1 + ((S.ease || {})[key] || 0), 1, capFor(key));
+// Every skill starts at its easiest level and climbs from there.
+const startLv = () => 1;
 function skillOf(key) {
   S.skills = S.skills || {};
   if (!S.skills[key]) S.skills[key] = { lv: startLv(key), r: [], n: 0, ok: 0, acq: 0 };
@@ -387,12 +389,11 @@ function skillOf(key) {
 /** Level shown in the panels, without creating the skill. */
 const shownLv = (key) => Math.min(((S.skills || {})[key] || { lv: startLv(key) }).lv, capFor(key));
 const isAcquis = (key) => { const s = (S.skills || {})[key]; return !!(s && s.acq && s.lv >= capFor(key)); };
-/** Working level of a skill. off: a harder action asks a bit above it, never above the ceiling. */
-function levelFor(key, off = 0) {
+/** Working level of a skill (harder actions ask more problems, never harder ones). */
+function levelFor(key) {
   const fx = fixedLevel(catOf(key));
   if (fx) return fx;
-  const cap = capFor(key);
-  return clamp(Math.min(cap, Math.min(skillOf(key).lv, cap) + off), 1, 5);
+  return clamp(Math.min(skillOf(key).lv, capFor(key)), 1, 5);
 }
 const unlockedConcepts = () => NEW_ORDER.filter((k) => (S.concepts || {})[k]);
 /** Skills that can be asked now: the basics and the 8H notions already unlocked, unless the parents switched them off. */
@@ -727,7 +728,7 @@ async function askMath(opts) {
   for (;;) {
     const r = await askOnce(o);
     if (!r.easier) return r;
-    if (o.d) o = { ...o, d: Math.max(1, o.d - 1) };
+    if (o.d) o = { ...o, d: Math.max(1, r.d - 1) }; // a défi: one step below the problem that was too hard
   }
 }
 function askOnce(opts) {
@@ -735,7 +736,7 @@ function askOnce(opts) {
     const p0 = opts.problem;
     const cat = p0 ? p0.cat : opts.cat;
     const skKey = p0 ? keyOf(p0.cat, p0.op) : opts.key;
-    const dUsed = p0 ? p0.d || 1 : fixedLevel(cat) || (opts.d ? Math.min(opts.d, capFor(skKey)) : levelFor(skKey, opts.off || 0));
+    const dUsed = p0 ? p0.d || 1 : fixedLevel(cat) || (opts.d ? Math.min(opts.d, capFor(skKey), levelFor(skKey) + 1) : levelFor(skKey));
     const p = p0 || makeProblem(cat, dUsed, {}, opts.op);
     if (!p0) { p.d = dUsed; p.key = skKey; }
     let paused = false; // a lesson is open over the problem

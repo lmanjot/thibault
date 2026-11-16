@@ -51,25 +51,39 @@ function C(cat, q, right, wrongs, ex, hint) {
 }
 
 // ---------- Calcul ----------
+// Additions: 1 two digits, no carry · 2 two digits with a carry · 3 three digits · 4 four digits · 5 bigger
 function add(d) {
   let a, b;
-  if (d <= 1) { a = R(12, 68); b = R(11, 29); }
-  else if (d === 2) { a = R(125, 689); b = R(112, 299); }
-  else if (d === 3) { a = R(1250, 6800); b = R(340, 2900); }
-  else if (d === 4) { a = R(105, 899) / 10; b = R(15, 399) / 10; }
-  else { a = R(1005, 8999) / 100; b = R(105, 999) / 10; }
-  return P('calc', `${fmt(a)} + ${fmt(b)} = @`, a + b, '', `${fmt(a)} + ${fmt(b)} = ${fmt(a + b)}`,
-    d >= 4 ? 'Aligne bien les virgules : les dixièmes sous les dixièmes.' : null, d >= 4 ? 'decimaux' : null);
+  if (d <= 1) { const at = R(1, 7), au = R(0, 8), bt = R(1, 8 - at), bu = R(1, 9 - au); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 2) { const au = R(3, 9), bu = R(10 - au, 9); a = R(1, 5) * 10 + au; b = R(1, 3) * 10 + bu; }
+  else if (d === 3) { a = R(125, 689); b = R(112, 299); }
+  else if (d === 4) { a = R(1250, 6800); b = R(340, 2900); }
+  else { a = R(2500, 8999); b = R(1250, 9999); }
+  return P('calc', `${fmt(a)} + ${fmt(b)} = @`, a + b, '', `${fmt(a)} + ${fmt(b)} = ${fmt(a + b)}`);
 }
+// Subtractions: 1 two digits, no borrowing (58 − 23) · 2 two digits with borrowing (72 − 38)
+// 3 three digits, no borrowing (486 − 152) · 4 three digits with borrowing (532 − 187) · 5 four digits
 function sub(d) {
   let a, b;
-  if (d <= 1) { a = R(40, 99); b = R(11, a - 10); }
-  else if (d === 2) { a = R(300, 999); b = R(105, a - 50); }
-  else if (d === 3) { a = R(2000, 9999); b = R(305, a - 300); }
-  else if (d === 4) { a = R(200, 999) / 10; b = R(15, Math.floor(a * 10) - 20) / 10; }
-  else { a = R(50, 300); b = R(105, a * 10 - 50) / 10; if (Math.random() < 0.5) { a = R(1000, 4000) / 100; b = R(105, Math.floor(a * 10) - 30) / 10; } }
+  if (d <= 1) { const at = R(3, 9), au = R(2, 9), bt = R(1, at - 1), bu = R(0, au); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 2) { const at = R(3, 9), au = R(0, 7), bt = R(1, at - 1), bu = R(au + 1, 9); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 3) { const ah = R(3, 9), at = R(1, 9), au = R(1, 9); a = ah * 100 + at * 10 + au; b = R(1, ah - 1) * 100 + R(0, at) * 10 + R(0, au); }
+  else if (d === 4) { do { a = R(300, 999); b = R(105, a - 50); } while (a % 10 >= b % 10 && Math.floor(a / 10) % 10 >= Math.floor(b / 10) % 10); }
+  else { a = R(2000, 9999); b = R(305, a - 300); }
   return P('calc', `${fmt(a)} − ${fmt(b)} = @`, a - b, '', `${fmt(a)} − ${fmt(b)} = ${fmt(a - b)}`,
-    d >= 4 ? 'Aligne bien les virgules. Tu peux ajouter un 0 à droite : 25 = 25,0.' : null, d >= 4 ? 'decimaux' : null);
+    d === 2 || d >= 4 ? 'Si le chiffre du haut est trop petit, il gagne 10, et la colonne suivante enlève 1 de plus (la retenue).' : null);
+}
+// Decimal additions and subtractions (the « Nombres à virgule » notion): k 1 or 2
+function addDec(k) {
+  const a = k <= 1 ? R(105, 899) / 10 : R(1005, 8999) / 100, b = k <= 1 ? R(15, 399) / 10 : R(105, 999) / 10;
+  return P('decimaux', `${fmt(a)} + ${fmt(b)} = @`, a + b, '', `${fmt(a)} + ${fmt(b)} = ${fmt(a + b)}`, 'Aligne bien les virgules : les dixièmes sous les dixièmes.');
+}
+function subDec(k) {
+  let a, b;
+  if (k <= 1) { a = R(200, 999) / 10; b = R(15, Math.floor(a * 10) - 20) / 10; }
+  else if (Math.random() < 0.5) { a = R(50, 300); b = R(105, a * 10 - 50) / 10; }
+  else { a = R(1000, 4000) / 100; b = R(105, Math.floor(a * 10) - 30) / 10; }
+  return P('decimaux', `${fmt(a)} − ${fmt(b)} = @`, a - b, '', `${fmt(a)} − ${fmt(b)} = ${fmt(a - b)}`, 'Aligne bien les virgules. Tu peux ajouter un 0 à droite : 25 = 25,0.');
 }
 function mul(d) {
   let a, b, ex = null;
@@ -92,20 +106,20 @@ function mul(d) {
   }
   return P('calc', `${fmt(a)} × ${fmt(b)} = @`, a * b, '', ex || `${fmt(a)} × ${fmt(b)} = ${fmt(a * b)}`);
 }
+// Divisions: 1 tables of 2, 5, 10 · 2 all the tables · 3 two digits ÷ 2 to 5 (48 ÷ 3)
+// 4 bigger quotients (296 ÷ 8) · 5 ÷ 10 / ÷ 100 and divisors 11 to 15
 function div(d) {
   let b, q;
-  if (d <= 1) { b = pick([2, 3, 4, 5, 10]); q = R(2, 10); }
-  else if (d === 2) { b = R(3, 9); q = R(3, 10); }
-  else if (d === 3) { b = R(3, 9); q = R(12, 40); }
-  else if (d === 4) {
+  if (d <= 1) { b = pick([2, 5, 10]); q = R(2, 10); }
+  else if (d === 2) { b = R(3, 9); q = R(2, 10); }
+  else if (d === 3) { b = R(2, 5); q = R(11, b === 2 ? 45 : b === 3 ? 30 : 20); }
+  else if (d === 4) { b = R(3, 9); q = R(12, 40); }
+  else {
     if (Math.random() < 0.5) {
       const a = R(12, 99) * 10, k = pick([10, 100]);
       return P('calc', `${fmt(a)} ÷ ${k} = @`, a / k, '', `÷ ${k} : la virgule se déplace de ${String(k).length - 1} rang(s) vers la gauche → ${fmt(a / k)}`);
     }
     b = R(11, 15); q = R(3, 9);
-  } else {
-    if (Math.random() < 0.5) { b = R(3, 9); q = R(11, 99) / 10; }
-    else { b = R(12, 25); q = R(11, 30); }
   }
   const a = r3(b * q);
   return P('calc', `${fmt(a)} ÷ ${fmt(b)} = @`, q, '', `${fmt(a)} ÷ ${fmt(b)} = ${fmt(q)}, car ${fmt(q)} × ${fmt(b)} = ${fmt(a)}`,
@@ -234,7 +248,7 @@ function conv(d) {
 const T = {};
 T.masse = [
   [1, 2, (d) => { const a = d <= 1 ? R(2, 9) : R(12, 25), n = R(3, 9); return P('masse', `Le meunier porte ${n} sacs de blé. Chaque sac pèse ${a} kg. Combien de kg porte-t-il en tout ?`, n * a, 'kg', `${n} × ${a} = ${n * a} kg`); }],
-  [1, 2, (d) => { const A = d <= 1 ? R(20, 60) : R(120, 400), b = R(5, Math.floor(A / 2)); return P('masse', `Mamie a ${A} kg de pommes de terre. Elle en donne ${b} kg à la voisine. Combien de kg lui reste-t-il ?`, A - b, 'kg', `${A} − ${b} = ${A - b} kg`); }],
+  [1, 3, (d) => { const A = d <= 2 ? R(20, d <= 1 ? 60 : 99) : R(120, 400), b = d <= 1 ? R(1, Math.floor(A / 10) - 1) * 10 + R(0, A % 10) : R(5, Math.floor(A / 2)); return P('masse', `Mamie a ${A} kg de pommes de terre. Elle en donne ${b} kg à la voisine. Combien de kg lui reste-t-il ?`, A - b, 'kg', `${A} − ${b} = ${A - b} kg`); }],
   [2, 3, () => { const b = pick([2, 4, 5, 6, 8, 10, 25]), q = R(3, 12); return P('masse', `Le meunier a ${b * q} kg de farine. Il la verse dans des sacs de ${b} kg. Combien de sacs remplit-il ?`, q, 'sacs', `${b * q} ÷ ${b} = ${q} sacs`); }],
   [2, 4, () => { const p = R(2, 5) * 50, n = R(3, 6), m = R(12, 20) * 10; return P('masse', `Un panier vide pèse ${p} g. Tu y mets ${n} pommes de ${m} g chacune. Combien pèse le panier plein ?`, p + n * m, 'g', `${n} × ${m} = ${n * m} g, puis ${n * m} + ${p} = ${p + n * m} g`); }],
   [3, 4, () => { const K = R(1, 3), g = R(2, 15) * 50; return P('masse', `Tu as ${K} kg de farine. Tu en utilises ${g} g pour une recette. Combien de grammes te reste-t-il ?`, K * 1000 - g, 'g', `${K} kg = ${K * 1000} g. ${K * 1000} − ${g} = ${K * 1000 - g} g`); }],
@@ -290,7 +304,7 @@ T.geo = [
   [5, 5, () => { const c = R(4, 12); return P('geo', `Un carré a un périmètre de ${4 * c} m. Quelle est son aire ?`, c * c, 'm²', `Côté : ${4 * c} ÷ 4 = ${c} m. Aire : ${c} × ${c} = ${c * c} m²`); }],
 ];
 T.longueur = [
-  [1, 2, () => { const a = R(200, 900), b = R(50, a - 50); return P('longueur', `Le chemin jusqu’au lac mesure ${a} m. Tu as déjà marché ${b} m. Combien de mètres te reste-t-il ?`, a - b, 'm', `${a} − ${b} = ${a - b} m`); }],
+  [1, 3, (d) => { const a = d <= 1 ? R(4, 9) * 10 + R(5, 9) : d === 2 ? R(4, 9) * 10 + R(0, 4) : R(200, 900), b = d <= 1 ? R(1, Math.floor(a / 10) - 1) * 10 + R(0, a % 10) : d === 2 ? R(1, Math.floor(a / 10) - 1) * 10 + R(a % 10 + 1, 9) : R(50, a - 50); return P('longueur', `Le chemin jusqu’au lac mesure ${a} m. Tu as déjà marché ${b} m. Combien de mètres te reste-t-il ?`, a - b, 'm', `${a} − ${b} = ${a - b} m`); }],
   [2, 3, () => { const n = R(2, 6), q = R(12, 40); return P('longueur', `Une planche mesure ${n * q} cm. Tu la coupes en ${n} morceaux égaux. Combien mesure chaque morceau ?`, q, 'cm', `${n * q} ÷ ${n} = ${q} cm`); }],
   [3, 4, () => { const M = R(4, 12), w = pick([20, 25, 50]); return P('longueur', `Le pont mesure ${M} m de long. Chaque planche fait ${w} cm de large. Combien de planches faut-il ?`, (M * 100) / w, 'planches', `${M} m = ${M * 100} cm. ${M * 100} ÷ ${w} = ${(M * 100) / w} planches`); }],
   [4, 5, () => { const a = R(15, 45) / 10, b = R(25, 95); return P('longueur', `Tu as une corde de ${fmt(a)} m. Tu en coupes ${b} cm. Combien de cm reste-t-il ?`, a * 100 - b, 'cm', `${fmt(a)} m = ${fmt(a * 100)} cm. ${fmt(a * 100)} − ${b} = ${fmt(a * 100 - b)} cm`); }],
@@ -396,7 +410,6 @@ T.enigme = [
 ];
 
 // ---------- 8H notions: unlocked one at a time once the basics are mastered (levels 1 to 3) ----------
-const tag = (cat, p) => { p.cat = cat; if (!p.hint || p.hint === HINTS.calc) p.hint = HINTS[cat]; delete p.lesson; return p; };
 const NC = {};
 NC.arrondi = (d) => {
   if (d <= 1) {
@@ -413,7 +426,7 @@ NC.arrondi = (d) => {
   return P('arrondi', `Arrondis ${fmt(n)} au dixième : @`, r, '', `Le chiffre des centièmes est ${c} : ${c >= 5 ? 'on monte' : 'on garde'} → ${fmt(r)}`);
 };
 NC.decimaux = (d) => {
-  if (d <= 1) return tag('decimaux', pick([add, sub])(4));
+  if (d <= 1) return pick([addDec, subDec])(1);
   if (d === 2) {
     if (Math.random() < 0.5) { const a = R(101, 999) / 100, b = pick([10, 100]); return P('decimaux', `${fmt(a)} × ${b} = @`, a * b, '', `× ${b} : la virgule avance de ${String(b).length - 1} rang(s) vers la droite → ${fmt(a * b)}`, 'Multiplier par 10, c’est avancer la virgule d’un rang vers la droite.'); }
     const i = R(2, 9), a = R(5, 9);
@@ -422,7 +435,7 @@ NC.decimaux = (d) => {
     return C('decimaux', 'Quel est le plus grand nombre ?', right, w, `${right} : les unités sont pareilles (${i}), et ${a} dixièmes, c’est le plus`, 'Compare les unités, puis les dixièmes, puis les centièmes. Ce n’est pas le plus long qui gagne !');
   }
   if (Math.random() < 0.34) { const a = R(15, 45) / 10, b = R(3, 9); return P('decimaux', `${fmt(a)} × ${b} = @`, a * b, '', `${fmt(a)} × ${b} = ${Math.round(a * 10)} × ${b} ÷ 10 = ${Math.round(a * 10) * b} ÷ 10 = ${fmt(a * b)}`, 'Calcule sans la virgule, puis remets-la : un chiffre après la virgule.'); }
-  return tag('decimaux', pick([add, sub])(5));
+  return pick([addDec, subDec])(2);
 };
 NC.priorites = (d) => {
   if (d <= 1) {
