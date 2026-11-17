@@ -612,6 +612,8 @@ function wpick(list, w) {
  * What to ask for a requested theme. A calculation picks its operation (the ones still being learned come more often).
  * Unless noSwap, a mastered skill often gives way to one still being learned, and a new 8H notion gets introduced.
  */
+const GEO_SKILLS = ['coord', 'sym', 'angles', 'figures'];
+const recentSkills = []; // the last skills asked in this session
 function pickSkill(reqCat, op, noSwap) {
   const cat = themeFor(reqCat || 'calc');
   if (isCalc(cat)) {
@@ -625,6 +627,12 @@ function pickSkill(reqCat, op, noSwap) {
     const untried = BASE_SKILLS.filter((k) => themeOn(catOf(k)) && (((S.skills || {})[k] || {}).n || 0) < 3);
     if (fresh.length && Math.random() < 0.3) key = pick(fresh);
     else if (untried.length && Math.random() < 0.15) key = pick(untried);
+    // no geometry in the last 5 questions: this one is, from the geometry theme practised least
+    const geo = GEO_SKILLS.filter((k) => themeOn(k));
+    if (geo.length && !geo.includes(key) && recentSkills.length >= 5 && !recentSkills.slice(-5).some((k) => GEO_SKILLS.includes(k))) {
+      const n = (k) => ((S.skills || {})[k] || {}).n || 0, least = Math.min(...geo.map(n));
+      key = pick(geo.filter((k) => n(k) === least));
+    }
     else if (isAcquis(key) && Math.random() < 0.7) {
       const alt = liveSkills().filter((k) => !isAcquis(k));
       if (alt.length) key = wpick(alt, (k) => (isNew(k) ? 3 : 1));
@@ -948,6 +956,7 @@ async function askMath(opts) {
   if (!o.problem) {
     const sk = pickSkill(o.cat, o.op, o.noSwap);
     o = { ...o, cat: sk.cat, op: sk.op, key: sk.key };
+    recentSkills.push(sk.key); if (recentSkills.length > 12) recentSkills.shift();
     // the first time a new 8H notion comes up, Maître Hibou explains it
     if (isNew(sk.key) && !(S.lessons || {})[sk.key]) {
       S.lessons = S.lessons || {};
@@ -1302,8 +1311,8 @@ function water(i, frac) {
 async function waterMenu(i) {
   const p = S.plots[i], c = CROPS[p.crop];
   const growing = S.plots.filter((pp) => pp.crop && progress(pp) < 1).length;
-  const opts = ['Arroser cette plante', growing > 1 ? `Arroser tout le potager (${growing} plantes, 3 problèmes)` : null, 'Plus tard'].filter(Boolean);
-  const k = await choose(`${c.name} : prêt dans ${fmtTime(remaining(p))}. Arroser ? Il faut réussir 2 calculs !`, opts);
+  const opts = ['Arroser cette plante', growing > 1 ? `Arroser tout le potager (${growing} plantes, 2 problèmes)` : null, 'Plus tard'].filter(Boolean);
+  const k = await choose(`${c.name} : prêt dans ${fmtTime(remaining(p))}. Arroser ? Il faut réussir 2 problèmes !`, opts);
   const frac = WATER_FRAC[S.tools.arrosoir];
   if (opts[k] === 'Arroser cette plante') {
     for (;;) {
@@ -1321,10 +1330,10 @@ async function waterMenu(i) {
       if (!(await confirm(`Encore ${fmtTime(remaining(p))}. Arroser encore ?`, 'Oui, encore', 'Non merci'))) return;
     }
   } else if (opts[k] && opts[k].startsWith('Arroser tout')) {
-    const r = await askSeries([{ cat: 'calc', off: 1 }, waterCat(), 'enigme'], 'Arroser tout le potager', false);
-    if (r.ok >= 2) {
+    const r = await askSeries([{ cat: 'calc', off: 1 }, maybeEnigme(waterCat(), 0.35)], 'Arroser tout le potager', false);
+    if (r.ok >= 1) {
       let n = 0;
-      S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.ok === 3 ? 0.75 : 0.45)); n++; } });
+      S.plots.forEach((pp, j) => { if (pp.crop && progress(pp) < 1) { water(j, frac * (r.ok === 2 ? 0.75 : 0.4)); n++; } });
       S.stats.watered++;
       sfx.water();
       toast(`${n} plantes arrosées !`, 'blue');
@@ -1483,8 +1492,8 @@ async function onBuilding(id) {
     const missing = Object.entries(B.cost).filter(([k, v]) => (k === 'coins' ? S.coins < v : !has(k, v)))
       .map(([k, v]) => (k === 'coins' ? `${fmt(v - S.coins)} pièces` : qtyName(k, v - (S.inv[k] || 0))));
     if (missing.length) return say([`Il te manque encore : ${missing.join(', ')}.`, id === 'serre' ? 'Les cristaux se trouvent dans la montagne.' : 'Le bois et les pierres se trouvent dans la forêt, à l’ouest de la ferme.']);
-    await say('Le chef de chantier vérifie le plan avec toi. Réussis ces 3 problèmes pour lancer la construction !');
-    const r = await askSeries(['geo', pick(['figures', 'angles']), pick(['enigme', 'calc', 'longueur'])], `Construire : ${B.name}`);
+    await say('Le chef de chantier vérifie le plan avec toi. Réussis ces 2 problèmes pour lancer la construction !');
+    const r = await askSeries(['geo', pick(['figures', 'angles', 'enigme'])], `Construire : ${B.name}`);
     if (!r.all) return say('Le chef de chantier dit : pas grave, on réessaie quand tu veux !');
     for (const [k, v] of Object.entries(B.cost)) { if (k === 'coins') S.coins -= v; else addItem(k, -v); }
     S.built[id] = true;
@@ -1528,7 +1537,7 @@ async function craftPanel(id) {
   await P.done;
   if (invent) { await inventPanel(id); return craftPanel(id); }
   if (!job) return;
-  const r = await askSeries([job.theme, maybeEnigme('calc')], `${B.name} : ${itemName(job.out)}`);
+  const r = await askSeries([maybeEnigme(job.theme, 0.25)], `${B.name} : ${itemName(job.out)}`);
   if (r.all) {
     for (const [k, v] of Object.entries(job.in)) addItem(k, -v);
     addItem(job.out, 1);
@@ -1547,8 +1556,8 @@ async function onWild(e) {
   if (S.lvl < d.lvl) return say([`${cap(art)} !`, `Il est encore trop farouche… Reviens au niveau ${d.lvl} pour l’apprivoiser.`]);
   if (!S.built.etable) return say([`${cap(art)} ! Tu pourrais l’adopter…`, 'Mais il te faut d’abord une Étable : elle se construit sous ta maison, à côté de l’enclos (niveau 3).']);
   if (S.animals.length >= S.barnSlots) return say('Ton Étable est pleine ! Agrandis-la à la Boutique (onglet Outils).');
-  if (!(await confirm(`${cap(art)} ! Veux-tu l’apprivoiser ? Réussis 3 problèmes pour gagner sa confiance.`, 'Essayer', 'Plus tard'))) return;
-  const tame = await askSeries(['animaux', 'enigme', pick(['animaux', 'calc', 'recette'])], `Apprivoiser : ${d.name}`);
+  if (!(await confirm(`${cap(art)} ! Veux-tu l’apprivoiser ? Réussis 2 problèmes pour gagner sa confiance.`, 'Essayer', 'Plus tard'))) return;
+  const tame = await askSeries(['animaux', pick(['enigme', 'calc', 'recette'])], `Apprivoiser : ${d.name}`);
   if (!tame.all) return say(tame.quit ? 'Tu reviendras plus tard.' : 'Oups, il a eu peur et s’éloigne un peu… Réessaie !');
   const used = new Set(S.animals.map((a) => a.name));
   const name = d.names.find((n) => !used.has(n)) || `${pick(d.names)} ${S.animals.length + 1}`;
@@ -2060,9 +2069,9 @@ async function onAncient() {
 // ---- Resources
 async function onTree(o) {
   if (respawning(o)) return say(`Une souche. L’arbre repousse… (encore ${fmtTime(S.res[o.id] - now())})`);
-  const r = await askSeries(['add', maybeEnigme('add', 0.4)], 'Couper du bois', false);
+  const r = await askSeries([maybeEnigme('add', 0.25)], 'Couper du bois', false);
   if (!r.ok) return;
-  const n = r.ok + (r.firsts === 2 ? 1 : 0) + (S.tools.hache ? 1 : 0);
+  const n = 1 + (r.firsts ? 1 : 0) + (S.tools.hache ? 1 : 0); // right the first time: one more piece
   addItem('bois', n); S.stats.bois += n;
   S.res[o.id] = now() + 180000;
   sfx.hit(); addXP(3);
@@ -2070,9 +2079,9 @@ async function onTree(o) {
 }
 async function onRock(o) {
   if (respawning(o)) return say('Il ne reste que des cailloux. Une nouvelle pierre apparaîtra bientôt.');
-  const r = await askSeries(['mul', maybeEnigme('mul', 0.4)], 'Casser la pierre', false);
+  const r = await askSeries([maybeEnigme('mul', 0.25)], 'Casser la pierre', false);
   if (!r.ok) return;
-  const n = r.ok + (r.firsts === 2 ? 1 : 0) + (S.tools.pioche ? 1 : 0);
+  const n = 1 + (r.firsts ? 1 : 0) + (S.tools.pioche ? 1 : 0);
   addItem('pierre', n); S.stats.pierre += n;
   S.res[o.id] = now() + 200000;
   sfx.hit(); addXP(3);
@@ -2098,8 +2107,9 @@ async function onForage(o) {
 }
 async function onChest(o) {
   if (S.chests[o.chest]) return say('Le coffre est vide.');
-  await say('Un coffre ! Il a deux serrures : une à fractions et une à énigme.');
-  const r = await askSeries([Math.random() < 0.6 ? 'coord' : 'frac', 'enigme'], 'Ouvrir le coffre');
+  const lock = Math.random() < 0.6 ? 'coord' : 'frac';
+  await say(`Un coffre ! Il a deux serrures : ${lock === 'coord' ? 'une carte au trésor' : 'une à fractions'} et une à énigme.`);
+  const r = await askSeries([lock, 'enigme'], 'Ouvrir le coffre');
   if (!r.all) return say(r.quit ? 'Tu reviendras plus tard.' : 'La serrure ne s’ouvre pas… Réessaie !');
   const c = CHESTS[o.chest];
   S.chests[o.chest] = true;
@@ -2110,11 +2120,11 @@ async function onChest(o) {
 }
 async function onFish() {
   if (!S.tools.canne) return say('Il te faudrait une canne à pêche. Tom le pêcheur en a peut-être une ?');
-  const r = await askSeries(['conv', maybeEnigme('conv')], 'Pêcher', false);
+  const r = await askSeries([maybeEnigme('conv', 0.25)], 'Pêcher', false);
   if (r.quit) return;
   if (!r.ok) return say('Le poisson s’est échappé…');
-  const big = r.ok === 2;
-  const table = [['gardon', 40], ['perche', 30], ['truite', big && S.lvl >= 7 ? 18 : 0], ['brochet', big && S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && r.firsts === 2 ? 4 : 0]];
+  const big = r.firsts === 1; // right the first time: the big fish can bite
+  const table = [['gardon', 40], ['perche', 30], ['truite', big && S.lvl >= 7 ? 18 : 0], ['brochet', big && S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && big ? 4 : 0]];
   const tot = table.reduce((s, [, w]) => s + w, 0);
   let x = Math.random() * tot, fish = 'gardon';
   for (const [id, w] of table) { if ((x -= w) < 0) { fish = id; break; } }
