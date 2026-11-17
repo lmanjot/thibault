@@ -140,7 +140,8 @@ function ac() {
 }
 function voice(f, t0, d, { type = 'triangle', v = 0.05, dest = null, attack = 0.01 } = {}) {
   const o = AC.createOscillator(), g = AC.createGain();
-  o.type = type; o.frequency.setValueAtTime(f, t0);
+  if (type.startsWith('pulse')) o.setPeriodicWave(pulseWave(Number(type.slice(5)) / 100)); else o.type = type;
+  o.frequency.setValueAtTime(f, t0);
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(v, t0 + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.max(d, attack + 0.02));
@@ -192,7 +193,25 @@ function rustle(when = 0, d = 0.5) {
   try { const a = ac(); for (let k = 0; k < 4; k++) noise(a.currentTime + when + k * (d / 4) + Math.random() * 0.03, d / 3, 0.09, 1800 + Math.random() * 1500); } catch { /* audio blocked */ }
 }
 
-// ---- Background music: little tunes played live, one per part of the valley, quieter during a problem.
+// ---- Background music: chiptune tunes played live (lead, bouncing bass, arpeggios, drums),
+// one per part of the valley, quieter during a problem.
+const PULSES = {};
+/** The classic console "pulse" sound: a square wave with a narrow duty (12.5 %, 25 %). */
+function pulseWave(duty) {
+  if (PULSES[duty]) return PULSES[duty];
+  const N = 40, re = new Float32Array(N), im = new Float32Array(N);
+  for (let n = 1; n < N; n++) { re[n] = (2 / (n * Math.PI)) * Math.sin(2 * Math.PI * n * duty); im[n] = (2 / (n * Math.PI)) * (1 - Math.cos(2 * Math.PI * n * duty)); }
+  return (PULSES[duty] = AC.createPeriodicWave(re, im));
+}
+function kick(t, dest, v = 0.22) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  o.connect(g).connect(dest); o.start(t); o.stop(t + 0.2);
+}
+const snare = (t, dest, v = 0.06) => { noise(t, 0.12, v, 1900, dest); voice(190, t, 0.06, { type: 'triangle', v: v * 0.8, dest }); };
+const hat = (t, dest, v = 0.016) => noise(t, 0.035, v, 8000, dest, 'highpass');
+/** "E5:4 G5:2 …" in sixteenths ("." is a rest) → [[step, note, length]] */
 function seq(str) {
   const ev = []; let t = 0;
   for (const tok of str.trim().split(/\s+/)) {
@@ -203,19 +222,26 @@ function seq(str) {
   }
   return { ev, len: t };
 }
+/**
+ * A tune: bpm, the lead (in sixteenths), one chord per bar ([bass root, ...arpeggio notes]),
+ * and drum steps inside a bar of 16 (kick, snare, hat).
+ */
 const TRACKS = {
-  // village and fields: calm, C major
-  valley: { bpm: 92, type: 'triangle', mv: 0.05, bv: 0.06,
-    mel: seq('E5:2 G5:2 C6:2 G5:2 | A5:3 G5:1 E5:4 | F5:2 A5:2 C6:2 A5:2 | G5:3 F5:1 D5:4 | E5:2 G5:2 C6:3 D6:1 | B5:2 G5:2 E5:4 | F5:2 E5:2 D5:2 F5:2 | E5:2 D5:2 C5:4'),
-    bass: seq('C3:2 G3:2 C3:2 G3:2 | A2:2 E3:2 A2:2 E3:2 | F2:2 C3:2 F2:2 C3:2 | G2:2 D3:2 G2:2 D3:2 | C3:2 G3:2 C3:2 G3:2 | E2:2 B2:2 E2:2 B2:2 | F2:2 C3:2 F2:2 C3:2 | G2:2 D3:2 C3:4') },
-  // forest: softer and a little mysterious, A minor
-  forest: { bpm: 78, type: 'sine', mv: 0.055, bv: 0.06,
-    mel: seq('A4:2 C5:2 E5:4 | F5:2 E5:2 C5:4 | E5:2 G5:2 C5:4 | D5:2 B4:2 G4:4 | A4:2 C5:2 E5:3 F5:1 | A5:2 G5:2 F5:4 | E5:2 D5:2 B4:4 | G#4:2 B4:2 E5:4'),
-    bass: seq('A2:4 E3:4 | F2:4 C3:4 | C3:4 G3:4 | G2:4 D3:4 | A2:4 E3:4 | F2:4 C3:4 | G2:4 D3:4 | E2:4 B2:4') },
-  // creature battle: lively
-  battle: { bpm: 150, type: 'square', mv: 0.025, bv: 0.05, hats: true,
-    mel: seq('D5 F5 A5 F5 D5 F5 A5 D6 | Bb4 D5 F5 D5 Bb4 D5 F5 Bb5 | C5 E5 G5 E5 C5 E5 G5 C6 | A4 C#5 E5 A5 E5:2 C#5:2'),
-    bass: seq('D3 D3 D4 D3 D3 D3 D4 D3 | Bb2 Bb2 Bb3 Bb2 Bb2 Bb2 Bb3 Bb2 | C3 C3 C4 C3 C3 C3 C4 C3 | A2 A2 A3 A2 A2 A2 A3 A2') },
+  // village and fields: bright and bouncy, C major
+  valley: { bpm: 112, lead: 'pulse25', lv: 0.032, echo: false,
+    mel: seq('E5:4 G5:2 C6:2 G5:4 E5:4 | D5:4 G5:2 B5:2 D6:6 B5:2 | C6:4 B5:2 A5:2 E5:4 A5:4 | F5:2 G5:2 A5:2 C6:2 A5:4 F5:4 | E5:4 G5:2 C6:2 E6:4 D6:2 C6:2 | B5:4 D6:2 B5:2 G5:8 | A5:2 G5:2 F5:2 A5:2 C6:4 A5:4 | G5:2 A5:2 B5:2 G5:2 D6:8'),
+    chords: [['C3', 'C5', 'E5', 'G5'], ['G2', 'B4', 'D5', 'G5'], ['A2', 'A4', 'C5', 'E5'], ['F2', 'A4', 'C5', 'F5'], ['C3', 'C5', 'E5', 'G5'], ['G2', 'B4', 'D5', 'G5'], ['F2', 'A4', 'C5', 'F5'], ['G2', 'B4', 'D5', 'G5']],
+    kick: [0, 8, 10], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14] },
+  // forest: adventurous and a bit mysterious, A minor, with an echo on the lead
+  forest: { bpm: 100, lead: 'pulse12', lv: 0.03, echo: true,
+    mel: seq('A4:4 C5:2 E5:2 A5:4 G5:2 E5:2 | F5:4 E5:2 C5:2 A4:8 | G4:2 B4:2 D5:2 G5:2 F5:4 D5:4 | E5:6 D5:2 B4:4 G#4:4 | A4:4 C5:2 E5:2 A5:4 B5:2 C6:2 | D6:4 C6:2 A5:2 F5:8 | G5:2 F5:2 D5:2 B4:2 G5:4 F5:4 | E5:8 .:4 E4:4'),
+    chords: [['A2', 'A4', 'C5', 'E5'], ['F2', 'A4', 'C5', 'F5'], ['G2', 'G4', 'B4', 'D5'], ['E2', 'G#4', 'B4', 'E5'], ['A2', 'A4', 'C5', 'E5'], ['F2', 'A4', 'C5', 'F5'], ['G2', 'G4', 'B4', 'D5'], ['E2', 'G#4', 'B4', 'E5']],
+    kick: [0, 8], snare: [12], hat: [2, 6, 10, 14] },
+  // creature battle: fast and punchy
+  battle: { bpm: 152, lead: 'pulse25', lv: 0.03, echo: false,
+    mel: seq('D5:2 F5:2 A5:2 F5:2 D5:2 F5:2 A5:2 D6:2 | Bb4:2 D5:2 F5:2 D5:2 Bb4:2 D5:2 F5:2 Bb5:2 | C5:2 E5:2 G5:2 E5:2 C5:2 E5:2 G5:2 C6:2 | A4:2 C#5:2 E5:2 A5:2 E5:4 C#5:4'),
+    chords: [['D3', 'D5', 'F5', 'A5'], ['Bb2', 'Bb4', 'D5', 'F5'], ['C3', 'C5', 'E5', 'G5'], ['A2', 'A4', 'C#5', 'E5']],
+    kick: [0, 4, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14, 15] },
 };
 // the lake: the village tune higher up; the mountain: the forest tune lower down
 const ZONE_MUSIC = { ferme: ['valley', 0], foret: ['forest', 0], lac: ['valley', 5], montagne: ['forest', -3] };
@@ -242,18 +268,29 @@ function musicTick() {
     }
     if (!want) return;
     if (now_ > music.fadeUntil) music.gain.gain.setTargetAtTime(document.querySelector('.mathbox') ? 0.35 : 0.85, now_, 0.4);
-    const T = TRACKS[music.name], step = 60 / T.bpm / 2, k = 2 ** (music.tr / 12);
+    const T = TRACKS[music.name], step = 60 / T.bpm / 4, k = 2 ** (music.tr / 12), out = music.gain;
     if (music.next < now_) music.next = now_ + 0.05; // after a pause, do not play the missed notes all at once
-    while (music.next < now_ + 0.3) {
-      const pm = music.pos % T.mel.len, pb = music.pos % T.bass.len;
-      for (const [t, n, len] of T.mel.ev) if (t === pm) voice(NOTE(n) * k, music.next, len * step * 0.95, { type: T.type, v: T.mv, dest: music.gain, attack: 0.02 });
-      for (const [t, n, len] of T.bass.ev) if (t === pb) voice(NOTE(n) * k, music.next, len * step * 0.9, { type: 'sine', v: T.bv, dest: music.gain, attack: 0.02 });
-      if (T.hats && pm % 2 === 1) noise(music.next, 0.05, 0.02, 7000, music.gain, 'highpass');
+    while (music.next < now_ + 0.25) {
+      const t = music.next, p = music.pos % T.mel.len, inBar = p % 16, chord = T.chords[Math.floor(p / 16) % T.chords.length];
+      // lead (with a soft echo three steps later in the forest)
+      for (const [s, n, len] of T.mel.ev) if (s === p) {
+        const f = NOTE(n) * k, d = Math.min(len * step * 0.92, 0.9);
+        voice(f, t, d, { type: T.lead, v: T.lv, dest: out, attack: 0.005 });
+        if (T.echo) voice(f, t + step * 3, d, { type: T.lead, v: T.lv * 0.3, dest: out, attack: 0.005 });
+      }
+      // bass: bouncing between the root and its octave, every eighth
+      if (inBar % 2 === 0) voice(NOTE(chord[0]) * k * (inBar % 4 === 2 ? 2 : 1), t, step * 1.7, { type: 'triangle', v: 0.11, dest: out, attack: 0.005 });
+      // quick arpeggio of the chord, quiet
+      voice(NOTE(chord[1 + [0, 1, 2, 1][inBar % 4]]) * k * 2, t, step * 0.8, { type: 'pulse12', v: 0.009, dest: out, attack: 0.003 });
+      // drums
+      if (T.kick.includes(inBar)) kick(t, out);
+      if (T.snare.includes(inBar)) snare(t, out);
+      if (T.hat.includes(inBar)) hat(t, out);
       music.next += step; music.pos++;
     }
   } catch { /* audio blocked */ }
 }
-setInterval(musicTick, 80);
+setInterval(musicTick, 60);
 // browsers only allow sound after a tap or a key: start the audio on the first one
 const unlockAudio = () => { if (S && (S.settings.music || S.settings.sound)) { try { ac(); } catch { /* audio blocked */ } } };
 addEventListener('pointerdown', unlockAudio, true);
@@ -271,6 +308,36 @@ const isTouch = () => root.classList.contains('is-touch');
 const cv = document.getElementById('world');
 const ctx = cv.getContext('2d');
 const ui = document.getElementById('ui');
+
+// The pixel font draws 5 like an S and 2 like a Z: every number in the interface is shown in the reading font.
+// A watcher wraps digits as they appear (dialogs retype their text a few letters at a time).
+const NUM_RE = /(\d+(?:[,  ]\d+)*)/;
+function numsIn(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      if (!/\d/.test(n.nodeValue)) return NodeFilter.FILTER_REJECT;
+      for (let p = n.parentElement; p; p = p.parentElement) {
+        if (p.classList.contains('num') || p.classList.contains('mathbox') || p.namespaceURI === 'http://www.w3.org/2000/svg' || /^(INPUT|TEXTAREA|SELECT|OPTION|SCRIPT|STYLE)$/.test(p.tagName)) return NodeFilter.FILTER_REJECT;
+        if (p === ui) break;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const found = [];
+  while (walker.nextNode()) found.push(walker.currentNode);
+  for (const n of found) {
+    const parts = n.nodeValue.split(NUM_RE);
+    if (parts.length < 2) continue;
+    const frag = document.createDocumentFragment();
+    parts.forEach((s, i) => { if (!s) return; frag.append(i % 2 ? h('span', { class: 'num' }, s) : document.createTextNode(s)); });
+    n.replaceWith(frag);
+  }
+}
+new MutationObserver((muts) => {
+  const roots = new Set();
+  for (const mu of muts) roots.add(mu.type === 'characterData' ? mu.target.parentElement : mu.target);
+  for (const r of roots) if (r && r.isConnected) numsIn(r);
+}).observe(ui, { childList: true, subtree: true, characterData: true });
 let SCALE = 3, VW = 320, VH = 240, DPR = 1;
 function resize() {
   const dpr = (DPR = Math.min(window.devicePixelRatio || 1, 3));
@@ -553,7 +620,10 @@ function pickSkill(reqCat, op, noSwap) {
   let key = keyOf(cat, op);
   if (!noSwap) {
     const fresh = unlockedConcepts().filter((k) => themeOn(k) && skillOf(k).n < 5);
+    // themes hardly tried yet (fewer than 3 questions) come up now and then, so the child meets them all early
+    const untried = BASE_SKILLS.filter((k) => themeOn(catOf(k)) && (((S.skills || {})[k] || {}).n || 0) < 3);
     if (fresh.length && Math.random() < 0.3) key = pick(fresh);
+    else if (untried.length && Math.random() < 0.15) key = pick(untried);
     else if (isAcquis(key) && Math.random() < 0.7) {
       const alt = liveSkills().filter((k) => !isAcquis(k));
       if (alt.length) key = wpick(alt, (k) => (isNew(k) ? 3 : 1));
@@ -1085,6 +1155,7 @@ function askOnce(opts) {
     if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }
     else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true, math: true });
     paint();
+    if (p.choices) requestAnimationFrame(() => { if (box.scrollHeight <= box.clientHeight + 2) box.style.touchAction = 'none'; });
   });
 }
 
@@ -1206,7 +1277,7 @@ function plant(i, crop, fert) {
 }
 function waterCat() {
   const r = Math.random();
-  if (r >= 0.88) return 'sym'; // a symmetrical flower bed
+  if (r >= 0.75) return pick(['coord', 'sym', 'angles', 'figures']); // a garden map, a symmetrical flower bed, shapes…
   if (S.lvl >= 4 && r < 0.2) return 'conv';
   if (S.lvl >= 3 && r < 0.4) return 'frac';
   return 'calc';
@@ -2599,6 +2670,27 @@ function setupSwipeStick() {
   cv.addEventListener('pointercancel', end);
 }
 setupSwipeStick();
+// In a menu or a multiple-choice question on a touch screen, a swipe anywhere moves the highlight (A then validates).
+function setupMenuSwipe() {
+  let id = null, sx = 0, sy = 0;
+  ui.addEventListener('pointerdown', (e) => {
+    if (!layers.length || e.pointerType === 'mouse') return;
+    if (e.target.closest('button, input, select, textarea, .m-grid, .panel')) return;
+    id = e.pointerId; sx = e.clientX; sy = e.clientY;
+  }, true);
+  ui.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
+    const key = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? 'ArrowDown' : 'ArrowUp') : (dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    sx = e.clientX; sy = e.clientY; // a long swipe moves several steps
+  }, true);
+  const end = (e) => { if (e.pointerId === id) id = null; };
+  ui.addEventListener('pointerup', end, true);
+  ui.addEventListener('pointercancel', end, true);
+}
+setupMenuSwipe();
 
 // ============================================================ Loop & title
 let last = performance.now();
@@ -2699,7 +2791,7 @@ requestAnimationFrame(loop);
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
   get audio() { return { state: AC && AC.state, key: music.key, gain: music.gain && music.gain.gain.value, pos: music.pos }; }, sfx,
-  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel, say, choose },
   ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
   world, pl, walkable, objById, objAt: () => objAt };

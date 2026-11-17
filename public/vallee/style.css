@@ -523,3 +523,6 @@ button.row:hover { background: #f1f4ff; }
 @media (max-height: 560px) and (orientation: landscape) { .m-grid .ggrid { max-height: 62vh; max-height: 62dvh; } .gfig { max-height: 150px; } }
 .m-fig .gfig.gbig { max-height: 230px; max-width: 280px; }
 .m-fig .gfig.ggrid { max-height: 230px; max-width: 300px; }
+
+/* numbers in the interface: the reading font (the pixel 5 looks like an S) */
+.num { font-family: var(--read); font-weight: 700; letter-spacing: 0; }
