@@ -4,6 +4,7 @@ import {
   CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
+import { gridSVG, gridKey } from './geo.js';
 import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS } from './math.js';
 import * as A from './art.js';
 import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
@@ -361,7 +362,7 @@ function themeFor(cat) {
 // 3 misses out of the last 4: one level down. The ceiling is higher in « Dur » mode and moves with the overall difficulty.
 const CALC_OPS = ['add', 'sub', 'mul', 'div', 'mental'];
 const NEW_ORDER = Object.keys(NEW_CONCEPTS);
-const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme'];
+const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme'];
 // Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers with borrowing in Normal mode. Themes not listed: [3, 4].
 // Additions and subtractions have 7 small steps, everything else 5.
 const MIN_LV = -1; // below level 1: easier problems (or level 1 with the hint shown) so a child who struggles does not give up
@@ -799,9 +800,30 @@ function askOnce(opts) {
     } }, 'Comprendre') : null;
     const qEl = h('div', { class: 'm-q', html: renderQ(p.q) });
     const ansVal = h('span', { class: 'm-val' });
-    const ansRow = p.choices ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
+    const gridOn = !!(p.grid && p.grid.mode !== 'none'); // the answer is given by tapping the grid
+    if (p.fig || (p.grid && !gridOn)) qEl.append(h('div', { class: 'm-fig', html: p.fig || gridSVG(p.grid) }));
+    const ansRow = p.choices || gridOn ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
     const fb = h('div', { class: 'm-fb' });
-    const pad = h('div', { class: p.choices ? 'm-choices' : 'm-pad' });
+    const pad = h('div', { class: p.choices ? 'm-choices' : gridOn ? 'm-gridpad' : 'm-pad' });
+    let gsel = new Set(), gbad = new Set(), gsol = new Set();
+    const gridWrap = gridOn ? h('div', { class: 'm-grid' }) : null;
+    const paintGrid = () => { if (gridWrap) gridWrap.innerHTML = gridSVG(p.grid, { sel: gsel, bad: gbad, sol: gsol }); };
+    const submitGrid = () => {
+      if (locked) return;
+      if (!gsel.size) { toast(p.grid.mode === 'one' ? 'Touche d’abord une case de la grille.' : 'Colorie d’abord des cases.', 'blue'); return; }
+      submit(gridKey(gsel));
+    };
+    if (gridOn) {
+      gridWrap.addEventListener('click', (e) => {
+        const el = e.target.closest('[data-k]');
+        if (!el || locked) return;
+        const k = el.dataset.k;
+        if (p.grid.mode === 'one') gsel = new Set([k]);
+        else if (gsel.has(k) || gbad.has(k)) { gsel.delete(k); gbad.delete(k); }
+        else gsel.add(k);
+        sfx.blip(); paintGrid();
+      });
+    }
     const head = h('div', { class: 'm-head' },
       h('span', { class: 'm-cat' }, CATS[p.cat] || 'Calcul'),
       h('span', { class: 'm-title' }, opts.title || ''),
@@ -823,8 +845,8 @@ function askOnce(opts) {
     }
     function submit(val) {
       if (locked) return;
-      if (!p.choices && !input) return;
-      const ok = checkAnswer(p, p.choices ? val : input);
+      if (!p.choices && !gridOn && !input) return;
+      const ok = checkAnswer(p, p.choices || gridOn ? val : input);
       tries++;
       if (tries === 1) record(p, ok, performance.now() - t0 - pausedMs, helped);
       if (ok) {
@@ -848,15 +870,31 @@ function askOnce(opts) {
         fb.append(h('b', { class: 'no' }, 'Presque ! '), h('span', null, 'Indice : ' + p.hint));
         input = ''; paint();
         if (p.choices) { [...pad.children].forEach((b) => { if (b.dataset.v === val) b.disabled = true; }); moveSel(1); }
+        if (gridOn) {
+          // the squares that should not be there turn red; the good ones stay
+          const target = new Set(String(p.a).split(' '));
+          gbad = new Set([...gsel].filter((k) => !target.has(k)));
+          gsel = new Set([...gsel].filter((k) => target.has(k)));
+          paintGrid();
+        }
       } else {
         locked = true;
         sfx.bad();
         fb.innerHTML = '';
         const shown = p.choices ? p.a : `${fmt(p.a)}${p.u ? ' ' + p.u : ''}`;
-        fb.append(h('div', { class: 'sol' }, h('b', null, `La réponse était ${shown}.`), h('div', null, p.ex)));
-        pad.innerHTML = '';
-        pad.className = 'm-choices';
-        pad.append(h('button', { class: 'btn big', onclick: () => finish({ ok: false, first: false }) }, 'J’ai compris'));
+        fb.append(h('div', { class: 'sol' }, h('b', null, gridOn ? 'Voici la réponse, en vert.' : `La réponse était ${shown}.`), h('div', null, p.ex)));
+        const understood = h('button', { class: 'btn big', onclick: () => finish({ ok: false, first: false }) }, 'J’ai compris');
+        if (gridOn) {
+          // the answer in green, the child's wrong squares in red
+          gsol = new Set(String(p.a).split(' '));
+          gbad = new Set([...gsel, ...gbad].filter((k) => !gsol.has(k))); gsel = new Set(); paintGrid();
+          pad.querySelector('.g-ok')?.remove();
+          pad.append(understood);
+        } else {
+          pad.innerHTML = '';
+          pad.className = 'm-choices';
+          pad.append(understood);
+        }
         save();
       }
       save();
@@ -868,7 +906,10 @@ function askOnce(opts) {
       for (let k = 0; k < bs.length; k++) { csel = (csel + step + bs.length) % bs.length; if (!bs[csel].disabled) break; }
       paintSel();
     };
-    if (p.choices) {
+    if (gridOn) {
+      pad.append(gridWrap, h('button', { class: 'btn big g-ok', onclick: submitGrid }, 'Valider'));
+      paintGrid();
+    } else if (p.choices) {
       p.choices.forEach((c, i) => pad.append(h('button', { class: 'm-choice', 'data-v': c, onclick: () => submit(c) }, h('small', null, i + 1), c)));
       paintSel();
     } else {
@@ -887,6 +928,7 @@ function askOnce(opts) {
         if (n >= 1 && n <= p.choices.length) { const b = pad.children[n - 1]; if (!b.disabled) submit(p.choices[n - 1]); e.preventDefault(); e.stopPropagation(); }
         return;
       }
+      if (gridOn) { if (e.key === 'Enter') { submitGrid(); e.preventDefault(); e.stopPropagation(); } return; }
       if (/^[0-9]$/.test(e.key)) key(e.key);
       else if (e.key === ',' || e.key === '.') key(',');
       else if (e.key === 'Backspace') key('⌫');
@@ -899,6 +941,7 @@ function askOnce(opts) {
     const mathA = { a() {
       const done = pad.querySelector('.btn');
       if (locked && done) { done.click(); return; }
+      if (gridOn) { submitGrid(); return; }
       if (!p.choices) { submit(); return; }
       const b = pad.querySelectorAll('.m-choice')[csel];
       if (b && !b.disabled) submit(p.choices[csel]);
@@ -914,7 +957,7 @@ function askOnce(opts) {
 let activeMath = null;
 /** The first step of the worked solution, as long as it does not give the answer away. */
 function firstStep(p) {
-  if (p.choices || !p.ex) return null;
+  if (p.choices || p.grid || !p.ex) return null;
   const parts = p.ex.split(/(?<=\d|[a-zé²])\. |, puis | ; |\. Pour /);
   let s = parts[0];
   if (parts.length < 2) { const eq = p.ex.split(' = '); if (eq.length < 3) return null; s = eq.slice(0, 2).join(' = '); }
@@ -1029,6 +1072,7 @@ function plant(i, crop, fert) {
 }
 function waterCat() {
   const r = Math.random();
+  if (r >= 0.88) return 'sym'; // a symmetrical flower bed
   if (S.lvl >= 4 && r < 0.2) return 'conv';
   if (S.lvl >= 3 && r < 0.4) return 'frac';
   return 'calc';
@@ -1226,7 +1270,7 @@ async function onBuilding(id) {
       .map(([k, v]) => (k === 'coins' ? `${fmt(v - S.coins)} pièces` : qtyName(k, v - (S.inv[k] || 0))));
     if (missing.length) return say([`Il te manque encore : ${missing.join(', ')}.`, id === 'serre' ? 'Les cristaux se trouvent dans la montagne.' : 'Le bois et les pierres se trouvent dans la forêt, à l’ouest de la ferme.']);
     await say('Le chef de chantier vérifie le plan avec toi. Réussis ces 3 problèmes pour lancer la construction !');
-    const r = await askSeries(['geo', 'enigme', pick(['calc', 'masse', 'longueur'])], `Construire : ${B.name}`);
+    const r = await askSeries(['geo', pick(['figures', 'angles']), pick(['enigme', 'calc', 'longueur'])], `Construire : ${B.name}`);
     if (!r.all) return say('Le chef de chantier dit : pas grave, on réessaie quand tu veux !');
     for (const [k, v] of Object.entries(B.cost)) { if (k === 'coins') S.coins -= v; else addItem(k, -v); }
     S.built[id] = true;
@@ -1544,7 +1588,7 @@ async function onMamie() {
 async function onMailbox() {
   if (S.daily.mail === today()) return say('La boîte aux lettres est vide. Reviens demain pour un nouveau cadeau !');
   await say('Il y a un colis dans la boîte aux lettres ! Il est fermé par un cadenas à calcul.');
-  const res = await askSeries(['enigme', pick(['calc', 'frac', 'conv', 'masse', 'argent', 'geo', 'duree'])], 'Cadeau du jour', false);
+  const res = await askSeries(['enigme', pick(['calc', 'frac', 'conv', 'masse', 'argent', 'geo', 'duree', 'coord', 'figures'])], 'Cadeau du jour', false);
   if (res.quit) return;
   const r = { ok: res.ok >= 1 };
   S.daily.mail = today();
@@ -1633,8 +1677,8 @@ async function lessonsPanel() {
 const DEFI_PACKS = [
   ['Le potager', ['calc', 'calc', 'frac']], ['Le marché', ['argent', 'recette', 'calc']], ['Le moulin', ['masse', 'conv', 'calc']],
   ['La boulangerie', ['duree', 'recette', 'enigme']], ['Le pressoir', ['contenance', 'conv']], ['La ferme', ['animaux', 'enigme']],
-  ['Le chantier', ['geo', 'longueur', 'calc']], ['Les énigmes', ['enigme']], ['Les fractions', ['frac', 'frac', 'calc']],
-  ['Le grand mélange', ['calc', 'frac', 'conv', 'masse', 'contenance', 'duree', 'argent', 'geo', 'animaux', 'enigme']],
+  ['Le chantier', ['geo', 'figures', 'angles', 'longueur']], ['Les énigmes', ['enigme']], ['Les fractions', ['frac', 'frac', 'calc']],
+  ['Le grand mélange', ['calc', 'frac', 'conv', 'masse', 'contenance', 'duree', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme']],
 ];
 const DEFIS = Array.from({ length: 30 }, (_, i) => ({ n: i + 1, name: DEFI_PACKS[i % DEFI_PACKS.length][0], cats: DEFI_PACKS[i % DEFI_PACKS.length][1], level: 1 + Math.floor(i / 6) }));
 const defiD = (df) => clamp(Math.round(df.level + (S.settings.grade === 8 ? 0.5 : 0) + (S.settings.diff || 0)), 1, 5);
@@ -1696,7 +1740,7 @@ async function defiLadder() {
 
 async function series(cat, n, off, title, mixed) {
   let score = 0, won = 0;
-  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme', 'enigme', ...unlockedConcepts()];
+  const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme', 'enigme', ...unlockedConcepts()];
   for (let i = 0; i < n; i++) {
     const c = mixed ? pick(pool) : cat;
     // a revision stays on the chosen theme; the daily challenge mixes everything
@@ -1776,7 +1820,7 @@ async function onGuardian() {
   if (S.flags.guardian) return say(pick(['Les cristaux brillent près des rochers. Bonne chance là-haut !', 'Les créatures de la montagne sont coriaces. Garde ta série !']), who);
   if (S.lvl < 10) return say(['Halte ! Le Mont Givré est dangereux.', `Seuls les calculateurs de niveau 10 peuvent passer. Tu es niveau ${S.lvl}. Reviens plus tard !`], who);
   if (!(await confirm('Tu veux passer ? Réussis 4 problèmes difficiles de suite !', 'J’accepte le défi', 'Plus tard', who))) return;
-  const gd = await askSeries(['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo']), 'enigme'], 'Défi du gardien', true, 1);
+  const gd = await askSeries(['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo', 'angles']), 'enigme'], 'Défi du gardien', true, 1);
   if (!gd.all) return say('Pas encore… Entraîne-toi et reviens me voir !', who);
   S.flags.guardian = true; applyWorldFlags();
   addXP(60);
@@ -1841,7 +1885,7 @@ async function onForage(o) {
 async function onChest(o) {
   if (S.chests[o.chest]) return say('Le coffre est vide.');
   await say('Un coffre ! Il a deux serrures : une à fractions et une à énigme.');
-  const r = await askSeries(['frac', 'enigme'], 'Ouvrir le coffre');
+  const r = await askSeries([Math.random() < 0.6 ? 'coord' : 'frac', 'enigme'], 'Ouvrir le coffre');
   if (!r.all) return say(r.quit ? 'Tu reviendras plus tard.' : 'La serrure ne s’ouvre pas… Réessaie !');
   const c = CHESTS[o.chest];
   S.chests[o.chest] = true;
@@ -2003,7 +2047,7 @@ async function parentPanel() {
         h('small', { class: 'pstat' }, locked ? 'pas encore débloquée' : (fixedLevel(k) ? '' : auto + ' · ') + (mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé')),
         locked ? h('button', { class: 'btn sm', onclick: () => { S.concepts = S.concepts || {}; S.concepts[k] = now(); save(); api.refresh(); } }, 'Débloquer') : sel,
         h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || (exOp ? shownLv('calc:' + exOp) : shownLv(k)), {}, exOp); api.refresh(); } }, 'Exemple'),
-        examples[k] ? h('div', { class: 'pex', html: renderQ(examples[k].q) + ` <i>→ ${examples[k].choices ? examples[k].a : fmt(examples[k].a) + ' ' + examples[k].u}</i>` }) : null));
+        examples[k] ? h('div', { class: 'pex', html: renderQ(examples[k].q) + ` <i>→ ${examples[k].choices ? examples[k].a : examples[k].grid ? 'sur la grille' : fmt(examples[k].a) + ' ' + examples[k].u}</i>` + (examples[k].fig || (examples[k].grid ? gridSVG(examples[k].grid, { sol: new Set(String(examples[k].a).split(' ')) }) : '')) }) : null));
     }
     body.append(list,
       h('div', { class: 'sync-acts' },
@@ -2085,7 +2129,7 @@ function encounterFor(zone) {
   return pick(list);
 }
 function battleCats(zone) {
-  return { ferme: ['calc', 'calc', 'mul'], foret: ['calc', 'frac', 'mul', 'add'], lac: ['conv', 'contenance', 'longueur', 'masse', 'calc'], montagne: ['frac', 'masse', 'duree', 'recette', 'argent', 'geo', 'conv'] }[zone];
+  return { ferme: ['calc', 'calc', 'mul'], foret: ['calc', 'frac', 'mul', 'add', 'coord'], lac: ['conv', 'contenance', 'longueur', 'masse', 'calc'], montagne: ['frac', 'masse', 'duree', 'recette', 'argent', 'geo', 'conv', 'angles', 'figures'] }[zone];
 }
 async function startBattle(zone) {
   if (busy) return;
