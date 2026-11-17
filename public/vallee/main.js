@@ -1,7 +1,7 @@
 // La Vallée des Graines — main game: state, world loop, input, UI, farming, shop, crafting, battles.
 import { W, H, SOLID, TALL, buildWorld, zoneAt, plotPos, START, NPCS, WILD, PADDOCK } from './world.js';
 import {
-  CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed, OLD_XP_NEED, OLD_TO_NEW_LVL, GATE_LVL,
+  CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed, GATE_LVL,
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
 import { gridSVG, gridKey } from './geo.js';
@@ -29,7 +29,7 @@ function fmtTime(ms) {
 const SAVE_KEY = 'vallee-graines-v1';
 function newState() {
   return {
-    v: 1, name: 'Thibault', coins: 25, xp: 0, lvl: 1, lvlV: 2,
+    v: 1, name: 'Thibault', coins: 25, xp: 0, lvl: 1, lvlV: 4,
     inv: { 'graine:radis': 4 },
     plots: Array.from({ length: 18 }, (_, i) => ({ u: i < 4, crop: null, at: 0, grow: 0, skip: 0, fert: false, wet: 0 })),
     plotBuys: 0,
@@ -50,12 +50,14 @@ function migrate(s) {
   if (s.skills && (s.skillsV || 0) < 3) { for (const sk of Object.values(s.skills)) { sk.sc = 0; sk.nl = 0; } }
   if (s.skills && (s.skillsV || 0) < 4) { for (const k of ['calc:add', 'calc:sub']) if (s.skills[k]) Object.assign(s.skills[k], { lv: 1, r: [], acq: 0, sc: 0, nl: 0 }); }
   s.skillsV = 4;
-  if (s.lvl && (s.lvlV || 1) < 2) {
-    const old = Math.min(s.lvl, 30), frac = Math.min(0.95, (s.xp || 0) / OLD_XP_NEED(old));
-    s.lvl = Math.min(MAX_LVL, OLD_TO_NEW_LVL[old] || old + 24);
-    s.xp = Math.round(frac * xpNeed(s.lvl));
+  if ((s.lvlV || 1) < 4) {
+    // the 50-level progression: every game made before it starts over at level 1, keeping the name and the settings
+    const fresh = newState();
+    fresh.name = s.name || fresh.name;
+    fresh.settings = { ...fresh.settings, ...(s.settings || {}) };
+    s = fresh;
   }
-  s.lvlV = 2;
+  s.lvlV = 4;
   // First version kept the objective as an index: turn it into the list of finished ones.
   if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];

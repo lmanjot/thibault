@@ -188,10 +188,6 @@ export const titleFor = (lvl) => TITLES.filter(([l]) => lvl >= l).pop()[1];
 export const MAX_LVL = 50;
 // XP for the next level: about 2 minutes of play at the start, about 30 minutes near level 50 (some 15 hours in all).
 export const xpNeed = (lvl) => Math.round(((50 + 6 * lvl) * (1.5 + 0.72 * lvl)) / 10) * 10;
-// The curve before the 50 levels, to carry old saves over.
-export const OLD_XP_NEED = (lvl) => 30 + 20 * (lvl - 1) + 6 * (lvl - 1) ** 2;
-// Old level (1-30) → new level where everything the old one had is open.
-export const OLD_TO_NEW_LVL = [0, 1, 2, 6, 9, 11, 14, 16, 20, 22, 27, 28, 31, 33, 34, 36, 40];
 // Levels of the places to open in the valley.
 export const GATE_LVL = { rock: 3, bridge: 12, guardian: 24, arbre: 34 };
 
