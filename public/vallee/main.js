@@ -41,7 +41,7 @@ function newState() {
     streak: 0, mastery: {}, objDone: {}, daily: {},
     animals: [], barnSlots: 4, found: {}, stars: {}, defis: {}, ease: {}, easeRun: {}, skills: {}, concepts: {}, lessons: {},
     pos: { ...START },
-    settings: { sound: true, grade: 8, diff: 0, cats: {}, pin: '' },
+    settings: { sound: true, music: true, grade: 8, diff: 0, cats: {}, pin: '' },
   };
 }
 function migrate(s) {
@@ -117,15 +117,148 @@ const sfx = {
   blip: () => tone(700, 0.025, 'square', 0.012),
   sel: () => tone(880, 0.05, 'square', 0.03),
   ok: () => { tone(784, 0.08); tone(1047, 0.14, 'square', 0.04, 0.08); },
-  bad: () => { tone(240, 0.14, 'sawtooth', 0.03); tone(180, 0.2, 'sawtooth', 0.03, 0.12); },
+  bad: () => { tone(240, 0.14, 'sawtooth', 0.025); tone(180, 0.2, 'sawtooth', 0.025, 0.12); },
   coin: () => { tone(988, 0.06, 'square', 0.03); tone(1319, 0.12, 'square', 0.03, 0.06); },
-  level: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.14, 'square', 0.04, i * 0.09)),
+  level: () => fanfare(),
   bump: () => tone(90, 0.06, 'triangle', 0.06),
   hit: () => { tone(420, 0.12, 'sawtooth', 0.05, 0, -300); tone(140, 0.1, 'square', 0.04, 0.08); },
   water: () => { for (let i = 0; i < 5; i++) tone(1400 - i * 160, 0.05, 'sine', 0.03, i * 0.04); },
-  enc: () => [392, 494, 587, 784, 587, 784, 988].forEach((f, i) => tone(f, 0.09, 'square', 0.035, i * 0.07)),
+  // something moves in the tall grass… then a creature jumps out
+  enc: () => { rustle(0, 0.5); chime(['E5', 'G#5', 'B5', 'E6'], 0.07, { delay: 0.55, type: 'triangle', v: 0.06 }); },
   harvest: () => [660, 880, 1100].forEach((f, i) => tone(f, 0.07, 'triangle', 0.05, i * 0.06)),
+  friend: () => chime(['C5', 'E5', 'G5', 'C6', 'G5', 'C6', 'E6'], 0.1, { type: 'triangle', d: 0.4, v: 0.07 }),
+  discover: () => chime(['G5', 'B5', 'D6', 'G6', 'B6', 'D7'], 0.06, { d: 0.6, v: 0.05 }),
+  treasure: () => { chime(['A5', 'C#6', 'E6', 'A6'], 0.08, { d: 0.5, v: 0.06 }); chime(['E6', 'A6'], 0.12, { delay: 0.4, d: 0.7, v: 0.05 }); },
+  fanfare: () => fanfare(),
 };
+
+// ---- Softer voices for the music and the discovery sounds (plain Web Audio, no files)
+function ac() {
+  AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function voice(f, t0, d, { type = 'triangle', v = 0.05, dest = null, attack = 0.01 } = {}) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(v, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.max(d, attack + 0.02));
+  o.connect(g).connect(dest || AC.destination); o.start(t0); o.stop(t0 + d + 0.05);
+}
+/** "C#5" → 554 Hz */
+function NOTE(n) {
+  const [, l, acc, oct] = /^([A-G])(#|b)?(\d)$/.exec(n);
+  const semi = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[l] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0);
+  return 440 * 2 ** ((semi + (Number(oct) + 1) * 12 - 69) / 12);
+}
+/** A bell-like little tune: each note with a soft octave above. */
+function chime(notes, step = 0.08, o = {}) {
+  if (!S || !S.settings.sound) return;
+  try {
+    const a = ac(), d = o.d || 0.35, v = o.v || 0.06;
+    notes.forEach((n, i) => {
+      const t = a.currentTime + (o.delay || 0) + i * step, f = NOTE(n);
+      voice(f, t, d, { type: o.type || 'sine', v });
+      voice(f * 2, t, d * 0.6, { type: 'sine', v: v * 0.3 });
+    });
+  } catch { /* audio blocked */ }
+}
+function fanfare() {
+  if (!S || !S.settings.sound) return;
+  try {
+    const a = ac(), t = a.currentTime;
+    [['C5', 0], ['C5', 0.12], ['C5', 0.24], ['E5', 0.36], ['G5', 0.6], ['E5', 0.84], ['G5', 0.96], ['C6', 1.08]].forEach(([n, w], i) => {
+      voice(NOTE(n), t + w, i === 7 ? 0.8 : 0.22, { type: 'triangle', v: 0.07 });
+      voice(NOTE(n) / 2, t + w, i === 7 ? 0.8 : 0.22, { type: 'sine', v: 0.04 });
+    });
+  } catch { /* audio blocked */ }
+}
+let noiseBuf = null;
+function noise(t0, d, v, freq, dest, kind = 'bandpass') {
+  if (!noiseBuf) {
+    noiseBuf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.6), AC.sampleRate);
+    const ch = noiseBuf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+  }
+  const src = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = noiseBuf; f.type = kind; f.frequency.value = freq; f.Q.value = 0.9;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+  src.connect(f).connect(g).connect(dest || AC.destination); src.start(t0); src.stop(t0 + d + 0.05);
+}
+/** Leaves rustling: a few soft bursts of noise. */
+function rustle(when = 0, d = 0.5) {
+  if (!S || !S.settings.sound) return;
+  try { const a = ac(); for (let k = 0; k < 4; k++) noise(a.currentTime + when + k * (d / 4) + Math.random() * 0.03, d / 3, 0.09, 1800 + Math.random() * 1500); } catch { /* audio blocked */ }
+}
+
+// ---- Background music: little tunes played live, one per part of the valley, quieter during a problem.
+function seq(str) {
+  const ev = []; let t = 0;
+  for (const tok of str.trim().split(/\s+/)) {
+    if (tok === '|') continue;
+    const [n, l] = tok.split(':'), len = Number(l || 1);
+    if (n !== '.') ev.push([t, n, len]);
+    t += len;
+  }
+  return { ev, len: t };
+}
+const TRACKS = {
+  // village and fields: calm, C major
+  valley: { bpm: 92, type: 'triangle', mv: 0.05, bv: 0.06,
+    mel: seq('E5:2 G5:2 C6:2 G5:2 | A5:3 G5:1 E5:4 | F5:2 A5:2 C6:2 A5:2 | G5:3 F5:1 D5:4 | E5:2 G5:2 C6:3 D6:1 | B5:2 G5:2 E5:4 | F5:2 E5:2 D5:2 F5:2 | E5:2 D5:2 C5:4'),
+    bass: seq('C3:2 G3:2 C3:2 G3:2 | A2:2 E3:2 A2:2 E3:2 | F2:2 C3:2 F2:2 C3:2 | G2:2 D3:2 G2:2 D3:2 | C3:2 G3:2 C3:2 G3:2 | E2:2 B2:2 E2:2 B2:2 | F2:2 C3:2 F2:2 C3:2 | G2:2 D3:2 C3:4') },
+  // forest: softer and a little mysterious, A minor
+  forest: { bpm: 78, type: 'sine', mv: 0.055, bv: 0.06,
+    mel: seq('A4:2 C5:2 E5:4 | F5:2 E5:2 C5:4 | E5:2 G5:2 C5:4 | D5:2 B4:2 G4:4 | A4:2 C5:2 E5:3 F5:1 | A5:2 G5:2 F5:4 | E5:2 D5:2 B4:4 | G#4:2 B4:2 E5:4'),
+    bass: seq('A2:4 E3:4 | F2:4 C3:4 | C3:4 G3:4 | G2:4 D3:4 | A2:4 E3:4 | F2:4 C3:4 | G2:4 D3:4 | E2:4 B2:4') },
+  // creature battle: lively
+  battle: { bpm: 150, type: 'square', mv: 0.025, bv: 0.05, hats: true,
+    mel: seq('D5 F5 A5 F5 D5 F5 A5 D6 | Bb4 D5 F5 D5 Bb4 D5 F5 Bb5 | C5 E5 G5 E5 C5 E5 G5 C6 | A4 C#5 E5 A5 E5:2 C#5:2'),
+    bass: seq('D3 D3 D4 D3 D3 D3 D4 D3 | Bb2 Bb2 Bb3 Bb2 Bb2 Bb2 Bb3 Bb2 | C3 C3 C4 C3 C3 C3 C4 C3 | A2 A2 A3 A2 A2 A2 A3 A2') },
+};
+// the lake: the village tune higher up; the mountain: the forest tune lower down
+const ZONE_MUSIC = { ferme: ['valley', 0], foret: ['forest', 0], lac: ['valley', 5], montagne: ['forest', -3] };
+const music = { key: null, name: null, tr: 0, pos: 0, next: 0, gain: null, fadeUntil: 0 };
+let inBattle = false;
+function musicWanted() {
+  if (!S || !S.settings.music) return null;
+  if (inBattle) return ['battle', 0];
+  if (mode !== 'world') return ['valley', 0];
+  return ZONE_MUSIC[zoneAt(pl.x, pl.y)] || ['valley', 0];
+}
+function musicTick() {
+  if (!AC || AC.state !== 'running') return;
+  try {
+    if (!music.gain) { music.gain = AC.createGain(); music.gain.gain.value = 0; music.gain.connect(AC.destination); }
+    const want = musicWanted(), key = want ? want.join(':') : null, now_ = AC.currentTime;
+    if (key !== music.key) {
+      // fade out, then start the new tune from its beginning
+      music.gain.gain.cancelScheduledValues(now_);
+      music.gain.gain.setTargetAtTime(0, now_, 0.12);
+      music.key = key; music.pos = 0; music.next = now_ + 0.6; music.fadeUntil = now_ + 0.55;
+      if (want) [music.name, music.tr] = want;
+      return;
+    }
+    if (!want) return;
+    if (now_ > music.fadeUntil) music.gain.gain.setTargetAtTime(document.querySelector('.mathbox') ? 0.35 : 0.85, now_, 0.4);
+    const T = TRACKS[music.name], step = 60 / T.bpm / 2, k = 2 ** (music.tr / 12);
+    if (music.next < now_) music.next = now_ + 0.05; // after a pause, do not play the missed notes all at once
+    while (music.next < now_ + 0.3) {
+      const pm = music.pos % T.mel.len, pb = music.pos % T.bass.len;
+      for (const [t, n, len] of T.mel.ev) if (t === pm) voice(NOTE(n) * k, music.next, len * step * 0.95, { type: T.type, v: T.mv, dest: music.gain, attack: 0.02 });
+      for (const [t, n, len] of T.bass.ev) if (t === pb) voice(NOTE(n) * k, music.next, len * step * 0.9, { type: 'sine', v: T.bv, dest: music.gain, attack: 0.02 });
+      if (T.hats && pm % 2 === 1) noise(music.next, 0.05, 0.02, 7000, music.gain, 'highpass');
+      music.next += step; music.pos++;
+    }
+  } catch { /* audio blocked */ }
+}
+setInterval(musicTick, 80);
+// browsers only allow sound after a tap or a key: start the audio on the first one
+const unlockAudio = () => { if (S && (S.settings.music || S.settings.sound)) { try { ac(); } catch { /* audio blocked */ } } };
+addEventListener('pointerdown', unlockAudio, true);
+addEventListener('keydown', unlockAudio, true);
+document.addEventListener('visibilitychange', () => { if (!AC) return; if (document.hidden) AC.suspend(); else if (started || mode === 'title') AC.resume(); });
 
 // ============================================================ Canvas
 // Touch devices (phones, tablets, touch laptops) get the on-screen pad, even with a mouse or keyboard attached.
@@ -542,7 +675,7 @@ function checkBadges() {
     if (!S.badges[b.id] && b.c(S)) {
       S.badges[b.id] = now();
       S.coins += 50;
-      celebrate({ title: 'Nouveau badge !', lines: [b.name, b.desc, '+50 pièces'], iconsBig: [A.badgeURL(i, b.color, true)], kind: 'badge' });
+      celebrate({ sound: 'fanfare', title: 'Nouveau badge !', lines: [b.name, b.desc, '+50 pièces'], iconsBig: [A.badgeURL(i, b.color, true)], kind: 'badge' });
     }
   });
 }
@@ -720,6 +853,7 @@ function celebrate(o) {
     let closed = false;
     const fin = () => { if (closed) return; closed = true; popLayer(L); resolve(); };
     const L = pushLayer(wrap, { onA: fin, onB: fin, onKey: (e) => { if (['Enter', ' ', 'Escape'].includes(e.key)) { fin(); return true; } return false; } });
+    if (o.sound && sfx[o.sound]) sfx[o.sound]();
   }));
   return popChain;
 }
@@ -1138,7 +1272,7 @@ async function harvestAll() {
   addXP(xp);
   const parts = Object.entries(got).map(([id, q]) => `${q} ${itemName(id)}`);
   toast(`Récolte : ${parts.join(', ')}`, 'green', Object.keys(got).map((id) => A.iconURL(id)));
-  if (got.doree) await celebrate({ title: 'Fruit d’or !', lines: ['Tu as récolté le fruit le plus rare de la vallée !', 'Il vaut 1200 pièces.'], iconsBig: [A.iconURL('doree', 5)] });
+  if (got.doree) await celebrate({ sound: 'discover', title: 'Fruit d’or !', lines: ['Tu as récolté le fruit le plus rare de la vallée !', 'Il vaut 1200 pièces.'], iconsBig: [A.iconURL('doree', 5)] });
   if (S.stats.harvests === n) await say(['Ta première récolte ! Bravo !', 'Vends tes légumes dans la caisse en bois devant ta maison.'], 'Mamie Rose');
 }
 
@@ -1345,7 +1479,7 @@ async function onWild(e) {
   syncFarm();
   addXP(15 + d.lvl * 2);
   sfx.level();
-  await celebrate({ title: `${name} rejoint ta ferme !`, iconsBig: [animalURL(e.kind)], lines: [`Mange : ${foodsText(e.kind)}`, `Donne : ${itemName(d.out).toLowerCase()}`, 'Va la voir dans l’enclos, à côté de ta maison.'] });
+  await celebrate({ sound: 'friend', title: `${name} rejoint ta ferme !`, iconsBig: [animalURL(e.kind)], lines: [`Mange : ${foodsText(e.kind)}`, `Donne : ${itemName(d.out).toLowerCase()}`, 'Va la voir dans l’enclos, à côté de ta maison.'] });
 }
 async function onFarmAnimal(e) {
   const a = animalOf(e);
@@ -1452,7 +1586,7 @@ async function inventPanel(id) {
       if (r && r.secret && !S.found[r.out]) {
         S.found[r.out] = now();
         addXP(25); sfx.level();
-        celebrate({ title: 'Recette découverte !', iconsBig: [A.iconURL(r.out, 5)], lines: [itemName(r.out), Object.entries(r.in).map(([k, v]) => qtyName(k, v)).join(' + '), `Se vend ${ITEMS[r.out].sell} pièces. Fabrique-la à : ${B.name}.`] });
+        celebrate({ sound: 'discover', title: 'Recette découverte !', iconsBig: [A.iconURL(r.out, 5)], lines: [itemName(r.out), Object.entries(r.in).map(([k, v]) => qtyName(k, v)).join(' + '), `Se vend ${ITEMS[r.out].sell} pièces. Fabrique-la à : ${B.name}.`] });
         afterChange(); P.close(); return;
       }
       result = r ? `Tu connais déjà cette recette : ${itemName(r.out)} !` : 'Hmm… ça ne donne rien de bon. Relis les indices et essaie autre chose !';
@@ -1646,7 +1780,7 @@ async function onOwl() {
     if (score >= 4) {
       const c = 80 + S.lvl * 10;
       S.coins += c; addItem('engrais', 2); addXP(50);
-      await celebrate({ title: 'Défi réussi !', lines: [`${score}/5 bonnes réponses`, `+${c} pièces, +2 engrais, +50 XP`], icons: [A.coinURL(), A.iconURL('engrais')] });
+      await celebrate({ sound: 'fanfare', title: 'Défi réussi !', lines: [`${score}/5 bonnes réponses`, `+${c} pièces, +2 engrais, +50 XP`], icons: [A.coinURL(), A.iconURL('engrais')] });
     } else if (score !== null) await say(`${score}/5. Pas mal ! Tu pourras retenter demain. Continue à t’entraîner !`, who);
   } else if (o === 'Mes progrès') return carnetPanel('progres');
 }
@@ -1801,7 +1935,7 @@ async function onBigRock() {
   sfx.hit();
   S.flags.rock = true; applyWorldFlags();
   addXP(20);
-  await celebrate({ title: 'Le chemin est ouvert !', lines: ['La Forêt des Murmures t’attend à l’ouest.', 'Tu y trouveras du bois, des pierres, des coffres… et des créatures !'] });
+  await celebrate({ sound: 'discover', title: 'Le chemin est ouvert !', lines: ['La Forêt des Murmures t’attend à l’ouest.', 'Tu y trouveras du bois, des pierres, des coffres… et des créatures !'] });
 }
 async function onBridge() {
   if (S.lvl < 6) return say(['Le pont du lac est cassé.', 'Au niveau 6, tu pourras le réparer avec 10 bois et 5 pierres. (Tu es niveau ' + S.lvl + '.)']);
@@ -1812,7 +1946,7 @@ async function onBridge() {
   addItem('bois', -10); addItem('pierre', -5);
   S.flags.bridge = true; applyWorldFlags();
   addXP(30);
-  await celebrate({ title: 'Le pont est réparé !', lines: ['Le Lac Miroir est ouvert.', 'Tom le pêcheur t’attend près du ponton.'] });
+  await celebrate({ sound: 'discover', title: 'Le pont est réparé !', lines: ['Le Lac Miroir est ouvert.', 'Tom le pêcheur t’attend près du ponton.'] });
 }
 async function onGuardian() {
   const who = 'Gardien du Mont';
@@ -1840,7 +1974,7 @@ async function onAncient() {
   addItem('cristal', -need);
   addItem('graine:doree', 1);
   S.flags.arbre = true; S.daily.arbre = today();
-  await celebrate({ title: 'Graine dorée !', lines: ['Plante-la dans ton potager.', 'Elle donnera un Fruit d’or qui vaut 1200 pièces !'], iconsBig: [A.iconURL('graine:doree', 5)] });
+  await celebrate({ sound: 'discover', title: 'Graine dorée !', lines: ['Plante-la dans ton potager.', 'Elle donnera un Fruit d’or qui vaut 1200 pièces !'], iconsBig: [A.iconURL('graine:doree', 5)] });
 }
 
 // ---- Resources
@@ -1892,7 +2026,7 @@ async function onChest(o) {
   S.coins += c.coins;
   for (const [k, v] of Object.entries(c.items)) addItem(k, v);
   sfx.coin();
-  await celebrate({ title: 'Trésor !', lines: [`${c.coins} pièces`, ...Object.entries(c.items).map(([k, v]) => `${v} × ${itemName(k)}`)], icons: [A.coinURL(), ...Object.keys(c.items).map((k) => A.iconURL(k))] });
+  await celebrate({ sound: 'treasure', title: 'Trésor !', lines: [`${c.coins} pièces`, ...Object.entries(c.items).map(([k, v]) => `${v} × ${itemName(k)}`)], icons: [A.coinURL(), ...Object.keys(c.items).map((k) => A.iconURL(k))] });
 }
 async function onFish() {
   if (!S.tools.canne) return say('Il te faudrait une canne à pêche. Tom le pêcheur en a peut-être une ?');
@@ -1980,7 +2114,8 @@ async function carnetPanel(tab) {
 async function optionsPanel() {
   await panel('Options', (body, api) => {
     body.append(
-      h('div', { class: 'opt' }, h('b', null, 'Son'), h('button', { class: 'btn sm' + (S.settings.sound ? '' : ' ghost'), onclick: () => { S.settings.sound = !S.settings.sound; save(); api.refresh(); } }, S.settings.sound ? 'Activé' : 'Coupé')),
+      h('div', { class: 'opt' }, h('b', null, 'Bruitages'), h('button', { class: 'btn sm' + (S.settings.sound ? '' : ' ghost'), onclick: () => { S.settings.sound = !S.settings.sound; save(); api.refresh(); } }, S.settings.sound ? 'Activés' : 'Coupés')),
+      h('div', { class: 'opt' }, h('b', null, 'Musique'), h('button', { class: 'btn sm' + (S.settings.music ? '' : ' ghost'), onclick: () => { S.settings.music = !S.settings.music; save(); unlockAudio(); api.refresh(); } }, S.settings.music ? 'Activée' : 'Coupée')),
       h('div', { class: 'opt' }, h('b', null, 'Espace parents'), h('button', { class: 'btn sm', onclick: () => { parentPanel(); } }, 'Ouvrir')),
       h('div', { class: 'opt' }, h('b', null, 'Prénom'), h('input', { class: 'name', value: S.name, maxlength: 14, onchange: (e) => { S.name = e.target.value.trim() || 'Thibault'; save(); } })),
       syncSection(api),
@@ -2134,7 +2269,8 @@ function battleCats(zone) {
 async function startBattle(zone) {
   if (busy) return;
   busy = true;
-  try { await battle(zone, encounterFor(zone)); } finally { busy = false; afterChange(); }
+  inBattle = true;
+  try { await battle(zone, encounterFor(zone)); } finally { inBattle = false; busy = false; afterChange(); }
 }
 async function battle(zone, id) {
   const c = CREATURES[id];
@@ -2214,7 +2350,7 @@ async function battle(zone, id) {
     S.coins += coins; addXP(c.xp + (first ? c.xp : 0));
     await msg(`${c.name} est battu… et devient ton ami !`);
     popLayer(L);
-    await celebrate({ title: first ? `Nouvel ami : ${c.name} !` : `${c.name} battu !`, lines: [`+${coins} pièces`, ...got], iconsBig: [A.creatureURL(id, 3)] });
+    await celebrate({ sound: 'friend', title: first ? `Nouvel ami : ${c.name} !` : `${c.name} battu !`, lines: [`+${coins} pièces`, ...got], iconsBig: [A.creatureURL(id, 3)] });
   } else {
     await msg(`${c.name} s’enfuit dans les herbes… Tu feras mieux la prochaine fois !`);
     addXP(2);
@@ -2562,6 +2698,7 @@ requestAnimationFrame(loop);
 // debug helpers for testing in the console
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
+  get audio() { return { state: AC && AC.state, key: music.key, gain: music.gain && music.gain.gain.value, pos: music.pos }; }, sfx,
   fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel },
   ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
