@@ -47,7 +47,8 @@ function migrate(s) {
   const d = newState();
   if (s.skills && (s.skillsV || 0) < 2) { for (const sk of Object.values(s.skills)) { sk.lv = 1; sk.r = []; sk.acq = 0; } }
   if (s.skills && (s.skillsV || 0) < 3) { for (const sk of Object.values(s.skills)) { sk.sc = 0; sk.nl = 0; } }
-  s.skillsV = 3;
+  if (s.skills && (s.skillsV || 0) < 4) { for (const k of ['calc:add', 'calc:sub']) if (s.skills[k]) Object.assign(s.skills[k], { lv: 1, r: [], acq: 0, sc: 0, nl: 0 }); }
+  s.skillsV = 4;
   // First version kept the objective as an index: turn it into the list of finished ones.
   if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
@@ -337,14 +338,9 @@ function effElapsed(p) { return (now() - p.at) * speedMult() + p.skip; }
 function progress(p) { return p.crop ? Math.min(1, effElapsed(p) / p.grow) : 0; }
 function remaining(p) { return Math.max(0, p.grow - effElapsed(p)) / speedMult(); }
 
-// Problem difficulty, 1 (easy) to 5. It climbs slowly with the player's level, the « Dur » mode
-// (settings.grade 8) is a half step ahead of « Normal » (7), the Options setting moves it by hand, and each theme adapts to recent answers.
+// Maths difficulty never depends on the game level: each skill climbs its own ladder (see « Skills » below).
+// DIFF_STEPS: the overall difficulty set by the parents, which moves the ceilings.
 const DIFF_STEPS = [[-2, 'Très facile'], [-1, 'Facile'], [0, 'Normal'], [1, 'Difficile'], [2, 'Très difficile']];
-function baseD() {
-  const L = S.lvl;
-  const d = L <= 3 ? 1 : L <= 6 ? 2 : L <= 10 ? 3 : L <= 15 ? 4 : 5;
-  return d + (S.settings.grade === 8 ? 0.5 : 0) + (S.settings.diff || 0);
-}
 const mKey = (cat) => (cat === 'add' || cat === 'mul' ? 'calc' : cat);
 /** Level fixed by the parents for this theme (1-5), or null when the game adapts by itself. */
 function fixedLevel(cat) {
@@ -367,7 +363,11 @@ const CALC_OPS = ['add', 'sub', 'mul', 'div', 'mental'];
 const NEW_ORDER = Object.keys(NEW_CONCEPTS);
 const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux', 'enigme'];
 // Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers with borrowing in Normal mode. Themes not listed: [3, 4].
-const CAPS = { 'calc:add': [4, 5], 'calc:sub': [4, 5], 'calc:mul': [3, 4], 'calc:div': [4, 5], 'calc:mental': [3, 4], enigme: [4, 5] };
+// Additions and subtractions have 7 small steps, everything else 5.
+const MIN_LV = -1; // below level 1: easier problems (or level 1 with the hint shown) so a child who struggles does not give up
+const lvTxt = (lv) => (lv < 0 ? '−' + -lv : String(lv));
+const maxLv = (key) => (key === 'calc:add' || key === 'calc:sub' ? 7 : 5);
+const CAPS = { 'calc:add': [6, 7], 'calc:sub': [6, 7], 'calc:mul': [3, 4], 'calc:div': [4, 5], 'calc:mental': [3, 4], enigme: [4, 5] };
 const isCalc = (cat) => !cat || cat === 'calc' || cat === 'add' || cat === 'mul';
 const keyOf = (cat, op) => (op ? 'calc:' + op : mKey(cat));
 const catOf = (key) => (key.startsWith('calc:') ? 'calc' : key);
@@ -378,7 +378,7 @@ function capFor(key) {
   const diff = S.settings.diff || 0;
   if (isNew(key)) return clamp(3 + Math.min(0, diff), 1, 3);
   const c = CAPS[key] || [3, 4];
-  return clamp(c[S.settings.grade === 8 ? 1 : 0] + diff, 1, 5);
+  return clamp(c[S.settings.grade === 8 ? 1 : 0] + diff, 1, maxLv(key));
 }
 // Every skill starts at its easiest level and climbs from there.
 const startLv = () => 1;
@@ -394,7 +394,7 @@ const isAcquis = (key) => { const s = (S.skills || {})[key]; return !!(s && s.ac
 function levelFor(key) {
   const fx = fixedLevel(catOf(key));
   if (fx) return fx;
-  return clamp(Math.min(skillOf(key).lv, capFor(key)), 1, 5);
+  return clamp(Math.min(skillOf(key).lv, capFor(key)), MIN_LV, maxLv(key));
 }
 const unlockedConcepts = () => NEW_ORDER.filter((k) => (S.concepts || {})[k]);
 /** Skills that can be asked now: the basics and the 8H notions already unlocked, unless the parents switched them off. */
@@ -429,7 +429,6 @@ function pickSkill(reqCat, op, noSwap) {
 }
 /** The next 8H notion unlocks when enough skills are mastered and the previous notion has been practised. */
 function checkConcepts() {
-  if (S.lvl < 4) return;
   S.concepts = S.concepts || {};
   const got = unlockedConcepts();
   if (got.length >= NEW_ORDER.length) return;
@@ -446,6 +445,7 @@ function checkConcepts() {
 const LEVEL_MIN_Q = 8, LEVEL_UP = 6, LEVEL_DOWN = -2.5;
 /** Time after which a right answer counts as slow: short for a calculation, longer for a problem to read. */
 function slowMs(key, lv) {
+  lv = Math.max(1, lv);
   if (key === 'calc:mental') return (8 + 3 * lv) * 1000;
   if (opOf(key)) return (12 + 5 * lv) * 1000;
   if (key === 'frac' || key === 'conv' || key === 'arrondi' || key === 'priorites' || key === 'decimaux' || key === 'fracplus') return (18 + 6 * lv) * 1000;
@@ -474,7 +474,7 @@ function record(p, ok, ms = 0, helped = false) {
     } else if (s.nl >= 3 && s.sc <= LEVEL_DOWN) {
       // a level back down, starting half-way so it does not bounce straight back up
       s.sc = LEVEL_UP / 2; s.nl = 0; s.r = []; s.acq = 0;
-      if (s.lv > 1) s.lv--; else s.sc = 0;
+      if (s.lv > MIN_LV) s.lv--; else s.sc = 0;
     }
   }
   checkConcepts();
@@ -744,7 +744,7 @@ async function askMath(opts) {
   for (;;) {
     const r = await askOnce(o);
     if (!r.easier) return r;
-    if (o.d) o = { ...o, d: Math.max(1, r.d - 1) }; // a défi: one step below the problem that was too hard
+    if (o.d) o = { ...o, d: Math.max(MIN_LV, r.d - 1) }; // a défi: one step below the problem that was too hard
   }
 }
 function askOnce(opts) {
@@ -760,7 +760,7 @@ function askOnce(opts) {
     let tries = 0, input = '', locked = false, helped = false;
     const t0 = performance.now();
     let pausedMs = 0;
-    const hintCost = 5 + 5 * dUsed;
+    const hintCost = 5 + 5 * Math.max(1, dUsed);
     const tip = h('div', { class: 'm-tip' });
     const hintBtn = h('button', { class: 'm-hint', onclick: () => {
       if (locked || hintBtn.disabled) return;
@@ -773,12 +773,19 @@ function askOnce(opts) {
       if (step) tip.append(h('div', { class: 'm-step' }, 'Pour commencer : ' + step));
       hintBtn.disabled = true; hintBtn.textContent = 'Indice acheté';
     } }, 'Indice · ', coinImg('coin sm'), ` ${hintCost}`);
+    if (!p0 && p.aid != null) {
+      tip.append(h('b', null, 'Indice : '), h('span', null, p.hint));
+      const step = p.aid <= -1 ? firstStep(p) : null;
+      if (step) tip.append(h('div', { class: 'm-step' }, 'Pour commencer : ' + step));
+      hintBtn.disabled = true; hintBtn.textContent = 'Indice offert';
+      if (!p.op) helped = true; // a word problem with its help shown counts like a slow answer
+    }
     // "Trop dur" lowers this theme (or this operation) a step and asks an easier problem instead
     const easier = !p0 && !fixedLevel(cat);
     const hardBtn = easier ? h('button', { class: 'm-hard', onclick: () => {
       if (locked || tries > 0) return;
       const s = skillOf(skKey);
-      if (s.lv > 1) s.lv--;
+      if (s.lv > MIN_LV) s.lv--;
       s.r = []; s.acq = 0; s.sc = 0; s.nl = 0;
       toast(`D’accord ! « ${skillTitle(skKey)} » : un peu plus facile.`, 'blue');
       save();
@@ -1603,7 +1610,7 @@ async function onOwl() {
 function catLevelTxt(cat) {
   if (cat === 'calc') { const n = CALC_OPS.filter((o) => isAcquis('calc:' + o)).length; return `${n}/${CALC_OPS.length} opérations maîtrisées`; }
   if (isAcquis(cat)) return 'Maîtrisé';
-  return (S.skills || {})[cat] ? `Niveau ${shownLv(cat)}/${capFor(cat)}` : isNew(cat) ? 'Nouvelle notion' : 'Pas encore essayé';
+  return (S.skills || {})[cat] ? `Niveau ${lvTxt(shownLv(cat))}/${capFor(cat)}` : isNew(cat) ? 'Nouvelle notion' : 'Pas encore essayé';
 }
 async function lessonsPanel() {
   let chosen = null;
@@ -1695,7 +1702,7 @@ async function series(cat, n, off, title, mixed) {
     // a revision stays on the chosen theme; the daily challenge mixes everything
     const r = await askMath({ cat: c, off, noSwap: !mixed, title: `${title} · ${i + 1}/${n}` });
     if (r.quit) return i === 0 ? null : score;
-    const gain = r.ok ? (r.first ? 5 + 3 * r.d : 2) : 0;
+    const gain = r.ok ? (r.first ? 5 + 3 * Math.max(1, r.d) : 2) : 0;
     if (r.ok && r.first) score++;
     if (gain) { won += gain; addCoins(gain); }
     updateHud();
@@ -1915,9 +1922,9 @@ async function carnetPanel(tab) {
       for (const k of liveSkills()) {
         const s = (S.skills || {})[k], cap = capFor(k), acq = isAcquis(k);
         const lv = s ? Math.min(s.lv, cap) : 0;
-        const pct = acq ? 100 : s ? Math.min(95, Math.round(((lv - 1 + clamp((s.sc || 0) / LEVEL_UP, 0, 1)) / cap) * 100)) : 0;
+        const pct = acq ? 100 : s ? Math.min(95, Math.max(0, Math.round(((lv - 1 + clamp((s.sc || 0) / LEVEL_UP, 0, 1)) / cap) * 100))) : 0;
         tbl.append(h('div', { class: 'mrow' + (acq ? ' acq' : '') }, h('span', { class: 'mlabel' }, skillTitle(k)), h('span', { class: 'mbar' }, h('i', { style: `width:${pct}%` })),
-          h('span', { class: 'mpct' }, acq ? 'Maîtrisé' : s ? `Niveau ${lv}/${cap}` : '—'), h('span', { class: 'stars' }, acq ? '★' : '')));
+          h('span', { class: 'mpct' }, acq ? 'Maîtrisé' : s ? `Niveau ${lvTxt(lv)}/${cap}` : '—'), h('span', { class: 'stars' }, acq ? '★' : '')));
       }
       body.append(tbl);
       const left = NEW_ORDER.length - unlockedConcepts().length;
@@ -1985,7 +1992,7 @@ async function parentPanel() {
       const mm = S.mastery[k];
       const locked = isNew(k) && !(S.concepts || {})[k];
       const max = isNew(k) ? 3 : 5;
-      const auto = k === 'calc' ? CALC_OPS.map((o) => `${o === 'add' ? '+' : o === 'sub' ? '−' : o === 'mul' ? '×' : o === 'div' ? '÷' : 'tête'} ${shownLv('calc:' + o)}/${capFor('calc:' + o)}${isAcquis('calc:' + o) ? ' ✓' : ''}`).join(' · ') : `niveau ${shownLv(k)}/${capFor(k)}${isAcquis(k) ? ' · maîtrisé' : ''}`;
+      const auto = k === 'calc' ? CALC_OPS.map((o) => `${o === 'add' ? '+' : o === 'sub' ? '−' : o === 'mul' ? '×' : o === 'div' ? '÷' : 'tête'} ${lvTxt(shownLv('calc:' + o))}/${capFor('calc:' + o)}${isAcquis('calc:' + o) ? ' ✓' : ''}`).join(' · ') : `niveau ${lvTxt(shownLv(k))}/${capFor(k)}${isAcquis(k) ? ' · maîtrisé' : ''}`;
       const setLvl = (v) => { S.settings.cats[k] = { ...c, lvl: v === 'auto' ? undefined : Number(v) }; delete examples[k]; save(); api.refresh(); };
       const sel = h('select', { class: 'psel', onchange: (e) => setLvl(e.target.value) },
         h('option', { value: 'auto', selected: c.lvl == null }, 'Auto'),

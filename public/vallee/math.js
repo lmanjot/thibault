@@ -51,27 +51,36 @@ function C(cat, q, right, wrongs, ex, hint) {
 }
 
 // ---------- Calcul ----------
-// Additions: 1 two digits, no carry · 2 two digits with a carry · 3 three digits · 4 four digits · 5 bigger
+// Additions: 1 two digits + one digit (23 + 5) · 2 with a carry (27 + 8) · 3 two digits, no carry (63 + 21)
+// 4 two digits with a carry (38 + 45) · 5 three digits · 6 four digits · 7 bigger
 function add(d) {
   let a, b;
-  if (d <= 1) { const at = R(1, 7), au = R(0, 8), bt = R(1, 8 - at), bu = R(1, 9 - au); a = at * 10 + au; b = bt * 10 + bu; }
-  else if (d === 2) { const au = R(3, 9), bu = R(10 - au, 9); a = R(1, 5) * 10 + au; b = R(1, 3) * 10 + bu; }
-  else if (d === 3) { a = R(125, 689); b = R(112, 299); }
-  else if (d === 4) { a = R(1250, 6800); b = R(340, 2900); }
+  if (d <= -1) { a = R(1, 8); b = R(1, 10 - a); } // within 10: 4 + 3
+  else if (d === 0) { if (Math.random() < 0.5) { a = R(11, 17); b = R(1, 9 - (a % 10)); } else { a = R(4, 9); b = R(10 - a + 1, 9); } } // within 20: 12 + 5, 8 + 6
+  else if (d <= 1) { a = R(1, 9) * 10 + R(0, 7); b = R(1, 9 - (a % 10)); }
+  else if (d === 2) { const au = R(2, 9); a = R(1, 8) * 10 + au; b = R(10 - au, 9); }
+  else if (d === 3) { const at = R(1, 7), au = R(0, 8), bt = R(1, 8 - at), bu = R(1, 9 - au); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 4) { const au = R(3, 9), bu = R(10 - au, 9); a = R(1, 5) * 10 + au; b = R(1, 3) * 10 + bu; }
+  else if (d === 5) { a = R(125, 689); b = R(112, 299); }
+  else if (d === 6) { a = R(1250, 6800); b = R(340, 2900); }
   else { a = R(2500, 8999); b = R(1250, 9999); }
   return P('calc', `${fmt(a)} + ${fmt(b)} = @`, a + b, '', `${fmt(a)} + ${fmt(b)} = ${fmt(a + b)}`);
 }
-// Subtractions: 1 two digits, no borrowing (58 − 23) · 2 two digits with borrowing (72 − 38)
-// 3 three digits, no borrowing (486 − 152) · 4 three digits with borrowing (532 − 187) · 5 four digits
+// Subtractions: 1 two digits − one digit (27 − 5) · 2 with borrowing (23 − 8) · 3 two digits, no borrowing (58 − 23)
+// 4 two digits with borrowing (72 − 38) · 5 three digits, no borrowing · 6 three digits with borrowing · 7 four digits
 function sub(d) {
   let a, b;
-  if (d <= 1) { const at = R(3, 9), au = R(2, 9), bt = R(1, at - 1), bu = R(0, au); a = at * 10 + au; b = bt * 10 + bu; }
-  else if (d === 2) { const at = R(3, 9), au = R(0, 7), bt = R(1, at - 1), bu = R(au + 1, 9); a = at * 10 + au; b = bt * 10 + bu; }
-  else if (d === 3) { const ah = R(3, 9), at = R(1, 9), au = R(1, 9); a = ah * 100 + at * 10 + au; b = R(1, ah - 1) * 100 + R(0, at) * 10 + R(0, au); }
-  else if (d === 4) { do { a = R(300, 999); b = R(105, a - 50); } while (a % 10 >= b % 10 && Math.floor(a / 10) % 10 >= Math.floor(b / 10) % 10); }
+  if (d <= -1) { a = R(3, 10); b = R(1, a - 1); } // within 10: 8 − 3
+  else if (d === 0) { if (Math.random() < 0.5) { a = R(12, 19); b = R(1, a % 10); } else { a = R(11, 17); b = R((a % 10) + 1, 9); } } // within 20: 15 − 4, 12 − 5
+  else if (d <= 1) { a = R(1, 9) * 10 + R(1, 9); b = R(1, a % 10); }
+  else if (d === 2) { a = R(2, 9) * 10 + R(0, 7); b = R((a % 10) + 1, 9); }
+  else if (d === 3) { const at = R(3, 9), au = R(2, 9), bt = R(1, at - 1), bu = R(0, au); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 4) { const at = R(3, 9), au = R(0, 7), bt = R(1, at - 1), bu = R(au + 1, 9); a = at * 10 + au; b = bt * 10 + bu; }
+  else if (d === 5) { const ah = R(3, 9), at = R(1, 9), au = R(1, 9); a = ah * 100 + at * 10 + au; b = R(1, ah - 1) * 100 + R(0, at) * 10 + R(0, au); }
+  else if (d === 6) { do { a = R(300, 999); b = R(105, a - 50); } while (a % 10 >= b % 10 && Math.floor(a / 10) % 10 >= Math.floor(b / 10) % 10); }
   else { a = R(2000, 9999); b = R(305, a - 300); }
   return P('calc', `${fmt(a)} − ${fmt(b)} = @`, a - b, '', `${fmt(a)} − ${fmt(b)} = ${fmt(a - b)}`,
-    d === 2 || d >= 4 ? 'Si le chiffre du haut est trop petit, il gagne 10, et la colonne suivante enlève 1 de plus (la retenue).' : null);
+    d === 2 || d === 4 || d >= 6 ? 'Si le chiffre du haut est trop petit, il gagne 10, et la colonne suivante enlève 1 de plus (la retenue).' : null);
 }
 // Decimal additions and subtractions (the « Nombres à virgule » notion): k 1 or 2
 function addDec(k) {
@@ -87,7 +96,9 @@ function subDec(k) {
 }
 function mul(d) {
   let a, b, ex = null;
-  if (d <= 1) { a = pick([2, 3, 4, 5, 10]); b = R(2, 10); }
+  if (d <= -1) { a = pick([2, 10]); b = R(1, 5); }
+  else if (d === 0) { a = pick([2, 5, 10]); b = R(1, 10); }
+  else if (d <= 1) { a = pick([2, 3, 4, 5, 10]); b = R(2, 10); }
   else if (d === 2) { a = pick([3, 4, 6, 7, 8, 9, 6, 7, 8, 9]); b = R(3, 10); }
   else if (d === 3) {
     if (Math.random() < 0.75) {
@@ -110,7 +121,9 @@ function mul(d) {
 // 4 bigger quotients (296 ÷ 8) · 5 ÷ 10 / ÷ 100 and divisors 11 to 15
 function div(d) {
   let b, q;
-  if (d <= 1) { b = pick([2, 5, 10]); q = R(2, 10); }
+  if (d <= -1) { b = 2; q = R(1, 5); }
+  else if (d === 0) { b = pick([2, 10]); q = R(1, 10); }
+  else if (d <= 1) { b = pick([2, 5, 10]); q = R(2, 10); }
   else if (d === 2) { b = R(3, 9); q = R(2, 10); }
   else if (d === 3) { b = R(2, 5); q = R(11, b === 2 ? 45 : b === 3 ? 30 : 20); }
   else if (d === 4) { b = R(3, 9); q = R(12, 40); }
@@ -126,6 +139,11 @@ function div(d) {
     'Cherche quel nombre multiplié par le diviseur donne le nombre de départ.');
 }
 function mental(d) {
+  if (d <= 0) {
+    const big = d === 0 ? 15 : 9;
+    if (Math.random() < 0.5) { const n = R(1, big); return P('calc', `Le double de ${n} = @`, n * 2, '', `${n} + ${n} = ${n * 2}`); }
+    const n = 2 * R(1, big); return P('calc', `La moitié de ${n} = @`, n / 2, '', `${n} ÷ 2 = ${n / 2}`, 'La moitié, c’est partager en 2 parts égales.');
+  }
   if (d <= 1) {
     if (Math.random() < 0.5) { const n = R(12, 45); return P('calc', `Le double de ${n} = @`, n * 2, '', `${n} + ${n} = ${n * 2}`); }
     const n = 2 * R(6, 49); return P('calc', `La moitié de ${n} = @`, n / 2, '', `${n} ÷ 2 = ${n / 2}`);
@@ -154,6 +172,7 @@ export const genMul = (d) => pick([mul, mul, div])(d);
 
 // ---------- Fractions ----------
 function frac(d) {
+  if (d <= 0) { const n = 2 * R(1, d === 0 ? 10 : 5); return P('frac', `La moitié de ${n} = @`, n / 2, '', `${n} ÷ 2 = ${n / 2}`, 'La moitié, c’est partager en 2 parts égales.'); }
   if (d <= 1) {
     if (Math.random() < 0.5) { const n = 2 * R(5, 30); return P('frac', `La moitié de ${n} = @`, n / 2, '', `${n} ÷ 2 = ${n / 2}`); }
     const n = 4 * R(2, 10); return P('frac', `Le quart de ${n} = @`, n / 4, '', `Le quart, c’est diviser par 4 : ${n} ÷ 4 = ${n / 4}`);
@@ -212,6 +231,12 @@ function convQ(v, from, to) {
   return P('conv', `${fmt(v)} ${from} = @ ${to}`, v * (U[from] / U[to]), to, convEx(v, from, to));
 }
 function conv(d) {
+  if (d <= 0) {
+    // the basic facts (1 m = 100 cm), then small whole numbers of them
+    const [f, t] = pick([['m', 'cm'], ['kg', 'g'], ['L', 'dL'], ['km', 'm']]);
+    if (Math.random() < 0.2) { const hh = d === 0 ? R(2, 3) : 1; return P('conv', `${hh} h = @ min`, hh * 60, 'min', `1 h = 60 min${hh > 1 ? `, donc ${hh} × 60 = ${hh * 60} min` : ''}`); }
+    return convQ(d === 0 ? R(2, 5) : 1, f, t);
+  }
   if (d <= 1) {
     if (Math.random() < 0.15) { const h = R(2, 5); return P('conv', `${h} h = @ min`, h * 60, 'min', `1 h = 60 min, donc ${h} × 60 = ${h * 60} min`); }
     const [f, t] = pick([['m', 'cm'], ['kg', 'g'], ['L', 'dL'], ['L', 'cL'], ['m', 'dm'], ['km', 'm'], ['cm', 'mm']]);
@@ -248,7 +273,7 @@ function conv(d) {
 const T = {};
 T.masse = [
   [1, 2, (d) => { const a = d <= 1 ? R(2, 9) : R(12, 25), n = R(3, 9); return P('masse', `Le meunier porte ${n} sacs de blé. Chaque sac pèse ${a} kg. Combien de kg porte-t-il en tout ?`, n * a, 'kg', `${n} × ${a} = ${n * a} kg`); }],
-  [1, 3, (d) => { const A = d <= 2 ? R(20, d <= 1 ? 60 : 99) : R(120, 400), b = d <= 1 ? R(1, Math.floor(A / 10) - 1) * 10 + R(0, A % 10) : R(5, Math.floor(A / 2)); return P('masse', `Mamie a ${A} kg de pommes de terre. Elle en donne ${b} kg à la voisine. Combien de kg lui reste-t-il ?`, A - b, 'kg', `${A} − ${b} = ${A - b} kg`); }],
+  [1, 3, (d) => { const A = d <= 2 ? R(20, d <= 1 ? 60 : 99) : R(120, 400), b = d <= 1 ? R(2, 9) : R(5, Math.floor(A / 2)); return P('masse', `Mamie a ${A} kg de pommes de terre. Elle en donne ${b} kg à la voisine. Combien de kg lui reste-t-il ?`, A - b, 'kg', `${A} − ${b} = ${A - b} kg`); }],
   [2, 3, () => { const b = pick([2, 4, 5, 6, 8, 10, 25]), q = R(3, 12); return P('masse', `Le meunier a ${b * q} kg de farine. Il la verse dans des sacs de ${b} kg. Combien de sacs remplit-il ?`, q, 'sacs', `${b * q} ÷ ${b} = ${q} sacs`); }],
   [2, 4, () => { const p = R(2, 5) * 50, n = R(3, 6), m = R(12, 20) * 10; return P('masse', `Un panier vide pèse ${p} g. Tu y mets ${n} pommes de ${m} g chacune. Combien pèse le panier plein ?`, p + n * m, 'g', `${n} × ${m} = ${n * m} g, puis ${n * m} + ${p} = ${p + n * m} g`); }],
   [3, 4, () => { const K = R(1, 3), g = R(2, 15) * 50; return P('masse', `Tu as ${K} kg de farine. Tu en utilises ${g} g pour une recette. Combien de grammes te reste-t-il ?`, K * 1000 - g, 'g', `${K} kg = ${K * 1000} g. ${K * 1000} − ${g} = ${K * 1000 - g} g`); }],
@@ -258,7 +283,7 @@ T.masse = [
 ];
 T.contenance = [
   [1, 2, (d) => { const c = d <= 1 ? pick([10, 20, 50]) : pick([25, 33, 75, 20]), n = R(2, 9); return P('contenance', `Une bouteille contient ${c} cL. Combien de cL y a-t-il dans ${n} bouteilles ?`, c * n, 'cL', `${n} × ${c} = ${c * n} cL`); }],
-  [1, 2, () => { const A = R(6, 15), b = R(2, A - 1); return P('contenance', `L’arrosoir contient ${A} L d’eau. Tu en verses ${b} L sur les radis. Combien de litres reste-t-il ?`, A - b, 'L', `${A} − ${b} = ${A - b} L`); }],
+  [1, 2, () => { const A = R(6, 15), b = R(2, Math.min(9, A - 1)); return P('contenance', `L’arrosoir contient ${A} L d’eau. Tu en verses ${b} L sur les radis. Combien de litres reste-t-il ?`, A - b, 'L', `${A} − ${b} = ${A - b} L`); }],
   [2, 3, () => { const v = pick([20, 25, 50]), L = R(1, 5); return P('contenance', `Avec ${L} L de jus, combien de verres de ${v} cL peux-tu remplir ?`, (L * 100) / v, 'verres', `${L} L = ${L * 100} cL. ${L * 100} ÷ ${v} = ${(L * 100) / v} verres`); }],
   [2, 3, () => { const b = pick([2, 3, 5]), q = R(4, 12); return P('contenance', `Un tonneau contient ${b * q} L de jus. Tu le verses dans des bidons de ${b} L. Combien de bidons remplis-tu ?`, q, 'bidons', `${b * q} ÷ ${b} = ${q} bidons`); }],
   [3, 4, () => { const C = pick([1, 1.5, 2]), v = pick([20, 25]), n = R(2, Math.floor((C * 100) / v) - 1); return P('contenance', `Une carafe contient ${fmt(C)} L de jus. Tu sers ${n} verres de ${v} cL. Combien de cL reste-t-il dans la carafe ?`, C * 100 - n * v, 'cL', `${fmt(C)} L = ${C * 100} cL. ${n} × ${v} = ${n * v} cL. ${C * 100} − ${n * v} = ${C * 100 - n * v} cL`); }],
@@ -268,7 +293,7 @@ T.contenance = [
 ];
 T.duree = [
   [1, 2, () => { const a = R(15, 45), b = R(10, 30); return P('duree', `La tarte cuit ${a} minutes, puis refroidit ${b} minutes. Combien de minutes en tout ?`, a + b, 'min', `${a} + ${b} = ${a + b} min`); }],
-  [1, 2, () => { const n = R(20, 35), k = R(5, n - 5); return P('duree', `Les carottes poussent en ${n} jours. Tu les as semées il y a ${k} jours. Dans combien de jours pourras-tu les récolter ?`, n - k, 'jours', `${n} − ${k} = ${n - k} jours`); }],
+  [1, 2, (d) => { const n = d <= 1 ? R(12, 20) : R(20, 35), k = d <= 1 ? R(2, 9) : R(5, n - 5); return P('duree', `Les carottes poussent en ${n} jours. Tu les as semées il y a ${k} jours. Dans combien de jours pourras-tu les récolter ?`, n - k, 'jours', `${n} − ${k} = ${n - k} jours`); }],
   [2, 4, () => {
     const h = R(8, 16), m = R(2, 10) * 5, c = R(4, 11) * 5;
     const tot = h * 60 + m + c, right = hm(Math.floor(tot / 60), tot % 60);
@@ -289,7 +314,7 @@ T.recette = [
 ];
 T.argent = [
   [1, 1, () => { const p = R(2, 9), n = R(2, 9); return P('argent', `Un paquet de graines coûte ${p} CHF. Tu en achètes ${n}. Combien paies-tu ?`, p * n, 'CHF', `${n} × ${p} = ${p * n} CHF`); }],
-  [1, 2, () => { const A = R(30, 99), p = R(12, A - 5); return P('argent', `Tu as ${A} CHF. Tu achètes un arrosoir à ${p} CHF. Combien te reste-t-il ?`, A - p, 'CHF', `${A} − ${p} = ${A - p} CHF`); }],
+  [1, 2, (d) => { const A = d <= 1 ? R(15, 40) : R(30, 99), p = d <= 1 ? R(3, 9) : R(12, A - 5); return P('argent', `Tu as ${A} CHF. Tu achètes un arrosoir à ${p} CHF. Combien te reste-t-il ?`, A - p, 'CHF', `${A} − ${p} = ${A - p} CHF`); }],
   [3, 3, () => { const n = R(2, 6), p = R(2, 8), B = n * p < 20 ? 20 : n * p < 50 ? 50 : 100; return P('argent', `Tu achètes ${n} kg de pommes à ${p} CHF le kilo. Tu paies avec un billet de ${B} CHF. Combien te rend-on ?`, B - n * p, 'CHF', `${n} × ${p} = ${n * p} CHF. ${B} − ${n * p} = ${B - n * p} CHF`); }],
   [4, 4, () => { const p = pick([3.5, 2.5, 4.5, 1.5, 2.2, 3.4]), n = R(2, 6); return P('argent', `Un pain coûte ${chf(p)} CHF. Combien coûtent ${n} pains ?`, p * n, 'CHF', `${n} × ${chf(p)} = ${chf(p * n)} CHF`); }],
   [5, 5, () => { const kg = 3, p = pick([7.5, 9, 4.5, 6]), k = pick([5, 2, 4]); return P('argent', `${kg} kg de cerises coûtent ${chf(p)} CHF. Combien coûtent ${k} kg ?`, (p / kg) * k, 'CHF', `1 kg : ${chf(p)} ÷ ${kg} = ${chf(p / kg)} CHF. ${k} kg : ${chf(p / kg)} × ${k} = ${chf((p / kg) * k)} CHF`); }],
@@ -304,7 +329,7 @@ T.geo = [
   [5, 5, () => { const c = R(4, 12); return P('geo', `Un carré a un périmètre de ${4 * c} m. Quelle est son aire ?`, c * c, 'm²', `Côté : ${4 * c} ÷ 4 = ${c} m. Aire : ${c} × ${c} = ${c * c} m²`); }],
 ];
 T.longueur = [
-  [1, 3, (d) => { const a = d <= 1 ? R(4, 9) * 10 + R(5, 9) : d === 2 ? R(4, 9) * 10 + R(0, 4) : R(200, 900), b = d <= 1 ? R(1, Math.floor(a / 10) - 1) * 10 + R(0, a % 10) : d === 2 ? R(1, Math.floor(a / 10) - 1) * 10 + R(a % 10 + 1, 9) : R(50, a - 50); return P('longueur', `Le chemin jusqu’au lac mesure ${a} m. Tu as déjà marché ${b} m. Combien de mètres te reste-t-il ?`, a - b, 'm', `${a} − ${b} = ${a - b} m`); }],
+  [1, 3, (d) => { const a = d <= 1 ? R(4, 9) * 10 + R(5, 9) : d === 2 ? R(4, 9) * 10 + R(0, 4) : R(200, 900), b = d <= 1 ? R(2, 9) : d === 2 ? R(1, Math.floor(a / 10) - 1) * 10 + R(a % 10 + 1, 9) : R(50, a - 50); return P('longueur', `Le chemin jusqu’au lac mesure ${a} m. Tu as déjà marché ${b} m. Combien de mètres te reste-t-il ?`, a - b, 'm', `${a} − ${b} = ${a - b} m`); }],
   [2, 3, () => { const n = R(2, 6), q = R(12, 40); return P('longueur', `Une planche mesure ${n * q} cm. Tu la coupes en ${n} morceaux égaux. Combien mesure chaque morceau ?`, q, 'cm', `${n * q} ÷ ${n} = ${q} cm`); }],
   [3, 4, () => { const M = R(4, 12), w = pick([20, 25, 50]); return P('longueur', `Le pont mesure ${M} m de long. Chaque planche fait ${w} cm de large. Combien de planches faut-il ?`, (M * 100) / w, 'planches', `${M} m = ${M * 100} cm. ${M * 100} ÷ ${w} = ${(M * 100) / w} planches`); }],
   [4, 5, () => { const a = R(15, 45) / 10, b = R(25, 95); return P('longueur', `Tu as une corde de ${fmt(a)} m. Tu en coupes ${b} cm. Combien de cm reste-t-il ?`, a * 100 - b, 'cm', `${fmt(a)} m = ${fmt(a * 100)} cm. ${fmt(a * 100)} − ${b} = ${fmt(a * 100 - b)} cm`); }],
@@ -330,11 +355,11 @@ const FRUITS = [['pommes', 'pomme'], ['bananes', 'banane'], ['kiwis', 'kiwi'], [
 T.enigme = [
   // two steps: buy then change
   [1, 2, (d) => {
-    const k = pick(KIDS), n = R(2, 5), p = R(2, d <= 1 ? 4 : 8), A = n * p + R(2, 12);
+    const k = pick(KIDS), n = d <= 1 ? R(2, 3) : R(2, 5), p = R(2, d <= 1 ? 3 : 8), A = n * p + R(2, 12);
     return P('enigme', `${k} a ${A} CHF. ${k} achète ${n} cahiers à ${p} CHF chacun. Combien lui reste-t-il ?`, A - n * p, 'CHF', `${n} × ${p} = ${n * p} CHF. ${A} − ${n * p} = ${A - n * p} CHF`);
   }],
-  [1, 2, () => {
-    const k = pick(KIDS), b = R(3, 6), per = R(4, 9), g = R(2, b * per - 2);
+  [1, 2, (d) => {
+    const k = pick(KIDS), b = R(3, 6), per = R(4, 9), g = d <= 1 ? R(2, 9) : R(2, b * per - 2);
     return P('enigme', `${k} a ${b} sacs de ${per} billes. ${k} en donne ${g} à un copain. Combien de billes lui reste-t-il ?`, b * per - g, 'billes', `${b} × ${per} = ${b * per}. ${b * per} − ${g} = ${b * per - g} billes`);
   }],
   [1, 3, (d) => {
@@ -621,21 +646,27 @@ export const OP_NAMES = { add: 'additions', sub: 'soustractions', mul: 'multipli
  * op: force one operation (to ask an easier problem of the same kind). Calculation problems get p.op.
  */
 export function makeProblem(cat, d, opAdj = {}, op = null) {
-  d = Math.max(1, Math.min(5, Math.round(d)));
+  d = Math.max(-1, Math.min(7, Math.round(d)));
+  const p = makeOne(cat, d, opAdj, op);
+  if (d <= 0) p.aid = d; // levels 0 and −1: the hint is shown from the start (and the first step at −1)
+  return p;
+}
+function makeOne(cat, d, opAdj, op) {
   if (cat === 'calc' || cat === 'add' || cat === 'mul' || !cat) {
-    const pool = cat === 'add' ? [add, sub] : cat === 'mul' ? [mul, mul, div] : CALC_POOLS[d];
+    const pool = cat === 'add' ? [add, sub] : cat === 'mul' ? [mul, mul, div] : CALC_POOLS[Math.max(1, Math.min(5, d))];
     const fn = pick(pool);
     const name = op && OPS[op] ? op : Object.keys(OPS).find((k) => OPS[k] === fn);
-    const dd = Math.max(1, Math.min(5, Math.round(d + (opAdj[name] || 0))));
+    const dd = Math.max(-1, Math.min(name === 'add' || name === 'sub' ? 7 : 5, Math.round(d + (opAdj[name] || 0))));
     const p = OPS[name](dd);
     p.op = name;
     return p;
   }
+  d = Math.min(5, d);
   if (cat === 'frac') return frac(d);
   if (cat === 'conv') return conv(d);
-  if (NC[cat]) return NC[cat](Math.min(3, d));
-  if (T[cat]) return theme(cat, d);
-  return pick(CALC_POOLS[d])(d);
+  if (NC[cat]) return NC[cat](Math.min(3, Math.max(1, d)));
+  if (T[cat]) return theme(cat, Math.max(1, d));
+  return pick(CALC_POOLS[Math.max(1, d)])(d);
 }
 
 /** True if the typed answer matches. */
