@@ -1,7 +1,7 @@
 // La Vallée des Graines — main game: state, world loop, input, UI, farming, shop, crafting, battles.
 import { W, H, SOLID, TALL, buildWorld, zoneAt, plotPos, START, NPCS, WILD, PADDOCK } from './world.js';
 import {
-  CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed,
+  CROPS, PRODUCTS, ITEMS, RECIPES, BUILDINGS, TOOLS, WATER_FRAC, PLOT_BUYS, HATS, titleFor, MAX_LVL, xpNeed, OLD_XP_NEED, OLD_TO_NEW_LVL, GATE_LVL,
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
 import { gridSVG, gridKey } from './geo.js';
@@ -29,7 +29,7 @@ function fmtTime(ms) {
 const SAVE_KEY = 'vallee-graines-v1';
 function newState() {
   return {
-    v: 1, name: 'Thibault', coins: 25, xp: 0, lvl: 1,
+    v: 1, name: 'Thibault', coins: 25, xp: 0, lvl: 1, lvlV: 2,
     inv: { 'graine:radis': 4 },
     plots: Array.from({ length: 18 }, (_, i) => ({ u: i < 4, crop: null, at: 0, grow: 0, skip: 0, fert: false, wet: 0 })),
     plotBuys: 0,
@@ -50,6 +50,12 @@ function migrate(s) {
   if (s.skills && (s.skillsV || 0) < 3) { for (const sk of Object.values(s.skills)) { sk.sc = 0; sk.nl = 0; } }
   if (s.skills && (s.skillsV || 0) < 4) { for (const k of ['calc:add', 'calc:sub']) if (s.skills[k]) Object.assign(s.skills[k], { lv: 1, r: [], acq: 0, sc: 0, nl: 0 }); }
   s.skillsV = 4;
+  if (s.lvl && (s.lvlV || 1) < 2) {
+    const old = Math.min(s.lvl, 30), frac = Math.min(0.95, (s.xp || 0) / OLD_XP_NEED(old));
+    s.lvl = Math.min(MAX_LVL, OLD_TO_NEW_LVL[old] || old + 24);
+    s.xp = Math.round(frac * xpNeed(s.lvl));
+  }
+  s.lvlV = 2;
   // First version kept the objective as an index: turn it into the list of finished ones.
   if (typeof s.obj === 'number' && !s.objDone) { s.objDone = {}; OLD_OBJECTIVE_ORDER.slice(0, s.obj).forEach((id) => (s.objDone[id] = 1)); delete s.obj; }
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
@@ -520,6 +526,8 @@ function onStep() {
 const has = (id, n = 1) => (S.inv[id] || 0) >= n;
 function addItem(id, n = 1) { S.inv[id] = (S.inv[id] || 0) + n; if (S.inv[id] <= 0) delete S.inv[id]; }
 function addCoins(n) { if (!n) return; S.coins += n; if (n > 0) { floatHud('+' + n, 'coin'); sfx.coin(); } updateHud(); }
+/** Reward step: the old levels were about twice as short, so rewards follow half the level. */
+const tier = () => Math.ceil(S.lvl / 2);
 function addXP(n) {
   if (!n) return;
   S.xp += n;
@@ -734,7 +742,21 @@ function levelUp(L) {
   const prevTitle = titleFor(L - 1), t = titleFor(L);
   if (t !== prevTitle) lines.unshift(`Nouveau titre : ${t} !`);
   const nx = nextUnlock(L);
-  celebrate({ title: `Niveau ${L} !`, lines: lines.length ? lines : ['Tu deviens plus fort !'], icons: u.map((x) => x.icon).filter(Boolean), foot: nx ? `Prochain : ${nx}` : null, kind: 'level' });
+  const icons = u.map((x) => x.icon).filter(Boolean);
+  const gift = 10 + 5 * L;
+  S.coins += gift;
+  lines.push(`Cadeau : ${gift} pièces`);
+  icons.push(A.coinURL());
+  if (!u.length) {
+    // a level with nothing new to open: seeds of the best crop so far (and fertilizer every 5 levels)
+    const seeds = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= L);
+    const seed = seeds[seeds.length - 1], q = 2 + (L % 3);
+    addItem('graine:' + seed, q);
+    lines.push(`${q} ${CROPS[seed].seedName.toLowerCase()}`);
+    icons.push(A.iconURL('graine:' + seed));
+    if (L % 5 === 0) { addItem('engrais', 2); lines.push('2 engrais'); icons.push(A.iconURL('engrais')); }
+  }
+  celebrate({ title: `Niveau ${L} !`, lines, icons, foot: nx ? `Prochain : ${nx}` : null, kind: 'level' });
 }
 const curObj = () => OBJECTIVES.find((o) => !S.objDone[o.id]) || OBJECTIVES[OBJECTIVES.length - 1];
 function checkObjectives() {
@@ -1296,8 +1318,8 @@ function plant(i, crop, fert) {
 function waterCat() {
   const r = Math.random();
   if (r >= 0.75) return pick(['coord', 'sym', 'angles', 'figures']); // a garden map, a symmetrical flower bed, shapes…
-  if (S.lvl >= 4 && r < 0.2) return 'conv';
-  if (S.lvl >= 3 && r < 0.4) return 'frac';
+  if (S.lvl >= 9 && r < 0.2) return 'conv';
+  if (S.lvl >= 5 && r < 0.4) return 'frac';
   return 'calc';
 }
 function water(i, frac) {
@@ -1444,10 +1466,10 @@ async function shopPanel() {
             if (buy(bb.price)) { S.barnSlots += 2; toast('L’Étable est plus grande !', 'green'); afterChange(); api.refresh(); }
           } }, coinImg('coin sm'), ` ${bb.price}`)));
       }
-      const eLocked = S.lvl < 5;
+      const eLocked = S.lvl < 10;
       list.append(h('div', { class: 'row' + (eLocked ? ' locked' : '') }, icon('engrais'),
         h('div', { class: 'row-main' }, h('b', null, 'Engrais'), h('small', null, `Double la récolte d’une plante. Tu en as ${S.inv.engrais || 0}.`)),
-        eLocked ? h('span', { class: 'lock' }, 'Niv. 5') : h('button', { class: 'btn sm', onclick: () => { if (buy(30)) { addItem('engrais', 1); afterChange(); api.refresh(); } } }, coinImg('coin sm'), ' 30')));
+        eLocked ? h('span', { class: 'lock' }, 'Niv. 10') : h('button', { class: 'btn sm', onclick: () => { if (buy(30)) { addItem('engrais', 1); afterChange(); api.refresh(); } } }, coinImg('coin sm'), ' 30')));
       for (const t of TOOLS) {
         const owned = toolOwned(t);
         const needPrev = t.id === 'arrosoir' && S.tools.arrosoir < t.tier - 1;
@@ -1817,18 +1839,18 @@ async function onMailbox() {
   S.daily.mail = today();
   const seedPool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
   const seed = pick(seedPool.slice(-3));
-  const coins = (r.ok ? 30 : 15) + S.lvl * (r.ok ? 8 : 4);
+  const coins = (r.ok ? 30 : 15) + tier() * (r.ok ? 8 : 4);
   const q = r.ok ? 4 : 2;
   addItem('graine:' + seed, q);
   S.coins += coins;
-  if (r.ok && S.lvl >= 5) addItem('engrais', 1);
+  if (r.ok && S.lvl >= 10) addItem('engrais', 1);
   sfx.coin();
-  await celebrate({ title: 'Cadeau du jour', lines: [`${coins} pièces`, `${q} ${CROPS[seed].seedName.toLowerCase()}`, r.ok && S.lvl >= 5 ? '1 engrais' : null].filter(Boolean), icons: [A.coinURL(), A.iconURL('graine:' + seed)] });
+  await celebrate({ title: 'Cadeau du jour', lines: [`${coins} pièces`, `${q} ${CROPS[seed].seedName.toLowerCase()}`, r.ok && S.lvl >= 10 ? '1 engrais' : null].filter(Boolean), icons: [A.coinURL(), A.iconURL('graine:' + seed)] });
 }
 async function onFountain() {
   if (S.daily.wish === today()) return say('L’eau de la fontaine scintille. Reviens demain faire un vœu !');
   S.daily.wish = today();
-  const c = R(5, 15) + S.lvl * 2;
+  const c = R(5, 15) + tier() * 2;
   S.coins += c; sfx.coin();
   return say(`Tu fais un vœu… et tu trouves ${c} pièces au fond de la fontaine !`);
 }
@@ -1867,7 +1889,7 @@ async function onOwl() {
     const score = await series(null, 5, 1, 'Défi du jour', true);
     if (score !== null) S.daily.hibou = today();
     if (score >= 4) {
-      const c = 80 + S.lvl * 10;
+      const c = 80 + tier() * 10;
       S.coins += c; addItem('engrais', 2); addXP(50);
       await celebrate({ sound: 'fanfare', title: 'Défi réussi !', lines: [`${score}/5 bonnes réponses`, `+${c} pièces, +2 engrais, +50 XP`], icons: [A.coinURL(), A.iconURL('engrais')] });
     } else if (score !== null) await say(`${score}/5. Pas mal ! Tu pourras retenter demain. Continue à t’entraîner !`, who);
@@ -1988,13 +2010,13 @@ async function reviewRewards(cat, score, n, won) {
   if (score >= 3) {
     const pool = Object.keys(CROPS).filter((k) => !CROPS[k].rare && CROPS[k].lvl <= S.lvl);
     let seed = pick(pool.slice(-4)), q = R(2, 3);
-    if (score === n && S.lvl >= 8 && Math.random() < 0.15) { seed = pick(['melon', 'lune']); q = 1; }
+    if (score === n && S.lvl >= 20 && Math.random() < 0.15) { seed = pick(['melon', 'lune']); q = 1; }
     addItem('graine:' + seed, q);
     lines.push(`Sachet surprise : ${q} × ${CROPS[seed].seedName.toLowerCase()}`);
     icons.push(A.iconURL('graine:' + seed));
   }
   if (score === n) {
-    const bonus = 40 + S.lvl * 8;
+    const bonus = 40 + tier() * 8;
     S.coins += bonus; addItem('engrais', 1);
     S.stats.perfectReviews = (S.stats.perfectReviews || 0) + 1;
     lines.push(`Sans faute ! Bonus : +${bonus} pièces et 1 engrais`);
@@ -2017,7 +2039,7 @@ async function reviewRewards(cat, score, n, won) {
 
 // ---- Gates
 async function onBigRock() {
-  if (S.lvl < 3) return say(['Un énorme rocher bloque le chemin de la forêt.', 'Reviens au niveau 3 : tu seras assez fort pour le casser ! (Tu es niveau ' + S.lvl + '.)']);
+  if (S.lvl < GATE_LVL.rock) return say(['Un énorme rocher bloque le chemin de la forêt.', `Reviens au niveau ${GATE_LVL.rock} : tu seras assez fort pour le casser ! (Tu es niveau ${S.lvl}.)`]);
   if (!(await confirm('Un énorme rocher… Tu es assez fort pour le casser ! Il faut réussir 3 problèmes de suite.', 'Casser le rocher', 'Plus tard'))) return;
   const rk = await askSeries(['mul', 'mul', 'enigme'], 'Casser le rocher');
   if (!rk.all) return say('Le rocher tient bon. Réessaie, tu vas y arriver !');
@@ -2027,7 +2049,7 @@ async function onBigRock() {
   await celebrate({ sound: 'discover', title: 'Le chemin est ouvert !', lines: ['La Forêt des Murmures t’attend à l’ouest.', 'Tu y trouveras du bois, des pierres, des coffres… et des créatures !'] });
 }
 async function onBridge() {
-  if (S.lvl < 6) return say(['Le pont du lac est cassé.', 'Au niveau 6, tu pourras le réparer avec 10 bois et 5 pierres. (Tu es niveau ' + S.lvl + '.)']);
+  if (S.lvl < GATE_LVL.bridge) return say(['Le pont du lac est cassé.', `Au niveau ${GATE_LVL.bridge}, tu pourras le réparer avec 10 bois et 5 pierres. (Tu es niveau ${S.lvl}.)`]);
   if (!has('bois', 10) || !has('pierre', 5)) return say([`Pour réparer le pont, il faut 10 bois et 5 pierres.`, `Tu as ${S.inv.bois || 0} bois et ${S.inv.pierre || 0} pierres. La forêt en est pleine !`]);
   if (!(await confirm('Réparer le pont avec 10 bois et 5 pierres ? Il faut calculer les planches !', 'Réparer', 'Plus tard'))) return;
   const r = await askSeries(['longueur', 'enigme'], 'Réparer le pont');
@@ -2041,7 +2063,7 @@ async function onGuardian() {
   const who = 'Gardien du Mont';
   npcDir.guardian = 'left';
   if (S.flags.guardian) return say(pick(['Les cristaux brillent près des rochers. Bonne chance là-haut !', 'Les créatures de la montagne sont coriaces. Garde ta série !']), who);
-  if (S.lvl < 10) return say(['Halte ! Le Mont Givré est dangereux.', `Seuls les calculateurs de niveau 10 peuvent passer. Tu es niveau ${S.lvl}. Reviens plus tard !`], who);
+  if (S.lvl < GATE_LVL.guardian) return say(['Halte ! Le Mont Givré est dangereux.', `Seuls les calculateurs de niveau ${GATE_LVL.guardian} peuvent passer. Tu es niveau ${S.lvl}. Reviens plus tard !`], who);
   if (!(await confirm('Tu veux passer ? Réussis 4 problèmes difficiles de suite !', 'J’accepte le défi', 'Plus tard', who))) return;
   const gd = await askSeries(['frac', 'conv', pick(['masse', 'contenance', 'duree', 'geo', 'angles']), 'enigme'], 'Défi du gardien', true, 1);
   if (!gd.all) return say('Pas encore… Entraîne-toi et reviens me voir !', who);
@@ -2051,7 +2073,7 @@ async function onGuardian() {
 }
 async function onAncient() {
   const who = 'Vieil Arbre';
-  if (S.lvl < 14) return say(['Un arbre immense dort ici. Il ronfle doucement…', 'Peut-être se réveillera-t-il quand tu seras niveau 14.']);
+  if (S.lvl < GATE_LVL.arbre) return say(['Un arbre immense dort ici. Il ronfle doucement…', `Peut-être se réveillera-t-il quand tu seras niveau ${GATE_LVL.arbre}.`]);
   const first = !S.flags.arbre;
   const need = first ? 3 : 2;
   if (!first && S.daily.arbre === today()) return say('Hmmm… Je t’ai déjà donné une graine aujourd’hui. Reviens demain, petit jardinier.', who);
@@ -2124,7 +2146,7 @@ async function onFish() {
   if (r.quit) return;
   if (!r.ok) return say('Le poisson s’est échappé…');
   const big = r.firsts === 1; // right the first time: the big fish can bite
-  const table = [['gardon', 40], ['perche', 30], ['truite', big && S.lvl >= 7 ? 18 : 0], ['brochet', big && S.lvl >= 9 ? 10 : 0], ['carpe', S.lvl >= 11 && big ? 4 : 0]];
+  const table = [['gardon', 40], ['perche', 30], ['truite', big && S.lvl >= 14 ? 18 : 0], ['brochet', big && S.lvl >= 18 ? 10 : 0], ['carpe', S.lvl >= 24 && big ? 4 : 0]];
   const tot = table.reduce((s, [, w]) => s + w, 0);
   let x = Math.random() * tot, fish = 'gardon';
   for (const [id, w] of table) { if ((x -= w) < 0) { fish = id; break; } }
@@ -2349,7 +2371,7 @@ const ZONE_BG = {
 };
 function encounterFor(zone) {
   let list = CREATURE_ORDER.filter((id) => CREATURES[id].zone === zone && !CREATURES[id].rare);
-  if (zone === 'montagne' && S.lvl >= 12 && Math.random() < 0.08) return 'cristallon';
+  if (zone === 'montagne' && S.lvl >= 28 && Math.random() < 0.08) return 'cristallon';
   if (!list.length) list = ['lapinou'];
   return pick(list);
 }
@@ -2490,7 +2512,7 @@ function drawObject(o, X, Y, t) {
     case 'owl': return A.drawOwl(ctx, X, Y, t);
     case 'bigrock': return A.drawBigRock(ctx, X, Y);
     case 'brokenbridge': return A.drawBrokenBridge(ctx, X, Y);
-    case 'ancient': return A.drawAncient(ctx, X, Y, t, S.lvl >= 14);
+    case 'ancient': return A.drawAncient(ctx, X, Y, t, S.lvl >= GATE_LVL.arbre);
     case 'tree': return A.drawChopTree(ctx, X, Y, respawning(o));
     case 'rock': return A.drawRock(ctx, X, Y, respawning(o));
     case 'forage': return A.drawBush(ctx, X, Y, o.kind, respawning(o));
@@ -2810,7 +2832,7 @@ requestAnimationFrame(loop);
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
   get audio() { return { state: AC && AC.state, key: music.key, gain: music.gain && music.gain.gain.value, pos: music.pos }; }, sfx,
-  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel, say, choose },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel, say, choose, addXP },
   ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
   world, pl, walkable, objById, objAt: () => objAt };

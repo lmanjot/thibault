@@ -510,12 +510,12 @@ export function drawPerson(g, x, y, dir, frame, look) {
 function drawTool(g, id) {
   const k = id.slice(5);
   if (k.startsWith('arrosoir')) {
-    const c = { arrosoir: '#6aa0d8', arrosoir1: '#d07a40', arrosoir2: '#c8d0dc', arrosoir3: '#f8c830' }[k] || '#6aa0d8';
+    const c = { arrosoir: '#6aa0d8', arrosoir1: '#d07a40', arrosoir2: '#c8d0dc', arrosoir3: '#f8c830', arrosoir4: '#8ae8ff' }[k] || '#6aa0d8';
     const d = shade(c, -0.35);
     rect(g, 3, 7, 8, 7, d); rect(g, 4, 8, 6, 5, c); rect(g, 4, 8, 2, 4, shade(c, 0.4));
     for (let i = 0; i < 4; i++) rect(g, 11 + i, 9 - i, 1, 2, d);
     rect(g, 14, 4, 2, 2, d); rect(g, 5, 3, 4, 1, d); rect(g, 4, 4, 1, 3, d); rect(g, 9, 4, 1, 3, d);
-    if (k === 'arrosoir3') { rect(g, 1, 2, 1, 3, '#fff8b0'); rect(g, 0, 3, 3, 1, '#fff8b0'); }
+    if (k === 'arrosoir3' || k === 'arrosoir4') { rect(g, 1, 2, 1, 3, '#fff8b0'); rect(g, 0, 3, 3, 1, '#fff8b0'); }
     return;
   }
   switch (k) {
