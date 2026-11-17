@@ -472,6 +472,7 @@ const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const held = [];
 let mode = 'title'; // title | world
 const layers = [];
+let activeMath = null; // the problem being answered (A answers it)
 const npcDir = {};
 
 function playerLook() {
@@ -772,9 +773,17 @@ function pushLayer(el, handlers = {}) {
   ui.append(el);
   const L = { el, ...handlers };
   layers.push(L);
+  syncTouchButtons();
   return L;
 }
-function popLayer(L) { L.el.remove(); const i = layers.indexOf(L); if (i >= 0) layers.splice(i, 1); }
+function popLayer(L) { L.el.remove(); const i = layers.indexOf(L); if (i >= 0) layers.splice(i, 1); syncTouchButtons(); }
+// A and B sit above the popups (dialogs, menus, celebrations, lessons). Over a question or a panel they would
+// cover its keypad or buttons on a narrow screen, so there they hide (the child taps directly, ✕ closes a panel).
+function syncTouchButtons() {
+  const top = layers[layers.length - 1];
+  const covers = !!activeMath || !!(top && top.el.querySelector(':scope > .panel'));
+  document.documentElement.classList.toggle('ab-covers', covers);
+}
 
 // ---- HUD
 const hud = h('div', { class: 'hud' });
@@ -1042,7 +1051,7 @@ function askOnce(opts) {
       sfx.blip(); paint();
     }
     function finish(res) {
-      if (activeMath === mathA) activeMath = null;
+      if (activeMath === mathA) { activeMath = null; syncTouchButtons(); }
       document.removeEventListener('keydown', onDocKey, true);
       if (L) popLayer(L); else box.remove();
       resolve({ ...res, d: dUsed });
@@ -1151,6 +1160,7 @@ function askOnce(opts) {
       if (b && !b.disabled) submit(p.choices[csel]);
     } };
     activeMath = mathA;
+    syncTouchButtons();
     let L = null;
     if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }
     else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true, math: true });
@@ -1159,7 +1169,6 @@ function askOnce(opts) {
   });
 }
 
-let activeMath = null;
 /** The first step of the worked solution, as long as it does not give the answer away. */
 function firstStep(p) {
   if (p.choices || p.grid || !p.ex) return null;

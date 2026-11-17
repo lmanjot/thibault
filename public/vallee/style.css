@@ -526,3 +526,7 @@ button.row:hover { background: #f1f4ff; }
 
 /* numbers in the interface: the reading font (the pixel 5 looks like an S) */
 .num { font-family: var(--read); font-weight: 700; letter-spacing: 0; }
+
+/* A and B above the popups (they used to sit under them, so taps landed on the popup) */
+.tctl { z-index: 55; }
+@media (max-width: 899px) { .ab-covers .tctl { visibility: hidden; } }
