@@ -74,6 +74,7 @@ export interface Progress {
   albumNew?: string[]; // legends not seen in the album yet
   albumBase?: Record<string, number>; // rounds each letter had finished when the album started: won back as catch-ups
   albumV?: number; // album version (an older album starts again empty)
+  albumDefi?: string[]; // legends won with the parent's challenge (one per challenge won well)
 }
 
 /** A boss fight earned by reading: after each cleared letter, and a revision every few letters. */
@@ -219,7 +220,27 @@ export function applySession(s: Save, answers: { item: string; ok: boolean }[], 
 export const ROUND_DONE = [CLEARED, CLEARED + 3, MASTERED];
 
 /** Every legend won so far. */
-export const albumOwned = (s: Save): string[] => Object.values(s.progress.album ?? {}).flat().filter((x): x is string => !!x);
+export const albumOwned = (s: Save): string[] => [
+  ...Object.values(s.progress.album ?? {}).flat().filter((x): x is string => !!x),
+  ...(s.progress.albumDefi ?? []),
+];
+
+/** Right answers needed in the parent's challenge to win a friend. */
+export const DEFI_FRIEND_SCORE = 0.8;
+
+/**
+ * The parent's challenge on the important letters, won well: a friend joins (the next one of the
+ * album), so working the old letters the parent picked pays as much as a new letter. Changes the save.
+ */
+export function winDefiFriend(s: Save): Legend | undefined {
+  migrateAlbum(s);
+  const used = new Set(albumOwned(s));
+  const l = LEGENDS.find((x) => x.tier === "round" && !used.has(x.id)) ?? LEGENDS.find((x) => !used.has(x.id));
+  if (!l) return undefined;
+  s.progress.albumDefi = [...(s.progress.albumDefi ?? []), l.id];
+  s.progress.albumNew = [...(s.progress.albumNew ?? []), l.id];
+  return l;
+}
 
 /** Rounds a letter has finished: 0 (none) to 3 (silver, gold and diamond). */
 const roundsDone = (s: Save, g: string) => (isCleared(s, g) ? 1 + ROUND_DONE.slice(1).filter((lv) => level(s, gid(g)) >= lv).length : 0);

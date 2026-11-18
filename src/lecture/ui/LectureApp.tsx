@@ -17,6 +17,8 @@ import {
   applySession,
   fillAlbum,
   migrateAlbum,
+  winDefiFriend,
+  DEFI_FRIEND_SCORE,
   clearedList,
   isCleared,
   starsFor,
@@ -229,8 +231,11 @@ function Game({ fontClass }: { fontClass: string }) {
     }
     // Each round finished on a letter (silver, gold, diamond) brings a legend into the album; the
     // last one comes along on the home screen right away. Old saves get theirs the first time.
-    const won = fillAlbum(s, r.answers, worked);
-    const legend = won[won.length - 1]?.legend;
+    const won = fillAlbum(s, r.answers, worked).map((w) => w.legend);
+    // The parent's challenge on the important letters, won well: one more friend.
+    const defiFriend = fight?.target && r.total > 0 && r.ok / r.total >= DEFI_FRIEND_SCORE ? winDefiFriend(s) : undefined;
+    if (defiFriend) won.push(defiFriend);
+    const legend = won[won.length - 1];
     if (legend) s.progress.equip = { ...(s.progress.equip ?? {}), companion: legend.id };
     const stars = starsFor(r.ok, r.total);
     // Not a single mistake: blue stars, and the secret game (after training or a letters challenge).
@@ -248,7 +253,7 @@ function Game({ fontClass }: { fontClass: string }) {
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
     }
     update(s);
-    setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret, friends: won.map((w) => w.legend.id) });
+    setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret, friends: won.map((l) => l.id) });
     if (medal || perfect || legend) sfx.power();
     const friendLine = legend ? [L.newFriend, legend.name] : [];
     speak(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ASSET, type Form } from "../content";
 import { roundOf, ROUNDS } from "../engine";
 
@@ -245,9 +246,18 @@ export function FighterPicker({
   current?: string;
   onPick: (id?: string) => void;
 }) {
+  const row = useRef<HTMLDivElement>(null);
+  // Many friends: the chosen one is brought into view.
+  useEffect(() => {
+    const el = row.current;
+    const on = el?.querySelector<HTMLElement>(".is-on");
+    if (!el || !on) return;
+    const r = on.getBoundingClientRect();
+    el.scrollLeft += r.left - el.getBoundingClientRect().left - (el.clientWidth - r.width) / 2; // only this row moves
+  }, [current]);
   if (options.length < 2) return null;
   return (
-    <div className="lz-fighters" role="radiogroup" aria-label="Combattant">
+    <div className="lz-fighters" role="radiogroup" aria-label="Combattant" ref={row}>
       {options.map((f) => (
         <button
           key={f.id ?? "goku"}

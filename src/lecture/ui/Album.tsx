@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { ASSET, GRAPHEME, LEGENDS } from "../content";
-import { albumOwned, fillAlbum, isCatchup, type Save } from "../engine";
+import { activeTarget, albumOwned, fillAlbum, isCatchup, type Save } from "../engine";
 import { sfx, speak } from "../audio";
 import { formStep, ITEM, ITEMS, owns } from "../shop";
 import { Icon, Zeni } from "./bits";
@@ -33,6 +33,8 @@ export function Album({ save, onChange, onClose, onShop }: { save: Save; onChang
   const owned = albumOwned(view).length + bought.length;
   const kid = formStep(save) < 4;
   const companion = save.progress.equip?.companion;
+  const defiFriends = view.progress.albumDefi ?? [];
+  const target = activeTarget(save);
 
   function pick(id: string) {
     const l = ITEM[id];
@@ -100,6 +102,33 @@ export function Album({ save, onChange, onClose, onShop }: { save: Save; onChang
           );
         })}
       </div>
+      {/* Friends won with the parent's challenge on the important letters (one per challenge won well). */}
+      {(defiFriends.length > 0 || target) && (
+        <>
+          <h3 className="lz-album-sub">Amis du défi</h3>
+          <div className="lz-album-shop">
+            {defiFriends.map((id) => {
+              const l = ITEM[id];
+              return l?.img ? (
+                <button
+                  key={id}
+                  className={`lz-album-slot is-diamant is-won ${fresh.has(id) ? "is-fresh" : ""} ${companion === id ? "is-on" : ""}`}
+                  onClick={() => pick(id)}
+                  aria-label={l.name}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ASSET(l.img)} alt="" draggable={false} />
+                </button>
+              ) : null;
+            })}
+            {target && (
+              <span className="lz-album-slot is-diamant is-catchup" aria-label="Le prochain : gagne le défi">
+                <Icon name="fist" size={30} />
+              </span>
+            )}
+          </div>
+        </>
+      )}
       <h3 className="lz-album-sub">Amis de la boutique</h3>
       <div className="lz-album-shop">
         {shopFriends.map((i) => {
