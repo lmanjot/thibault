@@ -5,7 +5,7 @@ import {
   GATES, CREATURES, CREATURE_ORDER, CHESTS, CUSTOMERS, OBJECTIVES, BADGES, ANIMALS, BARN_BUYS, OLD_OBJECTIVE_ORDER,
 } from './data.js';
 import { gridSVG, gridKey } from './geo.js';
-import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS } from './math.js';
+import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS, FR_SKILLS, FR_GROUPS } from './math.js';
 import * as A from './art.js';
 import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
 
@@ -559,11 +559,22 @@ function fixedLevel(cat) {
   const c = (S.settings.cats || {})[mKey(cat)];
   return c && typeof c.lvl === 'number' ? c.lvl : null;
 }
-const themeOn = (cat) => !((S.settings.cats || {})[mKey(cat)] || {}).off;
+// French modules (fr:…) are off until the parents switch them on; the other themes are on until switched off.
+const isFr = (k) => typeof k === 'string' && k.startsWith('fr:');
+const themeOn = (cat) => { const c = (S.settings.cats || {})[mKey(cat)] || {}; return isFr(cat) ? !!c.on : !c.off; };
+const frOn = () => FR_SKILLS.filter((k) => themeOn(k));
+/** How often French comes up in the game: 2 one question in 3 · 1 one in 6 · 0 only in Léa's workshop. */
+/** Share of French in normal play, set by the parents: 0 only at Léa's, then 1 in 6, 1 in 4 (default), 1 in 2, 2 in 3. */
+const FR_SHARE = [['Seulement chez Léa', 'seulement chez Léa'], ['Un peu (1 sur 6)', '1 question sur 6'], ['Équilibré (1 sur 4)', '1 question sur 4'],
+  ['Moitié-moitié (1 sur 2)', '1 question sur 2'], ['Surtout du français (2 sur 3)', '2 questions sur 3']];
+const frMix = () => S.settings.frShare ?? 2;
+const inRotation = (k) => !isFr(k) || frMix() > 0;
+/** A French module, the ones still being learned more often. */
+const frPick = (list = frOn()) => wpick(list, (k) => (isAcquis(k) ? 1 : 3));
 /** The theme to ask: the requested one, or another switched-on theme if the parents turned it off. */
 function themeFor(cat) {
   if (!cat || themeOn(cat)) return cat;
-  const on = liveCats();
+  const on = liveCats().filter(inRotation);
   if (!on.length) return cat;
   return on.includes('calc') && Math.random() < 0.5 ? 'calc' : pick(on);
 }
@@ -573,13 +584,14 @@ function themeFor(cat) {
 // 3 misses out of the last 4: one level down. The ceiling is higher in « Dur » mode and moves with the overall difficulty.
 const CALC_OPS = ['add', 'sub', 'mul', 'div', 'mental'];
 const NEW_ORDER = Object.keys(NEW_CONCEPTS);
-const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme'];
+const BASE_SKILLS = [...CALC_OPS.map((o) => 'calc:' + o), 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme', ...FR_SKILLS];
 // Ceiling [Normal, Dur]: e.g. subtractions stop at 3-digit numbers with borrowing in Normal mode. Themes not listed: [3, 4].
 // Additions and subtractions have 7 small steps, everything else 5.
 const MIN_LV = -1; // below level 1: easier problems (or level 1 with the hint shown) so a child who struggles does not give up
 const lvTxt = (lv) => (lv < 0 ? '−' + -lv : String(lv));
 const maxLv = (key) => (key === 'calc:add' || key === 'calc:sub' ? 7 : 5);
 const CAPS = { 'calc:add': [6, 7], 'calc:sub': [6, 7], 'calc:mul': [3, 4], 'calc:div': [4, 5], 'calc:mental': [3, 4], enigme: [4, 5] };
+for (const k of FR_SKILLS) CAPS[k] = [4, 5]; // French: 4 = long sentences of 7H, 5 = the 8H cases
 const isCalc = (cat) => !cat || cat === 'calc' || cat === 'add' || cat === 'mul';
 const keyOf = (cat, op) => (op ? 'calc:' + op : mKey(cat));
 const catOf = (key) => (key.startsWith('calc:') ? 'calc' : key);
@@ -634,17 +646,22 @@ function pickSkill(reqCat, op, noSwap) {
   if (!noSwap) {
     const fresh = unlockedConcepts().filter((k) => themeOn(k) && skillOf(k).n < 5);
     // themes hardly tried yet (fewer than 3 questions) come up now and then, so the child meets them all early
-    const untried = BASE_SKILLS.filter((k) => themeOn(catOf(k)) && (((S.skills || {})[k] || {}).n || 0) < 3);
+    const untried = BASE_SKILLS.filter((k) => themeOn(catOf(k)) && inRotation(k) && (((S.skills || {})[k] || {}).n || 0) < 3);
     if (fresh.length && Math.random() < 0.3) key = pick(fresh);
     else if (untried.length && Math.random() < 0.15) key = pick(untried);
+    // French switched on: no French in the last 5 / 3 / 1 questions (1 in 6, 1 in 4, 1 in 2) → this one is French;
+    // « surtout du français »: French unless the last 2 already were (2 in 3)
+    const fr = frOn(), mix = frMix(), gap = [0, 5, 3, 1, 0][mix] ?? 3;
+    const frTurn = mix >= 4 ? !(recentSkills.length >= 2 && recentSkills.slice(-2).every(isFr)) : recentSkills.length >= gap && !recentSkills.slice(-gap).some(isFr);
     // no geometry in the last 5 questions: this one is, from the geometry theme practised least
     const geo = GEO_SKILLS.filter((k) => themeOn(k));
-    if (geo.length && !geo.includes(key) && recentSkills.length >= 5 && !recentSkills.slice(-5).some((k) => GEO_SKILLS.includes(k))) {
+    if (fr.length && mix > 0 && !isFr(key) && frTurn) key = frPick(fr);
+    else if (geo.length && !geo.includes(key) && recentSkills.length >= 5 && !recentSkills.slice(-5).some((k) => GEO_SKILLS.includes(k))) {
       const n = (k) => ((S.skills || {})[k] || {}).n || 0, least = Math.min(...geo.map(n));
       key = pick(geo.filter((k) => n(k) === least));
     }
     else if (isAcquis(key) && Math.random() < 0.7) {
-      const alt = liveSkills().filter((k) => !isAcquis(k));
+      const alt = liveSkills().filter((k) => !isAcquis(k) && inRotation(k));
       if (alt.length) key = wpick(alt, (k) => (isNew(k) ? 3 : 1));
     }
   }
@@ -657,7 +674,7 @@ function checkConcepts() {
   if (got.length >= NEW_ORDER.length) return;
   const prev = got[got.length - 1];
   if (prev && themeOn(prev) && skillOf(prev).n < 8) return;
-  const acq = [...BASE_SKILLS, ...got].filter(isAcquis).length;
+  const acq = [...BASE_SKILLS.filter((k) => !isFr(k)), ...got].filter(isAcquis).length; // French does not open the 8H maths
   if (acq < (S.settings.grade === 8 ? 3 : 4) + got.length) return;
   const k = NEW_ORDER.find((c) => !S.concepts[c]);
   S.concepts[k] = now();
@@ -670,6 +687,8 @@ const LEVEL_MIN_Q = 8, LEVEL_UP = 6, LEVEL_DOWN = -2.5;
 function slowMs(key, lv) {
   lv = Math.max(1, lv);
   if (key === 'calc:mental') return (8 + 3 * lv) * 1000;
+  if (key === 'fr:relire') return (18 + 5 * lv) * 1000; // a long sentence to read word by word
+  if (isFr(key)) return (12 + 4 * lv) * 1000;
   if (opOf(key)) return (12 + 5 * lv) * 1000;
   if (key === 'frac' || key === 'conv' || key === 'arrondi' || key === 'priorites' || key === 'decimaux' || key === 'fracplus') return (18 + 6 * lv) * 1000;
   return (30 + 10 * lv) * 1000; // word problems
@@ -709,7 +728,7 @@ function showLesson(key, intro) {
   return new Promise((resolve) => {
     if (!les) { resolve(); return; }
     const card = h('div', { class: 'lesson win' },
-      h('div', { class: 'les-tag' }, intro ? `Nouvelle notion · ${CATS[key] || ''}` : 'Leçon de Maître Hibou'),
+      h('div', { class: 'les-tag' }, intro ? `${isFr(key) ? 'Français' : 'Nouvelle notion'} · ${CATS[key] || ''}` : isFr(key) ? 'Leçon de Léa' : 'Leçon de Maître Hibou'),
       h('h2', null, les.title),
       h('div', { class: 'les-lines' }, les.lines.map((l) => h('p', { html: renderQ(l) }))),
       h('div', { class: 'les-ex' }, h('b', null, 'Exemple'), les.ex.map((l) => h('p', { html: renderQ(l) }))),
@@ -981,8 +1000,8 @@ async function askMath(opts) {
     const sk = pickSkill(o.cat, o.op, o.noSwap);
     o = { ...o, cat: sk.cat, op: sk.op, key: sk.key };
     recentSkills.push(sk.key); if (recentSkills.length > 12) recentSkills.shift();
-    // the first time a new 8H notion comes up, Maître Hibou explains it
-    if (isNew(sk.key) && !(S.lessons || {})[sk.key]) {
+    // the first time a new 8H notion (or a French module) comes up, its lesson comes first
+    if ((isNew(sk.key) || isFr(sk.key)) && !(S.lessons || {})[sk.key]) {
       S.lessons = S.lessons || {};
       S.lessons[sk.key] = now(); save();
       await showLesson(sk.key, true);
@@ -1048,9 +1067,12 @@ function askOnce(opts) {
     const ansVal = h('span', { class: 'm-val' });
     const gridOn = !!(p.grid && p.grid.mode !== 'none'); // the answer is given by tapping the grid
     if (p.fig || (p.grid && !gridOn)) qEl.append(h('div', { class: 'm-fig', html: p.fig || gridSVG(p.grid) }));
-    const ansRow = p.choices || gridOn ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
+    // the values to pick from: the choices, or the words of the sentence (their index) when a misspelled word is to be tapped
+    const choiceVals = p.choices || (p.words ? p.words.map((_, i) => String(i)) : null);
+    const ansRow = choiceVals || gridOn ? null : h('div', { class: 'm-ans' }, ansVal, p.u ? h('span', { class: 'm-unit' }, p.u) : null);
     const fb = h('div', { class: 'm-fb' });
-    const pad = h('div', { class: p.choices ? 'm-choices' : gridOn ? 'm-gridpad' : 'm-pad' });
+    const longChoice = !!(p.choices && p.choices.some((c) => String(c).length > 12));
+    const pad = h('div', { class: p.words ? 'm-choices m-words' : p.choices ? 'm-choices' + (longChoice ? ' m-long' : '') : gridOn ? 'm-gridpad' : 'm-pad' });
     let gsel = new Set(), gbad = new Set(), gsol = new Set();
     const gridWrap = gridOn ? h('div', { class: 'm-grid' }) : null;
     const paintGrid = () => { if (gridWrap) gridWrap.innerHTML = gridSVG(p.grid, { sel: gsel, bad: gbad, sol: gsol }); };
@@ -1091,8 +1113,8 @@ function askOnce(opts) {
     }
     function submit(val) {
       if (locked) return;
-      if (!p.choices && !gridOn && !input) return;
-      const ok = checkAnswer(p, p.choices || gridOn ? val : input);
+      if (!choiceVals && !gridOn && !input) return;
+      const ok = checkAnswer(p, choiceVals || gridOn ? val : input);
       tries++;
       if (tries === 1) record(p, ok, performance.now() - t0 - pausedMs, helped);
       if (ok) {
@@ -1115,7 +1137,7 @@ function askOnce(opts) {
         fb.innerHTML = '';
         fb.append(h('b', { class: 'no' }, 'Presque ! '), h('span', null, 'Indice : ' + p.hint));
         input = ''; paint();
-        if (p.choices) { [...pad.children].forEach((b) => { if (b.dataset.v === val) b.disabled = true; }); moveSel(1); }
+        if (choiceVals) { [...pad.children].forEach((b) => { if (b.dataset.v === val) { b.disabled = true; b.classList.add('wrong'); } }); moveSel(1); }
         if (gridOn) {
           // the squares that should not be there turn red; the good ones stay
           const target = new Set(String(p.a).split(' '));
@@ -1127,10 +1149,14 @@ function askOnce(opts) {
         locked = true;
         sfx.bad();
         fb.innerHTML = '';
-        const shown = p.choices ? p.a : `${fmt(p.a)}${p.u ? ' ' + p.u : ''}`;
-        fb.append(h('div', { class: 'sol' }, h('b', null, gridOn ? 'Voici la réponse, en vert.' : `La réponse était ${shown}.`), h('div', null, p.ex)));
+        const shown = p.words ? `« ${p.words[Number(p.a)]} »` : p.choices ? p.a : `${fmt(p.a)}${p.u ? ' ' + p.u : ''}`;
+        fb.append(h('div', { class: 'sol' }, h('b', null, gridOn ? 'Voici la réponse, en vert.' : p.words ? (p.sol || `Le mot mal écrit était ${shown}.`) : `La réponse était ${shown}.`), h('div', null, p.ex)));
         const understood = h('button', { class: 'btn big', onclick: () => finish({ ok: false, first: false }) }, 'J’ai compris');
-        if (gridOn) {
+        if (p.words) {
+          // the sentence stays, the misspelled word in green
+          [...pad.querySelectorAll('.m-word')].forEach((b) => { b.disabled = true; b.classList.remove('sel'); b.classList.toggle('right', (p.ok || [p.a]).includes(b.dataset.v)); if (b.dataset.v === val) b.classList.add('wrong'); });
+          pad.append(understood);
+        } else if (gridOn) {
           // the answer in green, the child's wrong squares in red
           gsol = new Set(String(p.a).split(' '));
           gbad = new Set([...gsel, ...gbad].filter((k) => !gsol.has(k))); gsel = new Set(); paintGrid();
@@ -1141,6 +1167,7 @@ function askOnce(opts) {
           pad.className = 'm-choices';
           pad.append(understood);
         }
+        box.style.touchAction = ''; // the solution can make the box taller than the screen: let it scroll
         save();
       }
       save();
@@ -1155,6 +1182,9 @@ function askOnce(opts) {
     if (gridOn) {
       pad.append(gridWrap, h('button', { class: 'btn big g-ok', onclick: submitGrid }, 'Valider'));
       paintGrid();
+    } else if (p.words) {
+      p.words.forEach((w, i) => pad.append(h('button', { class: 'm-choice m-word', 'data-v': String(i), onclick: () => submit(String(i)) }, w)));
+      paintSel();
     } else if (p.choices) {
       p.choices.forEach((c, i) => pad.append(h('button', { class: 'm-choice', 'data-v': c, onclick: () => submit(c) }, h('small', null, i + 1), c)));
       paintSel();
@@ -1166,12 +1196,12 @@ function askOnce(opts) {
     function onDocKey(e) {
       if (paused) return;
       if (locked && e.key === 'Enter' && pad.querySelector('.btn')) { pad.querySelector('.btn').click(); e.preventDefault(); e.stopPropagation(); return; }
-      if (p.choices) {
+      if (choiceVals) {
         if (['ArrowRight', 'ArrowDown'].includes(e.key)) { moveSel(1); e.preventDefault(); e.stopPropagation(); return; }
         if (['ArrowLeft', 'ArrowUp'].includes(e.key)) { moveSel(-1); e.preventDefault(); e.stopPropagation(); return; }
-        if (e.key === 'Enter' || e.key === ' ') { const b = pad.querySelectorAll('.m-choice')[csel]; if (b && !b.disabled) submit(p.choices[csel]); e.preventDefault(); e.stopPropagation(); return; }
+        if (e.key === 'Enter' || e.key === ' ') { const b = pad.querySelectorAll('.m-choice')[csel]; if (b && !b.disabled) submit(choiceVals[csel]); e.preventDefault(); e.stopPropagation(); return; }
         const n = Number(e.key);
-        if (n >= 1 && n <= p.choices.length) { const b = pad.children[n - 1]; if (!b.disabled) submit(p.choices[n - 1]); e.preventDefault(); e.stopPropagation(); }
+        if (p.choices && n >= 1 && n <= p.choices.length) { const b = pad.children[n - 1]; if (!b.disabled) submit(p.choices[n - 1]); e.preventDefault(); e.stopPropagation(); }
         return;
       }
       if (gridOn) { if (e.key === 'Enter') { submitGrid(); e.preventDefault(); e.stopPropagation(); } return; }
@@ -1188,9 +1218,9 @@ function askOnce(opts) {
       const done = pad.querySelector('.btn');
       if (locked && done) { done.click(); return; }
       if (gridOn) { submitGrid(); return; }
-      if (!p.choices) { submit(); return; }
+      if (!choiceVals) { submit(); return; }
       const b = pad.querySelectorAll('.m-choice')[csel];
-      if (b && !b.disabled) submit(p.choices[csel]);
+      if (b && !b.disabled) submit(choiceVals[csel]);
     } };
     activeMath = mathA;
     syncTouchButtons();
@@ -1198,13 +1228,13 @@ function askOnce(opts) {
     if (opts.mount) { opts.mount.innerHTML = ''; opts.mount.append(box); }
     else L = pushLayer(h('div', { class: 'layer modal math-layer' }, box), { onKey: () => true, math: true });
     paint();
-    if (p.choices) requestAnimationFrame(() => { if (box.scrollHeight <= box.clientHeight + 2) box.style.touchAction = 'none'; });
+    if (choiceVals) requestAnimationFrame(() => { if (box.scrollHeight <= box.clientHeight + 2) box.style.touchAction = 'none'; });
   });
 }
 
 /** The first step of the worked solution, as long as it does not give the answer away. */
 function firstStep(p) {
-  if (p.choices || p.grid || !p.ex) return null;
+  if (p.choices || p.grid || p.words || !p.ex) return null;
   const parts = p.ex.split(/(?<=\d|[a-zé²])\. |, puis | ; |\. Pour /);
   let s = parts[0];
   if (parts.length < 2) { const eq = p.ex.split(' = '); if (eq.length < 3) return null; s = eq.slice(0, 2).join(' = '); }
@@ -1785,6 +1815,7 @@ async function onNpc(o) {
   const toward = { up: 'down', down: 'up', left: 'right', right: 'left' }[pl.dir];
   npcDir[o.id] = toward;
   if (o.npc === 'mamie') return onMamie();
+  if (o.npc === 'lea' && frOn().length) return onLea();
   if (o.npc === 'pecheur') {
     if (!S.tools.canne) {
       S.tools.canne = true;
@@ -1797,6 +1828,43 @@ async function onNpc(o) {
   const list = TIPS[o.npc] || ['Bonjour !'];
   tipIdx[o.npc] = ((tipIdx[o.npc] ?? -1) + 1) % list.length;
   await say(list[tipIdx[o.npc]], n.name);
+}
+// Léa writes letters to the whole village, with mistakes: the child corrects them (French modules switched on by the parents).
+async function onLea() {
+  const who = NPCS.lea.name;
+  const mods = frOn();
+  const daily = S.daily.lea !== today();
+  const letters = mods.some((m) => ['fr:gn', 'fr:sv', 'fr:eer', 'fr:homo', 'fr:relire'].includes(m));
+  const opts = [`${letters ? 'Corriger les lettres de Léa' : 'Les exercices de Léa'} (5 questions${daily ? ', cadeau du jour' : ''})`, 'Leçons de français', 'Au revoir'];
+  const k = await choose(letters ? 'Coucou ! J’écris des lettres à tout le village, mais je fais des fautes… Tu m’aides à les corriger ?' : 'Coucou ! On fait un peu de français ensemble ? J’ai un cadeau pour toi.', opts, who);
+  if (k === 1) return lessonsPanel(true);
+  if (k !== 0) return;
+  const r = await series(mods, 5, 0, letters ? 'Lettres de Léa' : 'Exercices de Léa', false);
+  if (!r) return;
+  const { score, won } = r;
+  const lines = [`${score}/5 du premier coup`, `+${won} pièces gagnées pendant les lettres`];
+  const icons = [A.coinURL()];
+  const xp = score * 6;
+  addXP(xp); lines.push(`+${xp} XP`);
+  if (score >= 3) {
+    const pool = Object.keys(CROPS).filter((c) => !CROPS[c].rare && CROPS[c].lvl <= S.lvl);
+    const seed = pick(pool.slice(-4)), q = R(2, 3);
+    addItem('graine:' + seed, q);
+    lines.push(`Merci ! ${q} × ${CROPS[seed].seedName.toLowerCase()}`);
+    icons.push(A.iconURL('graine:' + seed));
+  }
+  if (score >= 3 && daily) {
+    // the first good letter round of the day: a bigger thank-you
+    S.daily.lea = today();
+    const c = 40 + tier() * 8;
+    S.coins += c; addItem('engrais', 1);
+    lines.push(`Cadeau du jour : +${c} pièces et 1 engrais`);
+    icons.push(A.iconURL('engrais'));
+  }
+  if (score === 5) { const c = 30 + tier() * 5; S.coins += c; lines.push(`Sans faute ! +${c} pièces`); }
+  sfx.coin();
+  await celebrate({ sound: score >= 4 ? 'fanfare' : null, title: score >= 4 ? 'Lettres parfaites !' : 'Lettres corrigées', lines, icons });
+  if (score < 3) await say('Merci quand même ! Relis bien chaque mot : le verbe avec son sujet, le nom avec son déterminant.', who);
 }
 const MAMIE_HELP = {
   plant: 'Va dans le potager derrière la barrière, mets-toi devant une parcelle et appuie sur A pour planter.',
@@ -1903,22 +1971,22 @@ function catLevelTxt(cat) {
   if (isAcquis(cat)) return 'Maîtrisé';
   return (S.skills || {})[cat] ? `Niveau ${lvTxt(shownLv(cat))}/${capFor(cat)}` : isNew(cat) ? 'Nouvelle notion' : 'Pas encore essayé';
 }
-async function lessonsPanel() {
+async function lessonsPanel(frOnly) {
   let chosen = null;
-  const P = panel('Leçons de Maître Hibou', (body) => {
-    body.append(h('p', { class: 'small' }, 'Choisis une leçon : Maître Hibou t’explique, avec un exemple. Pendant un problème, le bouton « Comprendre » ouvre aussi la leçon.'));
+  const P = panel(frOnly ? 'Leçons de français' : 'Leçons de Maître Hibou', (body) => {
+    body.append(h('p', { class: 'small' }, frOnly ? 'Choisis une leçon : Léa t’explique, avec un exemple. Pendant une question, le bouton « Comprendre » ouvre aussi la leçon.' : 'Choisis une leçon : Maître Hibou t’explique, avec un exemple. Pendant un problème, le bouton « Comprendre » ouvre aussi la leçon.'));
     const grid = h('div', { class: 'cats' });
     for (const k of liveSkills()) {
-      if (!LESSONS[k]) continue;
+      if (!LESSONS[k] || (frOnly && !isFr(k))) continue;
       grid.append(h('button', { class: 'catbtn' + (isNew(k) ? ' new' : ''), onclick: () => { chosen = k; P.close(); } },
         h('b', null, LESSONS[k].title), h('small', null, isNew(k) ? 'Notion de 8H' : skillTitle(k))));
     }
     body.append(grid);
     const left = NEW_ORDER.length - unlockedConcepts().length;
-    if (left) body.append(h('p', { class: 'small' }, `Encore ${left} notion${left > 1 ? 's' : ''} de 8H à découvrir : elles arrivent quand tu maîtrises tes compétences.`));
+    if (left && !frOnly) body.append(h('p', { class: 'small' }, `Encore ${left} notion${left > 1 ? 's' : ''} de 8H à découvrir : elles arrivent quand tu maîtrises tes compétences.`));
   });
   await P.done;
-  if (chosen) { await showLesson(chosen, false); return lessonsPanel(); }
+  if (chosen) { await showLesson(chosen, false); return lessonsPanel(frOnly); }
 }
 // ---- Challenge ladder: 30 challenges of 5 problems, each a bit harder, with 1 to 3 stars.
 const DEFI_PACKS = [
@@ -1989,17 +2057,17 @@ async function series(cat, n, off, title, mixed) {
   let score = 0, won = 0;
   const pool = ['calc', 'frac', 'conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'coord', 'sym', 'angles', 'figures', 'animaux', 'enigme', 'enigme', ...unlockedConcepts()];
   for (let i = 0; i < n; i++) {
-    const c = mixed ? pick(pool) : cat;
+    const c = Array.isArray(cat) ? frPick(cat) : mixed ? pick(pool) : cat;
     // a revision stays on the chosen theme; the daily challenge mixes everything
     const r = await askMath({ cat: c, off, noSwap: !mixed, title: `${title} · ${i + 1}/${n}` });
-    if (r.quit) return i === 0 ? null : score;
+    if (r.quit) return i === 0 ? null : Array.isArray(cat) ? { score, won } : score;
     const gain = r.ok ? (r.first ? 5 + 3 * Math.max(1, r.d) : 2) : 0;
     if (r.ok && r.first) score++;
     if (gain) { won += gain; addCoins(gain); }
     updateHud();
   }
-  if (!mixed) await reviewRewards(cat, score, n, won);
-  return score;
+  if (!mixed && !Array.isArray(cat)) await reviewRewards(cat, score, n, won);
+  return Array.isArray(cat) ? { score, won } : score;
 }
 // What a revision with Maître Hibou brings: coins for each right answer, a surprise seed bag from 3/5,
 // a big bonus for 5/5, and a gold star the first time a theme is done perfectly.
@@ -2265,22 +2333,73 @@ async function askPin() {
     P.done.then(() => { if (!ok) resolve(false); });
   });
 }
+/** A problem shown to the parents: the question and its answer. */
+function exampleHTML(p) {
+  if (p.words) {
+    const ok = p.ok || [p.a];
+    const s = p.words.map((w, i) => (ok.includes(String(i)) ? '« ' + w + ' »' : w)).join(' ');
+    return p.sol ? renderQ(p.q + ' ' + s) + ` <i>→ ${p.sol}</i>` : renderQ(s) + ` <i>→ le mot mal écrit est « ${p.words[Number(p.a)]} »</i>`;
+  }
+  return renderQ(p.q) + ` <i>→ ${p.choices ? p.a : p.grid ? 'sur la grille' : fmt(p.a) + ' ' + p.u}</i>` + (p.fig || (p.grid ? gridSVG(p.grid, { sol: new Set(String(p.a).split(' ')) }) : ''));
+}
+const FR_DESC = {
+  'fr:gn': 'Déterminant, nom et adjectifs accordés (les petites poules rousses), puis l’attribut (Les poules de la fermière sont contentes) et les pluriels en -x.',
+  'fr:sv': 'Le verbe accordé avec son sujet, même quand le sujet est long, éloigné du verbe (Les renards de la forêt mangent), ou placé après lui.',
+  'fr:eer': 'Il va manger / il a mangé (le truc de « mordre »), puis -ez, -ait et le participe passé avec être (elles sont arrivées).',
+  'fr:homo': 'a/à, et/est, son/sont, on/ont, ces/ses, ou/où, ce/se, leur/leurs.',
+  'fr:relire': 'Une phrase de plus en plus longue avec une faute d’accord cachée : il touche le mot mal écrit. C’est là que les fautes arrivent en dictée.',
+  'fr:conj': 'Présent, imparfait, futur, passé composé, conditionnel, impératif (7H), puis plus-que-parfait, futur antérieur, passé simple et subjonctif (8H). Aussi : trouver l’infinitif, le groupe, le temps d’un verbe.',
+  'fr:nature': 'Il touche le nom, le verbe, le déterminant, l’adjectif, puis le pronom, l’adverbe, la préposition, la conjonction (et en 8H : « le » déterminant ou pronom ?).',
+  'fr:fonc': 'Sujet, verbe conjugué, complément du verbe, complément de phrase, attribut du sujet, complément du nom ; types de phrases et phrase négative.',
+  'fr:ortho': 'm devant m, b, p ; s / ss ; c / ç ; g / ge / gu ; é, è, ê ; -ail / -aille ; lettres muettes ; -é / -ée / -er ; consonnes doubles (apporter).',
+  'fr:voc': 'Contraires, synonymes, mots génériques, ordre alphabétique, familles de mots, préfixes et suffixes, puis registres de langue et expressions.',
+};
+/** Parent space: switch the French modules on, choose how often they come up, a level or « Auto » for each. */
+function frSection(api, examples) {
+  const box = h('div', { class: 'frbox' }, h('h3', null, 'Français (modules à activer)'),
+    h('p', { class: 'small' }, 'Cochez les modules à travailler (programme romand 7H-8H). Ils viennent dans les actions du jeu, avec une leçon la première fois, et Léa, au village, propose 5 questions avec un cadeau chaque jour.'));
+  box.append(h('div', { class: 'opt optcol' }, h('b', null, 'Part du français dans le jeu'),
+    h('div', { class: 'diffrow' }, FR_SHARE.map(([label], v) =>
+      h('button', { class: 'btn sm' + (frMix() === v ? '' : ' ghost'), onclick: () => { S.settings.frShare = v; save(); api.refresh(); } }, label))),
+    h('small', null, 'Le reste du temps, ce sont des maths. Léa propose aussi 5 questions de français par jour, avec un cadeau.')));
+  const list = h('div', { class: 'pcats' });
+  const head = Object.fromEntries(FR_GROUPS.map(([name, ks]) => [ks[0], name]));
+  for (const k of FR_GROUPS.flatMap(([, ks]) => ks)) {
+    if (head[k]) list.append(h('h4', { class: 'frgroup' }, head[k]));
+    const c = S.settings.cats[k] || {}, mm = S.mastery[k];
+    const sel = h('select', { class: 'psel', onchange: (e) => { S.settings.cats[k] = { ...c, lvl: e.target.value === 'auto' ? undefined : Number(e.target.value) }; delete examples[k]; save(); api.refresh(); } },
+      h('option', { value: 'auto', selected: c.lvl == null }, 'Auto'),
+      [1, 2, 3, 4, 5].map((v) => h('option', { value: v, selected: c.lvl === v }, `Niveau ${v}`)));
+    list.append(h('div', { class: 'prow' + (c.on ? '' : ' off') },
+      h('label', { class: 'pon' }, h('input', { type: 'checkbox', checked: !!c.on, onchange: (e) => { S.settings.cats[k] = { ...c, on: e.target.checked }; save(); api.refresh(); } }), h('b', null, CATS[k])),
+      h('small', { class: 'pstat' }, FR_DESC[k] + ' ' + (c.on ? (fixedLevel(k) ? '' : `Niveau ${lvTxt(shownLv(k))}/${capFor(k)}${isAcquis(k) ? ' · maîtrisé' : ''} · `) + (mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé') : 'désactivé')),
+      sel,
+      h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || shownLv(k)); api.refresh(); } }, 'Exemple'),
+      examples[k] ? h('div', { class: 'pex', html: exampleHTML(examples[k]) }) : null));
+  }
+  box.append(list);
+  return box;
+}
 async function parentPanel() {
   if (!(await askPin())) return;
   S.settings.cats = S.settings.cats || {};
   const examples = {};
   await panel('Espace parents', (body, api) => {
+    const on = frOn();
     body.append(
+      h('p', { class: 'frsum' }, h('b', null, 'Français : '), on.length ? `${on.length} module${on.length > 1 ? 's' : ''} actif${on.length > 1 ? 's' : ''} · ${FR_SHARE[frMix()][1]}` : 'aucun module actif (voir plus bas)'),
       h('div', { class: 'opt' }, h('b', null, 'Mode de jeu'), h('div', null,
         h('button', { class: 'btn sm' + (S.settings.grade === 7 ? '' : ' ghost'), onclick: () => { S.settings.grade = 7; save(); api.refresh(); } }, 'Normal'), ' ',
         h('button', { class: 'btn sm' + (S.settings.grade === 8 ? '' : ' ghost'), onclick: () => { S.settings.grade = 8; save(); api.refresh(); } }, 'Dur'))),
       h('div', { class: 'opt optcol' }, h('b', null, 'Difficulté générale'),
         h('div', { class: 'diffrow' }, DIFF_STEPS.map(([v, label]) => h('button', { class: 'btn sm' + ((S.settings.diff || 0) === v ? '' : ' ghost'), onclick: () => { S.settings.diff = v; save(); api.refresh(); } }, label))),
         h('small', null, 'En « Auto », chaque compétence monte d’un niveau après au moins 8 questions bien réussies (une réponse juste et rapide compte plus qu’une réponse lente, une erreur fait reculer), jusqu’à un plafond (plus haut en mode Dur et avec une difficulté plus élevée). Une fois maîtrisée, elle revient moins souvent et les notions de 8H se débloquent une à une, avec une petite leçon.')),
+      frSection(api, examples),
       h('h3', null, 'Par thème'),
       h('p', { class: 'small' }, 'Fixez un niveau de 1 (très facile) à 5 (très difficile), ou laissez « Auto ». Décochez un thème pas encore vu en classe : il ne sera plus demandé. Les notions de 8H peuvent être débloquées à la main.'));
     const list = h('div', { class: 'pcats' });
     for (const [k, label] of Object.entries(CATS)) {
+      if (isFr(k)) continue;
       const c = S.settings.cats[k] || {};
       const mm = S.mastery[k];
       const locked = isNew(k) && !(S.concepts || {})[k];
@@ -2296,7 +2415,7 @@ async function parentPanel() {
         h('small', { class: 'pstat' }, locked ? 'pas encore débloquée' : (fixedLevel(k) ? '' : auto + ' · ') + (mm ? `${Math.round((mm.ok / mm.n) * 100)} % réussi · ${mm.n} questions` : 'pas encore essayé')),
         locked ? h('button', { class: 'btn sm', onclick: () => { S.concepts = S.concepts || {}; S.concepts[k] = now(); save(); api.refresh(); } }, 'Débloquer') : sel,
         h('button', { class: 'btn sm ghost', onclick: () => { examples[k] = makeProblem(k, fixedLevel(k) || (exOp ? shownLv('calc:' + exOp) : shownLv(k)), {}, exOp); api.refresh(); } }, 'Exemple'),
-        examples[k] ? h('div', { class: 'pex', html: renderQ(examples[k].q) + ` <i>→ ${examples[k].choices ? examples[k].a : examples[k].grid ? 'sur la grille' : fmt(examples[k].a) + ' ' + examples[k].u}</i>` + (examples[k].fig || (examples[k].grid ? gridSVG(examples[k].grid, { sol: new Set(String(examples[k].a).split(' ')) }) : '')) }) : null));
+        examples[k] ? h('div', { class: 'pex', html: exampleHTML(examples[k]) }) : null));
     }
     body.append(list,
       h('div', { class: 'sync-acts' },
@@ -2834,7 +2953,7 @@ requestAnimationFrame(loop);
 window.__vallee = {
   get S() { return S; }, get view() { return { SCALE, VW, VH, camX, camY }; },
   get audio() { return { state: AC && AC.state, key: music.key, gain: music.gain && music.gain.gain.value, pos: music.pos }; }, sfx,
-  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel, say, choose, addXP },
+  fn: { startBattle, craftPanel, ordersPanel, carnetPanel, bagPanel, onOwl, applyWorldFlags, saveNow, barnPanel, syncFarm, askMath, pickSkill, levelFor, isAcquis, lessonsPanel, parentPanel, say, choose, addXP, onLea },
   ents: () => ({ wildEnts, farmEnts }),
   step(n = 1) { for (let i = 0; i < n; i++) { if (mode === 'world') updatePlayer(1 / 60); } render(performance.now() / 1000); },
   world, pl, walkable, objById, objAt: () => objAt };

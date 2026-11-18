@@ -1,4 +1,6 @@
 import { GEO, GEO_CATS, GEO_HINTS, GEO_LESSONS } from './geo.js';
+import { FR, FR_CATS, FR_HINTS, FR_LESSONS, FR_SKILLS, FR_GROUPS } from './fr.js';
+export { FR_SKILLS, FR_GROUPS };
 
 // La Vallée des Graines — math problems for 7H-8H (ages 10-12), difficulty 1 (easy) to 5 (hard).
 // A problem: { cat, q, a, u, ex, hint } with a numeric answer, or { choices, a } for multiple choice.
@@ -23,7 +25,7 @@ const hm = (h, m) => `${h} h ${String(m).padStart(2, '0')}`;
 
 export const CATS = {
   calc: 'Calcul', frac: 'Fractions', conv: 'Conversions', masse: 'Masses', contenance: 'Contenances',
-  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Périmètre et aire', ...GEO_CATS, animaux: 'Animaux', enigme: 'Énigmes',
+  longueur: 'Longueurs', duree: 'Durées', recette: 'Proportions', argent: 'Argent', geo: 'Périmètre et aire', ...GEO_CATS, animaux: 'Animaux', enigme: 'Énigmes', ...FR_CATS,
 };
 export const MEASURE_CATS = ['conv', 'masse', 'contenance', 'longueur', 'duree', 'recette', 'argent', 'geo', 'animaux'];
 
@@ -41,6 +43,7 @@ const HINTS = {
   animaux: 'Lis bien : combien pour UN animal, puis multiplie ou divise.',
   enigme: 'Lis l’énigme deux fois, et fais un petit dessin ou un calcul à la fois.',
   ...GEO_HINTS,
+  ...FR_HINTS,
 };
 
 function P(cat, q, a, u, ex, hint, lesson) {
@@ -608,6 +611,7 @@ MEASURE_CATS.push('aires', 'volume', 'echelle');
 /** Short lessons: what the notion is, how to do it, a worked example. Keys: "calc:add"… or the theme. */
 export const LESSONS = {
   ...GEO_LESSONS,
+  ...FR_LESSONS,
   'calc:add': { title: 'L’addition posée', lines: ['On écrit les nombres l’un sous l’autre : unités sous unités, dizaines sous dizaines.', 'On commence à droite, par les unités.', 'Si ça fait 10 ou plus, on écrit les unités et on garde 1 en retenue pour la colonne d’à côté.'], ex: ['478 + 256', 'Unités : 8 + 6 = 14 → j’écris 4, je retiens 1', 'Dizaines : 7 + 5 + 1 = 13 → j’écris 3, je retiens 1', 'Centaines : 4 + 2 + 1 = 7 → 734'] },
   'calc:sub': { title: 'La soustraction posée', lines: ['Le grand nombre en haut, unités sous unités.', 'On commence par les unités. Si le chiffre du haut est trop petit, il gagne 10, et on ajoute 1 en bas dans la colonne suivante (la retenue).', 'Pour vérifier : réponse + nombre enlevé = nombre de départ.'], ex: ['532 − 187', 'Unités : 2 − 7, impossible → 12 − 7 = 5, retenue 1', 'Dizaines : 3 − (8 + 1), impossible → 13 − 9 = 4, retenue 1', 'Centaines : 5 − (1 + 1) = 3 → 345', 'Vérification : 345 + 187 = 532'] },
   'calc:mul': { title: 'La multiplication', lines: ['Multiplier, c’est ajouter plusieurs fois le même nombre : 4 × 3 = 4 + 4 + 4.', 'Pour un grand nombre, coupe-le en dizaines et unités, multiplie chaque morceau, puis additionne.', '× 10 : on ajoute un 0 à la fin (ou la virgule avance d’un rang).'], ex: ['36 × 7 = 30 × 7 + 6 × 7', '= 210 + 42 = 252'] },
@@ -666,6 +670,7 @@ function makeOne(cat, d, opAdj, op) {
     return p;
   }
   d = Math.min(5, d);
+  if (FR[cat]) return FR[cat](d); // French: levels −1 to 5 have their own steps
   if (cat === 'frac') return frac(d);
   if (cat === 'conv') return conv(d);
   if (GEO[cat]) return GEO[cat](Math.max(1, d));
@@ -676,14 +681,17 @@ function makeOne(cat, d, opAdj, op) {
 
 /** True if the typed answer matches. */
 export function checkAnswer(p, input) {
-  if (p.choices || p.grid) return input === p.a; // a choice, or the squares tapped on a grid
+  if (p.words && p.ok) return p.ok.includes(input); // « Touche un nom » : any of them
+  if (p.choices || p.grid || p.words) return input === p.a; // a choice, the squares tapped on a grid, or the word tapped
   const v = Number(String(input).replace(/\s| /g, '').replace(',', '.'));
   return Number.isFinite(v) && Math.abs(v - p.a) < 0.001;
 }
 
 /** Problem text → HTML: stacked fractions and the @ box. */
 export function renderQ(text) {
-  const esc = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const esc = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    // a word with a gap inside (la r@colte, d’@, @,) stays on one line
+    .replace(/(\S*[^\s@]@\S*|\S*@[^\s@]\S*)/g, '<span class="nw">$1</span>');
   return esc
     .replace(/\[([\d@]+)\/([\d@]+)\]/g, (_, a, b) => `<span class="frac"><span>${a === '@' ? '<b class="qbox">?</b>' : a}</span><span>${b}</span></span>`)
     .replace(/@/g, '<b class="qbox">?</b>');

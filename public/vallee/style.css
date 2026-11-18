@@ -248,7 +248,7 @@ button.row:hover { background: #f1f4ff; }
 .m-val { font-family: var(--read); min-height: 56px; line-height: 44px; min-width: 180px; text-align: center; font-size: 36px; font-weight: 700; padding: 4px 14px; border: 3px solid var(--frame); border-radius: 10px; background: #fff; letter-spacing: 1px; }
 .m-val.empty { color: #c8c8d4; }
 .m-unit { font-size: 24px; font-family: var(--read); font-weight: 700; color: var(--ink-soft); }
-.m-fb { min-height: 26px; font-family: var(--read); font-size: 17px; line-height: 1.35; text-align: center; }
+.m-fb { flex-shrink: 0; min-height: 26px; font-family: var(--read); font-size: 17px; line-height: 1.35; text-align: center; }
 .m-fb .ok { color: var(--leaf-d); font-family: var(--ui); font-size: 26px; }
 .m-fb .no { color: #c03030; font-family: var(--ui); }
 .m-streakmsg { color: #e06a10; font-family: var(--ui); font-size: 18px; }
@@ -264,6 +264,15 @@ button.row:hover { background: #f1f4ff; }
 .m-choice { font-size: 22px; padding: 12px; border-radius: 10px; background: #fff; border: 2px solid #9a9cb0; box-shadow: 0 4px 0 #9a9cb0; display: flex; align-items: center; gap: 10px; justify-content: center; font-family: var(--read); font-weight: 700; }
 .m-choice small { font-size: 13px; color: var(--ink-soft); font-family: var(--ui); }
 .m-choice:disabled { opacity: 0.35; }
+/* French: long choices on one column, and the sentence whose misspelled word is tapped */
+.m-choices.m-long { grid-template-columns: 1fr; }
+.m-choices.m-long .m-choice { font-size: 19px; padding: 10px; }
+.m-choices.m-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; }
+.m-choices.m-words .btn { flex-basis: 100%; }
+.m-word { font-size: 20px; padding: 8px 10px; box-shadow: 0 3px 0 #9a9cb0; }
+.m-word.wrong:disabled { opacity: 1; background: #fde8e6; border-color: #e07070; box-shadow: 0 3px 0 #e07070; text-decoration: line-through; }
+.m-word.right:disabled { opacity: 1; background: #e4f6dc; border-color: var(--leaf-d); box-shadow: 0 3px 0 var(--leaf-d); }
+.m-word:disabled:not(.right):not(.wrong) { opacity: 0.6; }
 .m-quit { position: absolute; top: 12px; right: 12px; background: #fff; border: 2px solid #b8bccf; border-radius: 8px; font-size: 13px; padding: 4px 8px; }
 .mathbox.good { box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 5px var(--leaf), 0 5px 0 rgba(0, 0, 0, 0.28); }
 .shake { animation: shake 0.35s; }
@@ -530,3 +539,11 @@ button.row:hover { background: #f1f4ff; }
 /* A and B above the popups (they used to sit under them, so taps landed on the popup) */
 .tctl { z-index: 55; }
 @media (max-width: 899px) { .ab-covers .tctl { visibility: hidden; } }
+
+/* ---------- parents: French modules ---------- */
+.frbox { margin: 10px 0 4px; padding: 8px 10px 4px; background: #f2f6ff; border: 2px solid #c8d4f0; border-radius: 10px; }
+.frbox h3 { margin-top: 2px; }
+.nw { white-space: nowrap; }
+.frsum { margin: 0 0 8px; padding: 6px 10px; background: #f2f6ff; border: 2px solid #c8d4f0; border-radius: 10px; font-size: 14px; }
+.frbox .frgroup { margin: 10px 0 0; font-size: 15px; color: #3a4a78; }
+.frbox .diffrow .btn { white-space: normal; }
