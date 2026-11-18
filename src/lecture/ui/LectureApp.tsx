@@ -589,7 +589,8 @@ function Home({
             </button>
           )}
           {/* No story boss waiting: a revision fight (a rematch, with the letter being worked on) is always there. */}
-          {!(fight && boss) && (
+          {/* Not while the parent's challenge is on: then that slot is the challenge's (and a story boss's). */}
+          {!(fight && boss) && !target && (
             <button
               className="lz-cta lz-cta-boss is-revision is-practice"
               onClick={() => onPractice(false)}
