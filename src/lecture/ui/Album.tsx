@@ -120,17 +120,17 @@ export function Album({ save, onChange, onClose, onShop }: { save: Save; onChang
   );
 }
 
-/** Home button to the album, with the last friend's face and a dot while there are new ones. */
+/** Home: a round button in the top corner (the parent gate's twin) with a friend's face, how many, and a dot while some are new. */
 export function AlbumButton({ save, onClick }: { save: Save; onClick: () => void }) {
   const view = albumView(save);
   const owned = [...albumOwned(view), ...ITEMS.filter((i) => i.kind === "companion" && !i.legend && owns(save, i.id)).map((i) => i.id)];
   const face = ITEM[save.progress.equip?.companion ?? ""]?.legend ? save.progress.equip!.companion! : owned[owned.length - 1];
   const fresh = (view.progress.albumNew ?? []).length > 0;
   return (
-    <button className={`lz-cta lz-cta-album ${fresh ? "has-new" : ""}`} onClick={onClick} aria-label="Album des amis">
+    <button className={`lz-album-btn ${fresh ? "has-new" : ""}`} onClick={onClick} aria-label={`Album des amis : ${owned.length}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={ASSET(ITEM[face]?.img ?? "krillin.png")} alt="" className={`lz-cta-face ${face ? "" : "is-shadow"}`} />
-      {owned.length}
+      <img src={ASSET(ITEM[face]?.img ?? "krillin.png")} alt="" draggable={false} className={face ? "" : "is-shadow"} />
+      <span className="lz-album-btn-count">{owned.length}</span>
     </button>
   );
 }

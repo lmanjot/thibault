@@ -5080,16 +5080,53 @@
   }
 }
 
-/* Home: the album button (last friend's face, a dot while some are new). */
-.lz-cta-album {
-  position: relative;
-  background: linear-gradient(170deg, #6fe3ff, #1d8fc0) !important;
+/* Home: the album, a round button in the top-left corner (the parent gate sits top right). */
+.lz-album-btn {
+  position: absolute;
+  z-index: 3;
+  top: max(16px, env(safe-area-inset-top));
+  left: 16px;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid #fff !important;
+  background: radial-gradient(circle at 50% 35%, #e6fcff, #6fe3ff 55%, #1d8fc0) !important;
+  box-shadow: 0 4px 0 rgba(18, 48, 107, 0.45), 0 0 14px rgba(111, 227, 255, 0.6);
+  overflow: visible;
 }
-.lz-cta-album.has-new::after {
+.lz-album-btn img {
+  position: absolute;
+  inset: 4px 6px 0;
+  width: calc(100% - 12px);
+  height: calc(100% - 4px);
+  object-fit: contain;
+  object-position: center bottom;
+  border-radius: 0 0 50% 50%;
+}
+.lz-album-btn img.is-shadow {
+  filter: brightness(0) opacity(0.4);
+}
+.lz-album-btn-count {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  min-width: 30px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background: var(--navy);
+  color: #fff;
+  font-family: var(--lz-display), Impact, sans-serif;
+  font-size: 17px;
+  line-height: 1.2;
+  text-align: center;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+.lz-album-btn.has-new::after {
   content: "";
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -3px;
+  right: -3px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -5097,8 +5134,8 @@
   border: 3px solid #fff;
   animation: lz-fresh 1.4s ease-in-out infinite;
 }
-.lz-cta-face.is-shadow {
-  filter: brightness(0) opacity(0.4);
+.lz-album-btn:active {
+  transform: translateY(2px) scale(0.96);
 }
 
 /* Result screen: the friends just won. */
@@ -5223,4 +5260,27 @@
   font-size: 14px;
   color: #fff;
   text-shadow: 0 1px 2px #000;
+}
+
+/* The album's header keeps off the screen edges (the shop's has its padding from .lz-shop). */
+.lz-album .lz-shop-head {
+  padding: max(12px, env(safe-area-inset-top)) 16px 8px;
+}
+.lz-album-card {
+  justify-content: center;
+}
+.lz-album-scroll {
+  scrollbar-width: thin;
+}
+@media (max-width: 560px) {
+  .lz-album .lz-shop-head .lz-title-sm {
+    font-size: 26px;
+  }
+  .lz-album-count {
+    padding: 6px 12px;
+    font-size: 18px;
+  }
+}
+.lz-album-shop {
+  justify-content: center;
 }

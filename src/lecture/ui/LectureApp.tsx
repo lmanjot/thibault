@@ -579,7 +579,6 @@ function Home({
           <button className="lz-cta lz-cta-shop" onClick={onShop} aria-label="Boutique de Bulma">
             <span className="lz-capsule" /> <Zeni size={30} /> {zeni(save)}
           </button>
-          <AlbumButton save={save} onClick={onAlbum} />
           {fight && boss && (
             <button className={`lz-cta lz-cta-boss ${fight.kind === "revision" ? "is-revision" : ""}`} onClick={onBoss}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -616,6 +615,7 @@ function Home({
         </div>
 
       </div>
+      <AlbumButton save={save} onClick={onAlbum} />
       <HoldButton onHold={onParent} />
     </div>
   );
