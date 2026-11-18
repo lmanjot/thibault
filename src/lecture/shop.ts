@@ -9,8 +9,9 @@
 // - Zénis buy everything around him, and that follows the same timeline: friends and places
 //   appear once Goku has reached their era (Vegeta after the Saiyans arrive, Trunks once he is
 //   Super Saiyan…), so the shop grows with him.
-// - Prices: a session earns about 30–45 zénis. Something small is affordable every 2–3 sessions
-//   and the big items take a couple of weeks, so there is always a near goal and a far goal.
+// - Prices: a session earns about 30–45 zénis (a revision fight or challenge three times more).
+//   Places and auras are near goals (every few sessions); friends are far goals, priced so that
+//   each one takes a good week or more of reading, not a handful bought at once.
 // - Senzu beans (+15 s on a mini-game) are cheap, but capped so they don't replace reading.
 
 import { FORMS, LEGENDS, type Form } from "./content";
@@ -66,31 +67,31 @@ export const SENZU_SECONDS = 15;
 
 export const ITEMS: ShopItem[] = [
   // Friends, in the order they join Goku's story.
-  { id: "c-bulma", kind: "companion", name: "Bulma", price: 50, img: "bulma.png", imgKid: "bulma_kid.png", era: ERA.kid },
-  { id: "c-yamcha", kind: "companion", name: "Yamcha", price: 70, img: "yamcha.png", era: ERA.kid },
-  { id: "c-roshi", kind: "companion", name: "Tortue Géniale", price: 80, img: "roshi.png", era: ERA.kid },
-  { id: "c-krillin", kind: "companion", name: "Krilin", price: 60, img: "krillin.png", imgKid: "krillin_kid.png", era: ERA.kid },
-  { id: "c-gohan", kind: "companion", name: "Gohan", price: 120, img: "gohan.png", era: ERA.grown },
-  { id: "c-piccolo", kind: "companion", name: "Piccolo", price: 150, img: "piccolo_jr.png", era: ERA.grown },
-  { id: "c-vegeta", kind: "companion", name: "Vegeta", price: 250, img: "vegeta_new.png", era: ERA.saiyans },
-  { id: "c-trunks", kind: "companion", name: "Trunks", price: 300, img: "trunks.png", era: ERA.ssj },
-  { id: "c-vegeta-ssj", kind: "companion", name: "Vegeta Super Saiyan", price: 280, img: "vegeta_ssj.png", era: ERA.ssj },
-  { id: "c-c18", kind: "companion", name: "C-18", price: 300, img: "c18.png", era: ERA.cell },
-  { id: "c-boo", kind: "companion", name: "Boo", price: 320, img: "buu_fat.png", era: ERA.buu },
+  { id: "c-bulma", kind: "companion", name: "Bulma", price: 200, img: "bulma.png", imgKid: "bulma_kid.png", era: ERA.kid },
+  { id: "c-yamcha", kind: "companion", name: "Yamcha", price: 280, img: "yamcha.png", era: ERA.kid },
+  { id: "c-roshi", kind: "companion", name: "Tortue Géniale", price: 320, img: "roshi.png", era: ERA.kid },
+  { id: "c-krillin", kind: "companion", name: "Krilin", price: 240, img: "krillin.png", imgKid: "krillin_kid.png", era: ERA.kid },
+  { id: "c-gohan", kind: "companion", name: "Gohan", price: 480, img: "gohan.png", era: ERA.grown },
+  { id: "c-piccolo", kind: "companion", name: "Piccolo", price: 600, img: "piccolo_jr.png", era: ERA.grown },
+  { id: "c-vegeta", kind: "companion", name: "Vegeta", price: 1000, img: "vegeta_new.png", era: ERA.saiyans },
+  { id: "c-trunks", kind: "companion", name: "Trunks", price: 1200, img: "trunks.png", era: ERA.ssj },
+  { id: "c-vegeta-ssj", kind: "companion", name: "Vegeta Super Saiyan", price: 1100, img: "vegeta_ssj.png", era: ERA.ssj },
+  { id: "c-c18", kind: "companion", name: "C-18", price: 1200, img: "c18.png", era: ERA.cell },
+  { id: "c-boo", kind: "companion", name: "Boo", price: 1300, img: "buu_fat.png", era: ERA.buu },
   // The gods' world and Dragon Ball Super, before Beerus and Whis (who are far stronger).
-  { id: "c-kaioshin", kind: "companion", name: "Kaïoshin", price: 150, img: "lg_kaioshin.png", era: ERA.buu },
-  { id: "c-kibito", kind: "companion", name: "Kibito", price: 160, img: "lg_kibito.png", era: ERA.buu },
-  { id: "c-marcarita", kind: "companion", name: "Marcarita", price: 180, img: "lg_marcarita.png", era: ERA.buu },
-  { id: "c-kibitoshin", kind: "companion", name: "Kibitoshin", price: 200, img: "lg_kibitoshin.png", era: ERA.buu },
-  { id: "c-dyspo", kind: "companion", name: "Dyspo", price: 220, img: "lg_dyspo.png", era: ERA.buu },
-  { id: "c-vermoud", kind: "companion", name: "Vermoud", price: 240, img: "lg_vermoud.png", era: ERA.buu },
-  { id: "c-piccolo-orange", kind: "companion", name: "Piccolo Orange", price: 260, img: "lg_piccolo_orange.png", era: ERA.buu },
-  { id: "c-toppo", kind: "companion", name: "Toppo", price: 300, img: "lg_toppo.png", era: ERA.buu },
-  { id: "c-whis", kind: "companion", name: "Whis", price: 350, img: "whis.png", era: ERA.gods },
-  { id: "c-vegeta-god", kind: "companion", name: "Vegeta God", price: 380, img: "vegeta_god.png", era: ERA.gods },
-  { id: "c-beerus", kind: "companion", name: "Beerus", price: 420, img: "beerus.png", era: ERA.gods },
-  { id: "c-vegeta-blue", kind: "companion", name: "Vegeta Blue", price: 400, img: "vegeta_blue.png", era: ERA.blue },
-  { id: "c-granola", kind: "companion", name: "Granola", price: 450, img: "granola.png", era: ERA.ui },
+  { id: "c-kaioshin", kind: "companion", name: "Kaïoshin", price: 600, img: "lg_kaioshin.png", era: ERA.buu },
+  { id: "c-kibito", kind: "companion", name: "Kibito", price: 700, img: "lg_kibito.png", era: ERA.buu },
+  { id: "c-marcarita", kind: "companion", name: "Marcarita", price: 800, img: "lg_marcarita.png", era: ERA.buu },
+  { id: "c-kibitoshin", kind: "companion", name: "Kibitoshin", price: 900, img: "lg_kibitoshin.png", era: ERA.buu },
+  { id: "c-dyspo", kind: "companion", name: "Dyspo", price: 1000, img: "lg_dyspo.png", era: ERA.buu },
+  { id: "c-vermoud", kind: "companion", name: "Vermoud", price: 1100, img: "lg_vermoud.png", era: ERA.buu },
+  { id: "c-piccolo-orange", kind: "companion", name: "Piccolo Orange", price: 1200, img: "lg_piccolo_orange.png", era: ERA.buu },
+  { id: "c-toppo", kind: "companion", name: "Toppo", price: 1400, img: "lg_toppo.png", era: ERA.buu },
+  { id: "c-whis", kind: "companion", name: "Whis", price: 1600, img: "whis.png", era: ERA.gods },
+  { id: "c-vegeta-god", kind: "companion", name: "Vegeta God", price: 1700, img: "vegeta_god.png", era: ERA.gods },
+  { id: "c-beerus", kind: "companion", name: "Beerus", price: 1900, img: "beerus.png", era: ERA.gods },
+  { id: "c-vegeta-blue", kind: "companion", name: "Vegeta Blue", price: 1800, img: "vegeta_blue.png", era: ERA.blue },
+  { id: "c-granola", kind: "companion", name: "Granola", price: 2000, img: "granola.png", era: ERA.ui },
 
 
   // Legends: never for sale, they join through the letters album (see fillAlbum).
