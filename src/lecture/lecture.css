@@ -5284,3 +5284,29 @@
 .lz-album-shop {
   justify-content: center;
 }
+
+/* A catch-up place: a round finished before the album, won back by training on that letter. */
+.lz-album-slot.is-catchup {
+  border-style: solid;
+  color: #fff;
+}
+.lz-album-slot.is-catchup.is-argent {
+  background: linear-gradient(170deg, #c9d3de, #8e9bab);
+}
+.lz-album-slot.is-catchup.is-or {
+  background: linear-gradient(170deg, #ffd95a, #d99a00);
+}
+.lz-album-slot.is-catchup.is-diamant {
+  background: linear-gradient(170deg, #8feaff, #1d8fc0);
+}
+.lz-album-slot.is-catchup svg {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3));
+}
+.lz-album-slot.is-catchup svg {
+  animation: lz-catchup 2.2s ease-in-out infinite;
+}
+@keyframes lz-catchup {
+  50% {
+    transform: scale(1.15) rotate(-8deg);
+  }
+}

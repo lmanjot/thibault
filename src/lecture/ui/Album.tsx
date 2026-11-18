@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import { ASSET, GRAPHEME, LEGENDS } from "../content";
-import { albumOwned, fillAlbum, type Save } from "../engine";
+import { albumOwned, fillAlbum, isCatchup, type Save } from "../engine";
 import { sfx, speak } from "../audio";
 import { formStep, ITEM, ITEMS, owns } from "../shop";
 import { Icon, Zeni } from "./bits";
@@ -14,8 +14,8 @@ import { Icon, Zeni } from "./bits";
 const TIERS = ["argent", "or", "diamant"] as const;
 
 /**
- * The save as the album shows it: rounds finished before the album existed get their legends
- * right away on screen. They are written to the save with the next session or the next choice.
+ * The save as the album shows it (an old album starts again empty, its rounds as catch-up places).
+ * It is written to the save with the next session or the next choice.
  */
 function albumView(save: Save): Save {
   const s = structuredClone(save);
@@ -83,9 +83,16 @@ export function Album({ save, onChange, onClose, onShop }: { save: Save; onChang
                       <img src={ASSET(l.img)} alt="" draggable={false} />
                     </button>
                   ) : (
-                    <span key={tier} className={`lz-album-slot is-${tier}`} aria-label={`${tier} : pas encore`}>
-                      ?
-                    </span>
+                    // A round finished before the album: won back with a good session on this letter.
+                    isCatchup(view, g, r) ? (
+                      <span key={tier} className={`lz-album-slot is-${tier} is-catchup`} aria-label={`${tier} : à regagner en t'entraînant sur cette lettre`}>
+                        <Icon name="fist" size={30} />
+                      </span>
+                    ) : (
+                      <span key={tier} className={`lz-album-slot is-${tier}`} aria-label={`${tier} : pas encore`}>
+                        ?
+                      </span>
+                    )
                   );
                 })}
               </div>

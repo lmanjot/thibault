@@ -72,6 +72,8 @@ export interface Progress {
   wishes?: number; // wishes made with 7 of those balls
   album?: Record<string, (string | null)[]>; // letter → the legends won with its silver, gold and diamond rounds
   albumNew?: string[]; // legends not seen in the album yet
+  albumBase?: Record<string, number>; // rounds each letter had finished when the album started: won back as catch-ups
+  albumV?: number; // album version (an older album starts again empty)
 }
 
 /** A boss fight earned by reading: after each cleared letter, and a revision every few letters. */
@@ -219,29 +221,71 @@ export const ROUND_DONE = [CLEARED, CLEARED + 3, MASTERED];
 /** Every legend won so far. */
 export const albumOwned = (s: Save): string[] => Object.values(s.progress.album ?? {}).flat().filter((x): x is string => !!x);
 
+/** Rounds a letter has finished: 0 (none) to 3 (silver, gold and diamond). */
+const roundsDone = (s: Save, g: string) => (isCleared(s, g) ? 1 + ROUND_DONE.slice(1).filter((lv) => level(s, gid(g)) >= lv).length : 0);
+
+/** The album's version: a save from before it starts again from an empty album (see migrateAlbum). */
+const ALBUM_V = 2;
+
 /**
- * Give a legend for each round finished that has none yet (in the order the letters were cleared):
- * the next "round" legend for silver and gold, the next big "diamond" legend for diamond.
- * Changes the save; returns the legends just won. Old saves get theirs the first time.
+ * The album starts empty, whatever was done before: the rounds already finished then become
+ * catch-up places, won back one per session with a good score on that letter (so the old letters
+ * get revised). Friends bought in the shop are not touched. Done once; changes the save.
  */
-export function fillAlbum(s: Save): { letter: string; round: number; legend: Legend }[] {
+export function migrateAlbum(s: Save) {
+  if (s.progress.albumV === ALBUM_V) return;
+  const base: Record<string, number> = {};
+  for (const g of new Set([...clearedList(s), ...knownSounds(s)])) {
+    const n = roundsDone(s, g);
+    if (n) base[g] = n;
+  }
+  const isLegend = (id?: string) => !!id && LEGENDS.some((l) => l.id === id);
+  const equip = { ...(s.progress.equip ?? {}) };
+  if (isLegend(equip.companion)) delete equip.companion;
+  if (isLegend(equip.fighter)) delete equip.fighter;
+  s.progress = { ...s.progress, album: {}, albumNew: [], albumBase: base, albumV: ALBUM_V, equip };
+}
+
+/** A place in the album still to win back (a round finished before the album). */
+export const isCatchup = (s: Save, g: string, round: number) => round < (s.progress.albumBase?.[g] ?? 0);
+
+/**
+ * Give the legends won: one for each new round finished on a letter (the next "round" legend for
+ * silver and gold, the next big "diamond" legend for diamond), and one catch-up place per session,
+ * on a letter answered well (at least 2 answers, 80 % right: the letter worked on first).
+ * Changes the save; returns the legends just won.
+ */
+export function fillAlbum(s: Save, answers: { item: string; ok: boolean }[] = [], worked?: string | null): { letter: string; round: number; legend: Legend }[] {
+  migrateAlbum(s);
   const album = { ...(s.progress.album ?? {}) };
   const used = new Set(albumOwned(s));
   const out: { letter: string; round: number; legend: Legend }[] = [];
-  const letters = [...new Set([...clearedList(s), ...knownSounds(s)])];
-  for (const g of letters) {
-    const slots = [...(album[g] ?? [null, null, null])];
-    for (let r = 0; r < 3; r++) {
-      const done = r === 0 ? isCleared(s, g) : isCleared(s, g) && level(s, gid(g)) >= ROUND_DONE[r];
-      if (!done || slots[r]) continue;
-      const l = LEGENDS.find((x) => x.tier === (r === 2 ? "diamond" : "round") && !used.has(x.id));
-      if (!l) continue; // all of them already won
-      slots[r] = l.id;
-      used.add(l.id);
-      out.push({ letter: g, round: r, legend: l });
-    }
-    if (slots.some(Boolean)) album[g] = slots;
+  const give = (g: string, r: number) => {
+    const l = LEGENDS.find((x) => x.tier === (r === 2 ? "diamond" : "round") && !used.has(x.id));
+    if (!l) return false; // all of them already won
+    album[g] = [...(album[g] ?? [null, null, null])];
+    album[g][r] = l.id;
+    used.add(l.id);
+    out.push({ letter: g, round: r, legend: l });
+    return true;
+  };
+  for (const g of new Set([...clearedList(s), ...knownSounds(s)])) {
+    for (let r = 0; r < roundsDone(s, g); r++) if (!album[g]?.[r] && !isCatchup(s, g, r)) give(g, r);
   }
+  // Catch-up: the letters read well this session, the one worked on first.
+  const per = new Map<string, { ok: number; tot: number }>();
+  for (const a of answers) {
+    if (!a.item.startsWith("g:")) continue;
+    const p = per.get(a.item.slice(2)) ?? { ok: 0, tot: 0 };
+    p.tot += 1;
+    if (a.ok) p.ok += 1;
+    per.set(a.item.slice(2), p);
+  }
+  const good = [...per].filter(([, p]) => p.tot >= 2 && p.ok / p.tot >= 0.8).map(([g]) => g);
+  if (worked && good.includes(worked)) good.unshift(worked);
+  catchup: for (const g of good)
+    for (let r = 0; r < 3; r++)
+      if (isCatchup(s, g, r) && !album[g]?.[r] && give(g, r)) break catchup;
   if (out.length) {
     s.progress.album = album;
     s.progress.albumNew = [...(s.progress.albumNew ?? []), ...out.map((o) => o.legend.id)];

@@ -16,6 +16,7 @@ import {
   loadSave,
   applySession,
   fillAlbum,
+  migrateAlbum,
   clearedList,
   isCleared,
   starsFor,
@@ -204,6 +205,7 @@ function Game({ fontClass }: { fontClass: string }) {
     // In a letter boss, that letter is the one being worked on; a revision clears nothing new.
     const worked = fight ? (fight.letter ?? null) : focusSound(save);
     const before = worked ? roundOf(level(save, gid(worked))) : null;
+    migrateAlbum(s); // before the session counts: its new rounds bring new legends, not catch-ups
     const cleared = applySession(s, r.answers, worked);
     // A gold or diamond round finished (3 more dots): a big bonus, and a dragon ball for diamond.
     const after = worked ? roundOf(level(s, gid(worked))) : null;
@@ -227,7 +229,7 @@ function Game({ fontClass }: { fontClass: string }) {
     }
     // Each round finished on a letter (silver, gold, diamond) brings a legend into the album; the
     // last one comes along on the home screen right away. Old saves get theirs the first time.
-    const won = fillAlbum(s);
+    const won = fillAlbum(s, r.answers, worked);
     const legend = won[won.length - 1]?.legend;
     if (legend) s.progress.equip = { ...(s.progress.equip ?? {}), companion: legend.id };
     const stars = starsFor(r.ok, r.total);
