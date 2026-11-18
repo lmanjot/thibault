@@ -5310,3 +5310,34 @@
     transform: scale(1.15) rotate(-8deg);
   }
 }
+
+/* The album button must read as one: bigger, with its name under it. */
+.lz-album-btn {
+  width: 78px;
+  height: 78px;
+}
+.lz-album-btn-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 4px);
+  padding: 1px 10px 2px;
+  border-radius: 10px;
+  background: var(--gi);
+  color: #fff;
+  font-family: var(--lz-display), Impact, sans-serif;
+  font-size: 18px;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 var(--gi-dark);
+}
+@media (orientation: portrait) and (max-width: 560px) {
+  .lz-album-btn {
+    width: 66px;
+    height: 66px;
+  }
+  .lz-album-btn-label {
+    font-size: 15px;
+  }
+}

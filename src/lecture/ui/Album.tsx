@@ -138,6 +138,7 @@ export function AlbumButton({ save, onClick }: { save: Save; onClick: () => void
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={ASSET(ITEM[face]?.img ?? "krillin.png")} alt="" draggable={false} className={face ? "" : "is-shadow"} />
       <span className="lz-album-btn-count">{owned.length}</span>
+      <span className="lz-album-btn-label">Album</span>
     </button>
   );
 }
