@@ -1400,11 +1400,11 @@ async function harvestAll() {
   S.plots.forEach((p) => {
     if (!p.crop || progress(p) < 1) return;
     const c = CROPS[p.crop];
-    let q = R(c.yield[0], c.yield[1]) + (S.tools.panier ? 1 : 0);
+    let q = R(c.yield[0], c.yield[1]) + (S.tools.panier && c.basket ? 1 : 0);
     if (p.fert) q *= 2;
     got[p.crop] = (got[p.crop] || 0) + q;
     S.stats.harvested[p.crop] = (S.stats.harvested[p.crop] || 0) + q;
-    if (Math.random() < (c.rare ? 0.2 : 0.35)) got['graine:' + p.crop] = (got['graine:' + p.crop] || 0) + 1;
+    if (Math.random() < (c.rare ? 0.2 : 0.15)) got['graine:' + p.crop] = (got['graine:' + p.crop] || 0) + 1; // now and then a seed back, not one harvest in three
     xp += c.xp; n++;
     Object.assign(p, { crop: null, at: 0, grow: 0, skip: 0, fert: false, wet: 0 });
   });
@@ -1420,6 +1420,12 @@ async function harvestAll() {
 }
 
 // ---- Selling
+// Economy notes. Prices come from a model of play: about 2 minutes per level at the start, 30 near level 50; half of
+// the time spent farming, about 35 s of the player's time per garden plot (plant, water with a question, harvest).
+// Coins per minute ≈ 0.86 × the profit of one harvest of the best crop, so each crop's seed price keeps that profit
+// on a gentle curve (about 10 coins a minute at level 1, 140 at level 45). Shop items cost about 1 to 2 levels of
+// coins at the level they open (hats less, the Serre more), so from start to finish the coins earned stay close to
+// what there is to buy, with a small surplus only at the very end.
 function sellPrice(id) {
   const base = ITEMS[id].sell || 0;
   return featured() === id ? base * 2 : base;
@@ -1499,9 +1505,12 @@ async function shopPanel() {
           } }, coinImg('coin sm'), ` ${bb.price}`)));
       }
       const eLocked = S.lvl < 10;
+      // fertilizer doubles a harvest: it costs about 60 % of one harvest of the best crop open, so it stays a small bonus
+      const best = Math.max(...Object.values(CROPS).filter((c) => !c.rare && c.lvl <= S.lvl).map((c) => (c.yield[0] + c.yield[1]) / 2 * c.sell));
+      const ePrice = Math.max(30, Math.round(best * 0.6 / 5) * 5);
       list.append(h('div', { class: 'row' + (eLocked ? ' locked' : '') }, icon('engrais'),
         h('div', { class: 'row-main' }, h('b', null, 'Engrais'), h('small', null, `Double la récolte d’une plante. Tu en as ${S.inv.engrais || 0}.`)),
-        eLocked ? h('span', { class: 'lock' }, 'Niv. 10') : h('button', { class: 'btn sm', onclick: () => { if (buy(30)) { addItem('engrais', 1); afterChange(); api.refresh(); } } }, coinImg('coin sm'), ' 30')));
+        eLocked ? h('span', { class: 'lock' }, 'Niv. 10') : h('button', { class: 'btn sm', onclick: () => { if (buy(ePrice)) { addItem('engrais', 1); afterChange(); api.refresh(); } } }, coinImg('coin sm'), ` ${ePrice}`)));
       for (const t of TOOLS) {
         const owned = toolOwned(t);
         const needPrev = t.id === 'arrosoir' && S.tools.arrosoir < t.tier - 1;
@@ -1754,7 +1763,7 @@ function newOrder() {
   const items = {};
   for (let i = 0; i < n; i++) { const [id, a, b] = pick(pool); items[id] = (items[id] || 0) + R(a, b); }
   const value = Object.entries(items).reduce((s, [id, q]) => s + ITEMS[id].sell * q, 0);
-  return { who: pick(CUSTOMERS), items, coins: Math.round(value * 1.6 + 10), xp: Math.round(10 + value / 5), at: 0 };
+  return { who: pick(CUSTOMERS), items, coins: Math.round(value * 1.4 + 10), xp: Math.round(10 + value / 5), at: 0 };
 }
 function ensureOrders() {
   if (!S.orders || S.orders.length !== 3) S.orders = [newOrder(), newOrder(), null];

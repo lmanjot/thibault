@@ -1,24 +1,26 @@
 // La Vallée des Graines — game data: crops, products, buildings, shop, levels, objectives, creatures, badges.
 
-// grow: seconds to grow without help. yield: [min, max] crops per harvest.
+// grow: seconds to grow without help. yield: [min, max] crops per harvest. basket: the woven basket adds 1 to the harvest.
+// Prices are set from a model of the coins a level of play brings (see the economy notes in main.js, near sellPrice):
+// a seed costs about half to two thirds of what its harvest sells for, so each new crop earns a bit more, not 3 to 4 times more.
 export const CROPS = {
-  radis:      { name: 'Radis', seedName: 'Graines de radis', lvl: 1, price: 5, grow: 40, yield: [2, 3], sell: 6, xp: 4, shape: 'root', c1: '#e8406a', c2: '#fff0f0' },
-  carotte:    { name: 'Carotte', seedName: 'Graines de carotte', lvl: 2, price: 10, grow: 75, yield: [2, 3], sell: 11, xp: 6, shape: 'carrot', c1: '#f08a24', c2: '#ffb868' },
-  ble:        { name: 'Blé', seedName: 'Graines de blé', lvl: 4, price: 14, grow: 100, yield: [3, 4], sell: 9, xp: 8, shape: 'grain', c1: '#ecc448', c2: '#b08820' },
-  patate:     { name: 'Pomme de terre', seedName: 'Plants de pomme de terre', lvl: 7, price: 18, grow: 120, yield: [3, 4], sell: 12, xp: 9, shape: 'root', c1: '#c89060', c2: '#f0d8b0' },
-  tomate:     { name: 'Tomate', seedName: 'Graines de tomate', lvl: 10, price: 25, grow: 150, yield: [2, 4], sell: 20, xp: 12, shape: 'round', c1: '#e83828', c2: '#ff9080' },
-  fraise:     { name: 'Fraise', seedName: 'Graines de fraise', lvl: 13, price: 35, grow: 200, yield: [3, 5], sell: 22, xp: 15, shape: 'berry', c1: '#e82848', c2: '#ffe070' },
-  poivron:    { name: 'Poivron', seedName: 'Graines de poivron', lvl: 15, price: 40, grow: 220, yield: [2, 4], sell: 26, xp: 17, shape: 'round', c1: '#48a838', c2: '#a8e070' },
-  mais:       { name: 'Maïs', seedName: 'Graines de maïs', lvl: 17, price: 45, grow: 240, yield: [2, 4], sell: 38, xp: 20, shape: 'cob', c1: '#f8d838', c2: '#78b838' },
-  tournesol:  { name: 'Tournesol', seedName: 'Graines de tournesol', lvl: 21, price: 60, grow: 300, yield: [2, 3], sell: 55, xp: 26, shape: 'flower', c1: '#f8c820', c2: '#704020' },
-  raisin:     { name: 'Raisin', seedName: 'Pépins de raisin', lvl: 25, price: 75, grow: 330, yield: [3, 5], sell: 40, xp: 30, shape: 'berry', c1: '#7038a0', c2: '#c090e0' },
-  citrouille: { name: 'Citrouille', seedName: 'Graines de citrouille', lvl: 28, price: 90, grow: 420, yield: [1, 2], sell: 140, xp: 40, shape: 'pumpkin', c1: '#f07818', c2: '#b84e08' },
+  radis:      { name: 'Radis', seedName: 'Graines de radis', lvl: 1, price: 5, grow: 40, yield: [2, 3], sell: 6, xp: 4, basket: 1, shape: 'root', c1: '#e8406a', c2: '#fff0f0' },
+  carotte:    { name: 'Carotte', seedName: 'Graines de carotte', lvl: 2, price: 10, grow: 75, yield: [2, 3], sell: 11, xp: 6, basket: 1, shape: 'carrot', c1: '#f08a24', c2: '#ffb868' },
+  ble:        { name: 'Blé', seedName: 'Graines de blé', lvl: 4, price: 15, grow: 100, yield: [3, 4], sell: 9, xp: 8, basket: 1, shape: 'grain', c1: '#ecc448', c2: '#b08820' },
+  patate:     { name: 'Pomme de terre', seedName: 'Plants de pomme de terre', lvl: 7, price: 20, grow: 120, yield: [3, 4], sell: 12, xp: 9, basket: 1, shape: 'root', c1: '#c89060', c2: '#f0d8b0' },
+  tomate:     { name: 'Tomate', seedName: 'Graines de tomate', lvl: 10, price: 25, grow: 150, yield: [2, 4], sell: 20, xp: 12, basket: 1, shape: 'round', c1: '#e83828', c2: '#ff9080' },
+  fraise:     { name: 'Fraise', seedName: 'Graines de fraise', lvl: 13, price: 60, grow: 200, yield: [3, 5], sell: 22, xp: 15, basket: 1, shape: 'berry', c1: '#e82848', c2: '#ffe070' },
+  poivron:    { name: 'Poivron', seedName: 'Graines de poivron', lvl: 15, price: 50, grow: 220, yield: [2, 4], sell: 26, xp: 17, basket: 1, shape: 'round', c1: '#48a838', c2: '#a8e070' },
+  mais:       { name: 'Maïs', seedName: 'Graines de maïs', lvl: 17, price: 85, grow: 240, yield: [2, 4], sell: 38, xp: 20, basket: 1, shape: 'cob', c1: '#f8d838', c2: '#78b838' },
+  tournesol:  { name: 'Tournesol', seedName: 'Graines de tournesol', lvl: 21, price: 70, grow: 300, yield: [2, 3], sell: 55, xp: 26, shape: 'flower', c1: '#f8c820', c2: '#704020' },
+  raisin:     { name: 'Raisin', seedName: 'Pépins de raisin', lvl: 25, price: 115, grow: 330, yield: [3, 5], sell: 40, xp: 30, basket: 1, shape: 'berry', c1: '#7038a0', c2: '#c090e0' },
+  citrouille: { name: 'Citrouille', seedName: 'Graines de citrouille', lvl: 28, price: 120, grow: 420, yield: [1, 2], sell: 140, xp: 40, shape: 'pumpkin', c1: '#f07818', c2: '#b84e08' },
   pomme:      { name: 'Pomme', seedName: 'Pépins de pomme', lvl: 30, price: 120, grow: 480, yield: [3, 5], sell: 50, xp: 45, shape: 'apple', c1: '#d82838', c2: '#ff7080' },
-  lavande:    { name: 'Lavande', seedName: 'Graines de lavande', lvl: 32, price: 110, grow: 450, yield: [2, 4], sell: 70, xp: 46, shape: 'flower', c1: '#9070d0', c2: '#5a8a40' },
-  pasteque:   { name: 'Pastèque', seedName: 'Graines de pastèque', lvl: 37, price: 160, grow: 540, yield: [1, 2], sell: 220, xp: 58, shape: 'pumpkin', c1: '#3a9a40', c2: '#a8e070' },
+  lavande:    { name: 'Lavande', seedName: 'Graines de lavande', lvl: 32, price: 120, grow: 450, yield: [2, 4], sell: 70, xp: 46, shape: 'flower', c1: '#9070d0', c2: '#5a8a40' },
+  pasteque:   { name: 'Pastèque', seedName: 'Graines de pastèque', lvl: 37, price: 220, grow: 540, yield: [1, 2], sell: 220, xp: 58, shape: 'pumpkin', c1: '#3a9a40', c2: '#a8e070' },
   cerise:     { name: 'Cerise', seedName: 'Noyaux de cerise', lvl: 39, price: 180, grow: 560, yield: [4, 6], sell: 60, xp: 62, shape: 'berry', c1: '#b01830', c2: '#5a9a30' },
-  ananas:     { name: 'Ananas', seedName: 'Couronne d’ananas', lvl: 43, price: 220, grow: 620, yield: [1, 2], sell: 300, xp: 72, shape: 'cob', c1: '#f0c030', c2: '#58a838' },
-  cacao:      { name: 'Cacao', seedName: 'Fèves de cacao', lvl: 45, price: 260, grow: 680, yield: [2, 3], sell: 180, xp: 80, shape: 'pumpkin', c1: '#8a5a30', c2: '#c8905a' },
+  ananas:     { name: 'Ananas', seedName: 'Couronne d’ananas', lvl: 43, price: 330, grow: 620, yield: [1, 2], sell: 300, xp: 72, shape: 'cob', c1: '#f0c030', c2: '#58a838' },
+  cacao:      { name: 'Cacao', seedName: 'Fèves de cacao', lvl: 45, price: 330, grow: 680, yield: [2, 3], sell: 180, xp: 80, shape: 'pumpkin', c1: '#8a5a30', c2: '#c8905a' },
   melon:      { name: 'Melon arc-en-ciel', seedName: 'Graine de melon arc-en-ciel', rare: true, grow: 600, yield: [1, 2], sell: 320, xp: 80, shape: 'melon', c1: '#58c858', c2: '#f8f8f8' },
   lune:       { name: 'Fleur de lune', seedName: 'Graine de fleur de lune', rare: true, grow: 720, yield: [1, 3], sell: 260, xp: 90, shape: 'flower', c1: '#c8d8ff', c2: '#6878d8' },
   doree:      { name: 'Fruit d’or', seedName: 'Graine dorée', rare: true, grow: 900, yield: [1, 1], sell: 1200, xp: 250, shape: 'golden', c1: '#ffd830', c2: '#fff8b0' },
@@ -134,50 +136,50 @@ export const RECIPES = {
 };
 
 export const BUILDINGS = {
-  etable:   { name: 'Étable', lvl: 6, cost: { coins: 120, bois: 10, pierre: 4 }, desc: 'Une maison pour tes animaux, avec un enclos.' },
-  moulin:   { name: 'Moulin', lvl: 9, cost: { coins: 150, bois: 8, pierre: 4 }, desc: 'Transforme le blé en farine.' },
-  four:     { name: 'Boulangerie', lvl: 16, cost: { coins: 400, bois: 15, pierre: 12 }, desc: 'Cuit le pain, les tartes et les pizzas.' },
-  laiterie: { name: 'Laiterie', lvl: 20, cost: { coins: 600, bois: 15, pierre: 10 }, desc: 'Transforme le lait en fromage… et cache des recettes secrètes.' },
-  pressoir: { name: 'Pressoir', lvl: 26, cost: { coins: 800, bois: 20, pierre: 15 }, desc: 'Fait des jus, de la sauce et de la confiture.' },
-  serre:    { name: 'Serre magique', lvl: 36, cost: { coins: 2500, bois: 30, pierre: 30, cristal: 5 }, desc: 'Toutes tes plantes poussent 50 % plus vite.' },
+  etable:   { name: 'Étable', lvl: 6, cost: { coins: 400, bois: 10, pierre: 4 }, desc: 'Une maison pour tes animaux, avec un enclos.' },
+  moulin:   { name: 'Moulin', lvl: 9, cost: { coins: 600, bois: 8, pierre: 4 }, desc: 'Transforme le blé en farine.' },
+  four:     { name: 'Boulangerie', lvl: 16, cost: { coins: 2200, bois: 15, pierre: 12 }, desc: 'Cuit le pain, les tartes et les pizzas.' },
+  laiterie: { name: 'Laiterie', lvl: 20, cost: { coins: 3000, bois: 15, pierre: 10 }, desc: 'Transforme le lait en fromage… et cache des recettes secrètes.' },
+  pressoir: { name: 'Pressoir', lvl: 26, cost: { coins: 4800, bois: 20, pierre: 15 }, desc: 'Fait des jus, de la sauce et de la confiture.' },
+  serre:    { name: 'Serre magique', lvl: 36, cost: { coins: 12000, bois: 30, pierre: 30, cristal: 5 }, desc: 'Toutes tes plantes poussent 50 % plus vite.' },
 };
 
 export const TOOLS = [
-  { id: 'hache', name: 'Hache solide', lvl: 5, price: 100, desc: '+1 bois à chaque arbre coupé.' },
-  { id: 'arrosoir', tier: 1, name: 'Arrosoir en cuivre', lvl: 5, price: 120, desc: 'Un arrosage fait gagner 50 % du temps restant (au lieu de 35 %).' },
-  { id: 'bottes', name: 'Bottes de course', lvl: 8, price: 180, desc: 'Tu marches beaucoup plus vite.' },
-  { id: 'pioche', name: 'Pioche solide', lvl: 8, price: 120, desc: '+1 pierre à chaque rocher cassé.' },
-  { id: 'panier', name: 'Panier tressé', lvl: 11, price: 280, desc: '+1 légume à chaque récolte.' },
-  { id: 'arrosoir', tier: 2, name: 'Arrosoir en argent', lvl: 15, price: 450, desc: 'Un arrosage fait gagner 65 % du temps restant.' },
-  { id: 'epouvantail', name: 'Épouvantail', lvl: 17, price: 650, desc: 'Toutes les plantes poussent 20 % plus vite.' },
-  { id: 'arrosoir', tier: 3, name: 'Arrosoir en or', lvl: 31, price: 1400, desc: 'Un arrosage fait gagner 80 % du temps restant.' },
-  { id: 'arroseur', name: 'Arroseur automatique', lvl: 33, price: 1500, desc: 'Toutes les plantes poussent encore 30 % plus vite.' },
-  { id: 'arrosoir', tier: 4, name: 'Arrosoir en diamant', lvl: 44, price: 4000, desc: 'Un arrosage fait gagner 90 % du temps restant.' },
+  { id: 'hache', name: 'Hache solide', lvl: 5, price: 150, desc: '+1 bois à chaque arbre coupé.' },
+  { id: 'arrosoir', tier: 1, name: 'Arrosoir en cuivre', lvl: 5, price: 170, desc: 'Un arrosage fait gagner 50 % du temps restant (au lieu de 35 %).' },
+  { id: 'bottes', name: 'Bottes de course', lvl: 8, price: 250, desc: 'Tu marches beaucoup plus vite.' },
+  { id: 'pioche', name: 'Pioche solide', lvl: 8, price: 250, desc: '+1 pierre à chaque rocher cassé.' },
+  { id: 'panier', name: 'Panier tressé', lvl: 11, price: 800, desc: '+1 à chaque récolte de légumes, de céréales, de fraises et de raisin.' },
+  { id: 'arrosoir', tier: 2, name: 'Arrosoir en argent', lvl: 15, price: 1100, desc: 'Un arrosage fait gagner 65 % du temps restant.' },
+  { id: 'epouvantail', name: 'Épouvantail', lvl: 17, price: 1500, desc: 'Toutes les plantes poussent 20 % plus vite.' },
+  { id: 'arrosoir', tier: 3, name: 'Arrosoir en or', lvl: 31, price: 3500, desc: 'Un arrosage fait gagner 80 % du temps restant.' },
+  { id: 'arroseur', name: 'Arroseur automatique', lvl: 33, price: 4000, desc: 'Toutes les plantes poussent encore 30 % plus vite.' },
+  { id: 'arrosoir', tier: 4, name: 'Arrosoir en diamant', lvl: 44, price: 6500, desc: 'Un arrosage fait gagner 90 % du temps restant.' },
 ];
 export const WATER_FRAC = [0.35, 0.5, 0.65, 0.8, 0.9];
 
 // Each purchase opens 2 more garden plots (4 at the start, 18 at most).
 export const PLOT_BUYS = [
-  { price: 40, lvl: 1 }, { price: 90, lvl: 3 }, { price: 160, lvl: 5 }, { price: 250, lvl: 8 },
-  { price: 380, lvl: 12 }, { price: 520, lvl: 16 }, { price: 700, lvl: 21 },
+  { price: 40, lvl: 1 }, { price: 120, lvl: 3 }, { price: 180, lvl: 5 }, { price: 280, lvl: 8 },
+  { price: 700, lvl: 12 }, { price: 950, lvl: 16 }, { price: 1300, lvl: 21 },
 ];
 
 export const HATS = {
   rouge:     { name: 'Casquette rouge', price: 0, lvl: 1, color: '#e03c3c' },
   bleu:      { name: 'Casquette bleue', price: 80, lvl: 2, color: '#3c74e0' },
-  vert:      { name: 'Casquette verte', price: 80, lvl: 3, color: '#2fa04a' },
-  jaune:     { name: 'Casquette jaune', price: 150, lvl: 7, color: '#f0c020' },
-  orange:    { name: 'Casquette orange', price: 200, lvl: 10, color: '#f08a24' },
-  violet:    { name: 'Casquette violette', price: 260, lvl: 19, color: '#8a48d0' },
-  noir:      { name: 'Casquette ninja', price: 450, lvl: 24, color: '#30303c' },
-  rose:      { name: 'Casquette rose', price: 450, lvl: 25, color: '#f06ab0' },
-  turquoise: { name: 'Casquette turquoise', price: 600, lvl: 29, color: '#28b8b0' },
-  marron:    { name: 'Casquette d’explorateur', price: 800, lvl: 35, color: '#8a5a30' },
-  blanc:     { name: 'Casquette des neiges', price: 1000, lvl: 38, color: '#f4f6fa' },
-  dore:      { name: 'Casquette en or', price: 2000, lvl: 40, color: '#ffc81e' },
-  argent:    { name: 'Casquette en argent', price: 2500, lvl: 42, color: '#c8d0dc' },
-  nuit:      { name: 'Casquette nuit étoilée', price: 3500, lvl: 47, color: '#1a2a6a' },
-  diamant:   { name: 'Casquette en diamant', price: 6000, lvl: 50, color: '#a8f0ff' },
+  vert:      { name: 'Casquette verte', price: 100, lvl: 3, color: '#2fa04a' },
+  jaune:     { name: 'Casquette jaune', price: 160, lvl: 7, color: '#f0c020' },
+  orange:    { name: 'Casquette orange', price: 240, lvl: 10, color: '#f08a24' },
+  violet:    { name: 'Casquette violette', price: 850, lvl: 19, color: '#8a48d0' },
+  noir:      { name: 'Casquette ninja', price: 1300, lvl: 24, color: '#30303c' },
+  rose:      { name: 'Casquette rose', price: 1500, lvl: 25, color: '#f06ab0' },
+  turquoise: { name: 'Casquette turquoise', price: 1900, lvl: 29, color: '#28b8b0' },
+  marron:    { name: 'Casquette d’explorateur', price: 2600, lvl: 35, color: '#8a5a30' },
+  blanc:     { name: 'Casquette des neiges', price: 4500, lvl: 38, color: '#f4f6fa' },
+  dore:      { name: 'Casquette en or', price: 6000, lvl: 40, color: '#ffc81e' },
+  argent:    { name: 'Casquette en argent', price: 7000, lvl: 42, color: '#c8d0dc' },
+  nuit:      { name: 'Casquette nuit étoilée', price: 8500, lvl: 47, color: '#1a2a6a' },
+  diamant:   { name: 'Casquette en diamant', price: 10000, lvl: 50, color: '#a8f0ff' },
 };
 
 export const TITLES = [
@@ -224,7 +226,7 @@ export const ANIMALS = {
   cochon:   { name: 'Cochon', lvl: 31, foods: [{ citrouille: 1 }, { pomme: 2 }], out: 'truffe', qty: [1, 1], prod: 360, xp: 20, names: ['Rosette', 'Groin-Groin', 'Pistache'] },
 };
 // Each purchase gives 2 more places in the barn (4 at the start).
-export const BARN_BUYS = [{ price: 200, lvl: 10 }, { price: 450, lvl: 18 }, { price: 900, lvl: 25 }];
+export const BARN_BUYS = [{ price: 450, lvl: 10 }, { price: 1600, lvl: 18 }, { price: 3500, lvl: 25 }];
 
 // One-time treasure chests in the world.
 export const CHESTS = {
