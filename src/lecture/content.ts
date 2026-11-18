@@ -543,3 +543,83 @@ export function rematchFor(step: number, beaten: string[] = [], turn = 0): Boss 
 export const NO_SYLLABLE_VOWELS: string[] = [];
 
 export const ASSET = (name: string) => `/assets/dbz/ready/${name}`;
+
+// ——— Legends: the letters album ———
+
+export interface Legend {
+  id: string;
+  name: string;
+  img: string;
+  /** "round": joins when a letter is cleared or turns gold; "diamond": the big ones, when a letter turns diamond. */
+  tier: "round" | "diamond";
+}
+
+const legend = (tier: Legend["tier"], prefix: string) => ([id, name, img]: string[]): Legend => ({ id: `${prefix}-${id}`, name, img, tier });
+
+/** In the order they join. Each finished round of a letter (silver, gold, diamond) brings the next one. */
+export const LEGENDS: Legend[] = [
+  ...[
+    ["tenshinhan", "Ten Shin Han", "lg_tenshinhan.png"],
+    ["chichi", "Chichi", "lg_chichi.png"],
+    ["kaio", "Maître Kaïo", "lg_kaio.png"],
+    ["gotenks", "Gotenks", "lg_gotenks.png"],
+    ["satan", "Hercule", "lg_satan.png"],
+    ["bardock", "Baddack", "lg_bardock.png"],
+    ["dodoria", "Dodoria", "lg_dodoria.png"],
+    ["lunch", "Lunch", "lg_lunch.png"],
+    ["zarbon", "Zarbon", "lg_zarbon.png"],
+    ["gohan-ssj2", "Gohan Super Saiyan 2", "lg_gohan_ssj2.png"],
+    ["dende", "Dendé", "lg_dende.png"],
+    ["freezer2", "Freezer, deuxième forme", "lg_freezer2.png"],
+    ["trunks-ssj", "Trunks Super Saiyan", "lg_trunks_ssj.png"],
+    ["c19", "C-19", "lg_c19.png"],
+    ["nail", "Nail", "lg_nail.png"],
+    ["vegeta-ssj2", "Vegeta Super Saiyan 2", "lg_vegeta_ssj2.png"],
+    ["zarbon-monstre", "Zarbon le monstre", "lg_zarbon_monstre.png"],
+    ["gero", "Docteur Gero", "lg_gero.png"],
+    ["freezer3", "Freezer, troisième forme", "lg_freezer3.png"],
+    ["cell-imparfait", "Cell imparfait", "lg_cell_imparfait.png"],
+    ["gotenks-ssj3", "Gotenks Super Saiyan 3", "lg_gotenks_ssj3.png"],
+    ["kaioshin", "Kaïoshin", "lg_kaioshin.png"],
+    ["kibito", "Kibito", "lg_kibito.png"],
+    ["babidi", "Babidi", "lg_babidi.png"],
+    ["cell-semi", "Cell semi-parfait", "lg_cell_semi.png"],
+    ["gohan-ultime", "Gohan ultime", "lg_gohan_ultime.png"],
+    ["c13", "C-13", "lg_c13.png"],
+    ["janemba", "Janemba", "lg_janemba.png"],
+    ["piccolo-super", "Piccolo géant", "lg_piccolo_super.png"],
+    ["kibitoshin", "Kibitoshin", "lg_kibitoshin.png"],
+    ["grandkaio", "Grand Kaïo", "lg_grandkaio.png"],
+    ["dyspo", "Dyspo", "lg_dyspo.png"],
+    ["piccolo-orange", "Piccolo Orange", "lg_piccolo_orange.png"],
+    ["marcarita", "Marcarita", "lg_marcarita.png"],
+    ["grandkaioshin", "Grand Kaïoshin", "lg_grandkaioshin.png"],
+    ["vermoud", "Vermoud", "lg_vermoud.png"],
+  ].map(legend("round", "r")),
+  ...[
+    ["gogeta", "Gogeta", "lg_gogeta.png"],
+    ["broly", "Broly", "broly.png"],
+    ["vegeto", "Vegeto", "lg_vegeto.png"],
+    ["jiren", "Jiren", "jiren.png"],
+    ["gohan-beast", "Gohan Beast", "lg_gohan_beast.png"],
+    ["freezer", "Freezer", "frieza_new.png"],
+    ["broly-legendaire", "Broly légendaire", "lg_broly_legendaire.png"],
+    ["cell", "Cell parfait", "cell_new.png"],
+    ["gogeta-blue", "Gogeta Blue", "lg_gogeta_blue.png"],
+    ["kidboo", "Kid Boo", "buu_kid.png"],
+    ["vegeto-blue", "Vegeto Blue", "lg_vegeto_blue.png"],
+    ["black", "Goku Black", "goku_black.png"],
+    ["gogeta-ssj4", "Gogeta Super Saiyan 4", "lg_gogeta_ssj4.png"],
+    ["superboo", "Super Boo", "buu_majin.png"],
+    ["vegeta-ssj4", "Vegeta Super Saiyan 4", "lg_vegeta_ssj4.png"],
+    ["c17", "C-17", "c17.png"],
+    ["zeno", "Zeno", "lg_zeno.png"],
+    ["broly-ssj", "Broly Super Saiyan", "broly_ssj.png"],
+    ["grandpretre", "Le Grand Prêtre", "lg_grandpretre.png"],
+    ["dabura", "Dabura", "dabura.png"],
+    ["janemba-super", "Super Janemba", "lg_janemba_super.png"],
+    ["toppo", "Toppo", "lg_toppo.png"],
+    ["raditz", "Raditz", "raditz.png"],
+    ["nappa", "Nappa", "nappa.png"],
+  ].map(legend("diamond", "d")),
+];

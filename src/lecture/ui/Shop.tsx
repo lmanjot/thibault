@@ -26,12 +26,14 @@ export function Shop({
   save,
   onChange,
   onClose,
+  start,
 }: {
   save: Save;
   onChange: (s: Save) => void;
   onClose: () => void;
+  start?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("goku");
+  const [tab, setTab] = useState<Tab>(start ?? "goku");
   const [justBought, setJustBought] = useState<string | null>(null);
   const step = formStep(save);
 
@@ -56,7 +58,8 @@ export function Shop({
   /** "After Goku reaches X": the step of the story an item is waiting for. */
   const eraLabel = (item: ShopItem) => `après « ${FORMS[item.era ?? 0].name} »`;
 
-  const items = ITEMS.filter((i) => (tab === "game" ? i.kind === "game" || i.kind === "level" : i.kind === tab));
+  // Legends are not sold: they live in the letters album.
+  const items = ITEMS.filter((i) => !i.legend && (tab === "game" ? i.kind === "game" || i.kind === "level" : i.kind === tab));
 
   return (
     <div className="lz-shop">
@@ -127,7 +130,7 @@ export function Shop({
             return (
               <button
                 key={item.id}
-                className={`lz-shop-card ${on ? "is-on" : ""} ${justBought === item.id ? "is-new" : ""} ${!mine && !affordable ? "is-locked" : ""} ${tooEarly ? "is-future" : ""} ${item.diamond ? "is-legend" : ""}`}
+                className={`lz-shop-card ${on ? "is-on" : ""} ${justBought === item.id ? "is-new" : ""} ${!mine && !affordable ? "is-locked" : ""} ${tooEarly ? "is-future" : ""}`}
                 onClick={() => act(item)}
               >
                 <span className="lz-shop-pic">
@@ -147,10 +150,6 @@ export function Shop({
                   {item.kind === "senzu" ? (
                     <>
                       <Zeni /> {item.price} · {save.progress.senzu ?? 0}/{SENZU_MAX}
-                    </>
-                  ) : item.diamond && !mine ? (
-                    <>
-                      <Icon name="lock" size={14} /> {item.diamond === 1 ? "1re" : `${item.diamond}e`} lettre en diamant
                     </>
                   ) : tooEarly ? (
                     <>

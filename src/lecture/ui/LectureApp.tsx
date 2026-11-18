@@ -15,6 +15,7 @@ import {
   level,
   loadSave,
   applySession,
+  fillAlbum,
   clearedList,
   isCleared,
   starsFor,
@@ -32,17 +33,19 @@ import { Parent } from "./Parent";
 import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
 import { MINI_GAMES, MiniGame, SECRET_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, newLegend, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { Album, AlbumButton, NewFriends } from "./Album";
+import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
   | { s: "home" }
   | { s: "versus"; boss: Boss; fight: Fight }
   | { s: "session"; exercises: Ex[]; boss?: Boss; fight?: Fight }
-  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[]; medal?: Medal; perfect?: boolean; secret?: boolean }
+  | { s: "result"; stars: number; earned: number; boss?: Boss; cleared: string[]; medal?: Medal; perfect?: boolean; secret?: boolean; friends?: string[] }
   | { s: "reward"; letters: string[] }
   | { s: "bonus"; game?: GameId; cleared: string[]; extra?: number }
-  | { s: "shop" }
+  | { s: "shop"; tab?: "companion" }
+  | { s: "album" }
   | { s: "parent" };
 
 const noop = () => () => {};
@@ -65,7 +68,10 @@ function Game({ fontClass }: { fontClass: string }) {
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
     if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };
     if (jeu === "or" || jeu === "diamant" || jeu === "voeu")
-      return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu", friend: jeu === "or" ? undefined : "d-broly" } };
+      return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu" }, friends: [jeu === "or" ? "r-gotenks" : "d-gogeta"] };
+    // /lecture?jeu=amis: several friends at once (an old save opening its album); ?jeu=album: the album.
+    if (jeu === "amis") return { s: "result", stars: 2, earned: 40, cleared: [], friends: ["r-tenshinhan", "r-chichi", "r-kaio", "r-gotenks", "r-satan", "d-gogeta"] };
+    if (jeu === "album") return { s: "album" };
     return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
@@ -219,12 +225,11 @@ function Game({ fontClass }: { fontClass: string }) {
         } else s.progress.letterBalls = balls;
       }
     }
-    // A letter in diamond: a legend joins Goku (and comes along on the home screen right away).
-    const legend = newLegend(save, s);
-    if (legend && medal) {
-      medal.friend = legend.id;
-      s.progress.equip = { ...(s.progress.equip ?? {}), companion: legend.id };
-    }
+    // Each round finished on a letter (silver, gold, diamond) brings a legend into the album; the
+    // last one comes along on the home screen right away. Old saves get theirs the first time.
+    const won = fillAlbum(s);
+    const legend = won[won.length - 1]?.legend;
+    if (legend) s.progress.equip = { ...(s.progress.equip ?? {}), companion: legend.id };
     const stars = starsFor(r.ok, r.total);
     // Not a single mistake: blue stars, and the secret game (after training or a letters challenge).
     const perfect = r.total > 0 && r.ok === r.total && r.answers.every((a) => a.ok);
@@ -241,25 +246,32 @@ function Game({ fontClass }: { fontClass: string }) {
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
     }
     update(s);
-    setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret });
-    if (medal || perfect) sfx.power();
+    setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret, friends: won.map((w) => w.legend.id) });
+    if (medal || perfect || legend) sfx.power();
+    const friendLine = legend ? [L.newFriend, legend.name] : [];
     speak(
       medal
         ? [
             ...(medal.wish ? [L.diamondDone, L.wish] : [medal.kind === "or" ? L.goldDone : L.diamondDone]),
-            ...(legend && medal.friend ? [L.newFriend, legend.name] : []),
+            ...friendLine,
           ]
         : boss
-          ? [boss.name, L.beaten, ...(perfect ? [L.flawless] : []), ...(secret ? [L.secretOpen] : [])]
+          ? [boss.name, L.beaten, ...(perfect ? [L.flawless] : []), ...(secret ? [L.secretOpen] : []), ...friendLine]
           : perfect
-            ? [L.flawless, ...(secret ? [L.secretOpen] : [])]
-            : [stars === 3 ? L.perfect : L.trainingDone],
+            ? [L.flawless, ...(secret ? [L.secretOpen] : []), ...friendLine]
+            : [stars === 3 ? L.perfect : L.trainingDone, ...friendLine],
     );
   }
 
   return (
     <div
       className={`lz ${fontClass} ${fontMode} ${aura ? "has-aura" : ""}`}
+      // A long press on a tablet opens the "right click" menu (Windows): never in the game, except in
+      // the parent's text fields (to paste a code).
+      onContextMenu={(e) => {
+        const el = e.target as HTMLElement;
+        if (!el.closest("input, textarea, [contenteditable]")) e.preventDefault();
+      }}
       style={aura?.color ? ({ ["--aura-custom" as string]: aura.color } as React.CSSProperties) : undefined}
     >
       {screen.s === "home" && (
@@ -280,6 +292,10 @@ function Game({ fontClass }: { fontClass: string }) {
           onShop={() => {
             stopSpeech();
             setScreen({ s: "shop" });
+          }}
+          onAlbum={() => {
+            stopSpeech();
+            setScreen({ s: "album" });
           }}
         />
       )}
@@ -338,6 +354,15 @@ function Game({ fontClass }: { fontClass: string }) {
             <Stars n={screen.stars} size={72} perfect={screen.perfect} />
             {screen.perfect && <p className="lz-flawless">Sans-faute !</p>}
             {screen.medal && <MedalBanner medal={screen.medal} />}
+            {!!screen.friends?.length && (
+              <NewFriends
+                ids={screen.friends}
+                onAlbum={() => {
+                  stopSpeech();
+                  setScreen({ s: "album" });
+                }}
+              />
+            )}
             <p className="lz-kigain">
               +{screen.earned} <Zeni size={40} />
             </p>
@@ -418,7 +443,11 @@ function Game({ fontClass }: { fontClass: string }) {
       )}
 
       {screen.s === "shop" && (
-        <Shop save={save} onChange={update} onClose={() => setScreen({ s: "home" })} />
+        <Shop save={save} onChange={update} onClose={() => setScreen({ s: "home" })} start={screen.tab} />
+      )}
+
+      {screen.s === "album" && (
+        <Album save={save} onChange={update} onClose={() => setScreen({ s: "home" })} onShop={() => setScreen({ s: "shop", tab: "companion" })} />
       )}
 
       {screen.s === "parent" && <Parent save={save} onChange={update} onClose={() => setScreen({ s: "home" })} />}
@@ -434,6 +463,7 @@ function Home({
   onParent,
   onPick,
   onShop,
+  onAlbum,
 }: {
   save: Save;
   onTrain: () => void;
@@ -442,6 +472,7 @@ function Home({
   onParent: () => void;
   onPick: (g: string) => void;
   onShop: () => void;
+  onAlbum: () => void;
 }) {
   const { form, next } = formFor(formStep(save));
   const fight = nextFight(save);
@@ -548,6 +579,7 @@ function Home({
           <button className="lz-cta lz-cta-shop" onClick={onShop} aria-label="Boutique de Bulma">
             <span className="lz-capsule" /> <Zeni size={30} /> {zeni(save)}
           </button>
+          <AlbumButton save={save} onClick={onAlbum} />
           {fight && boss && (
             <button className={`lz-cta lz-cta-boss ${fight.kind === "revision" ? "is-revision" : ""}`} onClick={onBoss}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -714,12 +746,10 @@ interface Medal {
   kind: "or" | "diamant";
   balls?: number; // dragon balls collected with diamond letters, this one included
   wish?: boolean; // the seventh: Shenron's wish
-  friend?: string; // the legend who joins with this diamond letter
 }
 
 function MedalBanner({ medal }: { medal: Medal }) {
   const got = medal.wish ? 7 : (medal.balls ?? 0);
-  const friend = medal.friend ? ITEM[medal.friend] : undefined;
   return (
     <div className={`lz-medal is-${medal.kind}`}>
       <span className="lz-medal-tile lz-read">{GRAPHEME[medal.letter]?.display}</span>
@@ -733,15 +763,6 @@ function MedalBanner({ medal }: { medal: Medal }) {
               </span>
             ))}
           </div>
-        )}
-        {friend?.img && (
-          <p className="lz-medal-friend">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={ASSET(friend.img)} alt="" />
-            <span>
-              Nouvel ami : <b>{friend.name}</b>
-            </span>
-          </p>
         )}
       </div>
     </div>

@@ -2,7 +2,7 @@
 // Every spoken line is built from these short clips, generated once by
 // scripts/gen-voice.mts and stored in public/lecture/voice/ (no live text-to-speech).
 
-import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, NO_SYLLABLE_VOWELS, WORDS } from "./content";
+import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, LEGENDS, NO_SYLLABLE_VOWELS, WORDS } from "./content";
 
 /** Fixed lines, in Goku's voice. */
 export const L = {
@@ -129,6 +129,7 @@ export function allClips(): Clip[] {
   Object.values(L).forEach((t) => add(t));
   PRAISE.forEach((t) => add(t));
   BOSSES.forEach((b) => add(b.name, true));
+  LEGENDS.forEach((l) => add(l.name, true)); // said when one joins, or tapped in the album
   FORMS.forEach((f) => {
     add(f.name); // announced with excitement on the reward screen
     add(f.story); // then what the new power does

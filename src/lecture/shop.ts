@@ -13,8 +13,8 @@
 //   and the big items take a couple of weeks, so there is always a near goal and a far goal.
 // - Senzu beans (+15 s on a mini-game) are cheap, but capped so they don't replace reading.
 
-import { FORMS, type Form } from "./content";
-import { MASTERED, type Ex, type Save } from "./engine";
+import { FORMS, LEGENDS, type Form } from "./content";
+import { albumOwned, type Ex, type Save } from "./engine";
 
 /** Zénis for a right answer, by exercise difficulty. */
 const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, lettre: 3, complete: 4, fusion: 4, syllabe: 5, trace: 4 };
@@ -56,7 +56,7 @@ export interface ShopItem {
   game?: GameKey;
   level?: number;
   era?: number; // Goku must have reached this step of the ladder
-  diamond?: number; // a legend: not for sale, joins at this many letters in diamond (1, 2, 3…)
+  legend?: boolean; // not for sale: joins through the letters album
 }
 
 export type GameKey = "nuage" | "kame" | "bulles" | "memoire" | "route" | "baton";
@@ -83,21 +83,9 @@ export const ITEMS: ShopItem[] = [
   { id: "c-vegeta-blue", kind: "companion", name: "Vegeta Blue", price: 400, img: "vegeta_blue.png", era: ERA.blue },
   { id: "c-granola", kind: "companion", name: "Granola", price: 450, img: "granola.png", era: ERA.ui },
 
-  // Legends: never for sale, one joins Goku for each letter he brings to diamond.
-  ...[
-    ["c17", "C-17", "c17.png"],
-    ["kidboo", "Kid Boo", "buu_kid.png"],
-    ["freezer", "Freezer", "frieza_new.png"],
-    ["cell", "Cell parfait", "cell_new.png"],
-    ["broly", "Broly", "broly.png"],
-    ["jiren", "Jiren", "jiren.png"],
-    ["black", "Goku Black", "goku_black.png"],
-    ["broly-ssj", "Broly Super Saiyan", "broly_ssj.png"],
-    ["superboo", "Super Boo", "buu_majin.png"],
-    ["dabura", "Dabura", "dabura.png"],
-    ["raditz", "Raditz", "raditz.png"],
-    ["nappa", "Nappa", "nappa.png"],
-  ].map(([id, name, img], i): ShopItem => ({ id: `d-${id}`, kind: "companion", name, price: 0, img, diamond: i + 1 })),
+
+  // Legends: never for sale, they join through the letters album (see fillAlbum).
+  ...LEGENDS.map((l): ShopItem => ({ id: l.id, kind: "companion", name: l.name, price: 0, img: l.img, legend: true })),
 
   // Places, in story order.
   { id: "s-papaya", kind: "scene", name: "Île Papaya", price: 0, img: "bg_papaya.png", era: ERA.kid },
@@ -145,26 +133,12 @@ export const inEra = (s: Save, item: ShopItem) => formStep(s) >= (item.era ?? 0)
 /** A mini-game is open once enough letters are cleared, or once bought. */
 export const gameOpen = (s: Save, g: GameKey) => (s.progress.cleared?.length ?? 0) >= GAME_UNLOCK[g] || owns(s, `g-${g}`);
 export const owns = (s: Save, id: string) => {
-  const d = ITEM[id]?.diamond;
-  if (d) return diamondLetters(s) >= d;
+  if (ITEM[id]?.legend) return albumOwned(s).includes(id);
   return ITEM[id]?.price === 0 || (s.progress.owned ?? []).includes(id);
 };
 
-/** How many letters are in diamond (all their dots done). */
-export const diamondLetters = (s: Save) =>
-  Object.entries(s.progress.items).filter(([id, st]) => id.startsWith("g:") && st.level >= MASTERED).length;
-
-/** The legends, in the order they join. */
-export const LEGENDS = ITEMS.filter((i) => i.diamond).sort((a, b) => a.diamond! - b.diamond!);
-
-/** The legend who joined between two saves (a letter just reached diamond), if any. */
-export function newLegend(before: Save, after: Save): ShopItem | undefined {
-  const n = diamondLetters(after);
-  return n > diamondLetters(before) ? LEGENDS[n - 1] : undefined;
-}
-
 export function canBuy(s: Save, item: ShopItem): boolean {
-  if (item.diamond) return false;
+  if (item.legend) return false;
   if (item.kind === "senzu") return (s.progress.senzu ?? 0) < SENZU_MAX && zeni(s) >= item.price;
   if (owns(s, item.id) || zeni(s) < item.price || !inEra(s, item)) return false;
   if (item.kind === "game" && item.game) return !gameOpen(s, item.game);

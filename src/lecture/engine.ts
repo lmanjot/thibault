@@ -1,6 +1,6 @@
 // Lecture Z — progress state, mastery levels and session building.
 
-import { CONFUSE, GRAPHEME, GRAPHEMES, WORDS, segment, wordAmbiguous, wordHas, type Seg, type Word, NO_SYLLABLE_VOWELS } from "./content";
+import { CONFUSE, GRAPHEME, GRAPHEMES, LEGENDS, type Legend, WORDS, segment, wordAmbiguous, wordHas, type Seg, type Word, NO_SYLLABLE_VOWELS } from "./content";
 
 // ——— State ———
 
@@ -70,6 +70,8 @@ export interface Progress {
   practices?: number; // revision fights chosen from the home screen (rematches)
   letterBalls?: number; // dragon balls won with diamond letters, toward the next wish (0-6)
   wishes?: number; // wishes made with 7 of those balls
+  album?: Record<string, (string | null)[]>; // letter → the legends won with its silver, gold and diamond rounds
+  albumNew?: string[]; // legends not seen in the album yet
 }
 
 /** A boss fight earned by reading: after each cleared letter, and a revision every few letters. */
@@ -207,6 +209,44 @@ export function applySession(s: Save, answers: { item: string; ok: boolean }[], 
   }
   if (!s.progress.playDays.includes(t)) s.progress.playDays.push(t);
   return cleared;
+}
+
+// ——— The letters album ———
+
+/** Level a letter reaches when each round is finished: silver (cleared), gold, diamond. */
+export const ROUND_DONE = [CLEARED, CLEARED + 3, MASTERED];
+
+/** Every legend won so far. */
+export const albumOwned = (s: Save): string[] => Object.values(s.progress.album ?? {}).flat().filter((x): x is string => !!x);
+
+/**
+ * Give a legend for each round finished that has none yet (in the order the letters were cleared):
+ * the next "round" legend for silver and gold, the next big "diamond" legend for diamond.
+ * Changes the save; returns the legends just won. Old saves get theirs the first time.
+ */
+export function fillAlbum(s: Save): { letter: string; round: number; legend: Legend }[] {
+  const album = { ...(s.progress.album ?? {}) };
+  const used = new Set(albumOwned(s));
+  const out: { letter: string; round: number; legend: Legend }[] = [];
+  const letters = [...new Set([...clearedList(s), ...knownSounds(s)])];
+  for (const g of letters) {
+    const slots = [...(album[g] ?? [null, null, null])];
+    for (let r = 0; r < 3; r++) {
+      const done = r === 0 ? isCleared(s, g) : isCleared(s, g) && level(s, gid(g)) >= ROUND_DONE[r];
+      if (!done || slots[r]) continue;
+      const l = LEGENDS.find((x) => x.tier === (r === 2 ? "diamond" : "round") && !used.has(x.id));
+      if (!l) continue; // all of them already won
+      slots[r] = l.id;
+      used.add(l.id);
+      out.push({ letter: g, round: r, legend: l });
+    }
+    if (slots.some(Boolean)) album[g] = slots;
+  }
+  if (out.length) {
+    s.progress.album = album;
+    s.progress.albumNew = [...(s.progress.albumNew ?? []), ...out.map((o) => o.legend.id)];
+  }
+  return out;
 }
 
 // ——— What is available ———
