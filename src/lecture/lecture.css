@@ -4963,3 +4963,47 @@
   background: linear-gradient(135deg, #ffffff 0%, #b9f6ff 30%, #27a9d6 60%, #c9f9ff 85%, #1d8fc0 100%);
   box-shadow: 0 0 0 1px #16739c, 0 0 12px rgba(111, 227, 255, 1);
 }
+
+/* A letter in diamond: a legend joins Goku (on the result screen), shown in the shop's « Amis » tab. */
+.lz-medal-friend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-family: var(--lz-display), Impact, sans-serif;
+  font-size: 26px;
+  color: var(--navy);
+}
+.lz-medal-friend img {
+  height: 130px;
+  margin: -10px 0 -6px;
+  width: auto;
+  filter: drop-shadow(0 0 10px rgba(111, 227, 255, 0.95));
+  animation: lz-legend-in 0.9s 0.8s both cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.lz-medal-friend b {
+  color: #1d8fc0;
+}
+@keyframes lz-legend-in {
+  from {
+    transform: translateY(30px) scale(0.3);
+    opacity: 0;
+    filter: brightness(6) drop-shadow(0 0 30px #6fe3ff);
+  }
+}
+.lz-shop-card.is-legend {
+  border-color: #6fe3ff;
+  box-shadow: 0 0 0 2px rgba(111, 227, 255, 0.5);
+}
+.lz-shop-card.is-legend.is-locked .lz-shop-pic {
+  filter: brightness(0) opacity(0.45); /* a mystery silhouette until the letter is in diamond */
+}
+@media (max-width: 560px) {
+  .lz-medal {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .lz-medal-friend img {
+    height: 96px;
+  }
+}

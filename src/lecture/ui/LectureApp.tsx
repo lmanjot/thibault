@@ -19,7 +19,6 @@ import {
   isCleared,
   starsFor,
   startLetter,
-  upcomingLetters,
   roundOf,
   storeSave,
   type Ex,
@@ -33,7 +32,7 @@ import { Parent } from "./Parent";
 import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
 import { MINI_GAMES, MiniGame, SECRET_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
-import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, newLegend, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
@@ -66,7 +65,7 @@ function Game({ fontClass }: { fontClass: string }) {
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
     if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };
     if (jeu === "or" || jeu === "diamant" || jeu === "voeu")
-      return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu" } };
+      return { s: "result", stars: 3, earned: 160, cleared: [], medal: { letter: "a", kind: jeu === "or" ? "or" : "diamant", balls: 3, wish: jeu === "voeu", friend: jeu === "or" ? undefined : "d-broly" } };
     return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
@@ -220,6 +219,12 @@ function Game({ fontClass }: { fontClass: string }) {
         } else s.progress.letterBalls = balls;
       }
     }
+    // A letter in diamond: a legend joins Goku (and comes along on the home screen right away).
+    const legend = newLegend(save, s);
+    if (legend && medal) {
+      medal.friend = legend.id;
+      s.progress.equip = { ...(s.progress.equip ?? {}), companion: legend.id };
+    }
     const stars = starsFor(r.ok, r.total);
     // Not a single mistake: blue stars, and the secret game (after training or a letters challenge).
     const perfect = r.total > 0 && r.ok === r.total && r.answers.every((a) => a.ok);
@@ -240,9 +245,10 @@ function Game({ fontClass }: { fontClass: string }) {
     if (medal || perfect) sfx.power();
     speak(
       medal
-        ? medal.wish
-          ? [L.diamondDone, L.wish]
-          : [medal.kind === "or" ? L.goldDone : L.diamondDone]
+        ? [
+            ...(medal.wish ? [L.diamondDone, L.wish] : [medal.kind === "or" ? L.goldDone : L.diamondDone]),
+            ...(legend && medal.friend ? [L.newFriend, legend.name] : []),
+          ]
         : boss
           ? [boss.name, L.beaten, ...(perfect ? [L.flawless] : []), ...(secret ? [L.secretOpen] : [])]
           : perfect
@@ -531,15 +537,7 @@ function Home({
                 <Pips level={level(save, gid(g))} />
               </button>
             ))}
-            {/* The next letter of the usual order, locked: only the parent adds letters. */}
-            {upcomingLetters(save, 1).map((g) => (
-              <span key={g} className="lz-weektile is-upcoming is-locked" aria-label={`Bientôt : ${GRAPHEME[g].display}`}>
-                <span className="lz-week-star is-new">
-                  <Icon name="lock" size={16} />
-                </span>
-                <span className="lz-read">{GRAPHEME[g].display}</span>
-              </span>
-            ))}
+            {/* Only the letters the parent turned on: no preview of the next ones. */}
           </div>
         )}
 
@@ -716,10 +714,12 @@ interface Medal {
   kind: "or" | "diamant";
   balls?: number; // dragon balls collected with diamond letters, this one included
   wish?: boolean; // the seventh: Shenron's wish
+  friend?: string; // the legend who joins with this diamond letter
 }
 
 function MedalBanner({ medal }: { medal: Medal }) {
   const got = medal.wish ? 7 : (medal.balls ?? 0);
+  const friend = medal.friend ? ITEM[medal.friend] : undefined;
   return (
     <div className={`lz-medal is-${medal.kind}`}>
       <span className="lz-medal-tile lz-read">{GRAPHEME[medal.letter]?.display}</span>
@@ -733,6 +733,15 @@ function MedalBanner({ medal }: { medal: Medal }) {
               </span>
             ))}
           </div>
+        )}
+        {friend?.img && (
+          <p className="lz-medal-friend">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={ASSET(friend.img)} alt="" />
+            <span>
+              Nouvel ami : <b>{friend.name}</b>
+            </span>
+          </p>
         )}
       </div>
     </div>

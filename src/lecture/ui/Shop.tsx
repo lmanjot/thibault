@@ -127,7 +127,7 @@ export function Shop({
             return (
               <button
                 key={item.id}
-                className={`lz-shop-card ${on ? "is-on" : ""} ${justBought === item.id ? "is-new" : ""} ${!mine && !affordable ? "is-locked" : ""} ${tooEarly ? "is-future" : ""}`}
+                className={`lz-shop-card ${on ? "is-on" : ""} ${justBought === item.id ? "is-new" : ""} ${!mine && !affordable ? "is-locked" : ""} ${tooEarly ? "is-future" : ""} ${item.diamond ? "is-legend" : ""}`}
                 onClick={() => act(item)}
               >
                 <span className="lz-shop-pic">
@@ -147,6 +147,10 @@ export function Shop({
                   {item.kind === "senzu" ? (
                     <>
                       <Zeni /> {item.price} · {save.progress.senzu ?? 0}/{SENZU_MAX}
+                    </>
+                  ) : item.diamond && !mine ? (
+                    <>
+                      <Icon name="lock" size={14} /> {item.diamond === 1 ? "1re" : `${item.diamond}e`} lettre en diamant
                     </>
                   ) : tooEarly ? (
                     <>

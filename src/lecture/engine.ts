@@ -35,6 +35,8 @@ export interface Settings {
   font: "script" | "cursive";
   /** Set only on the copy of the save a targeted fight is built from (never stored). */
   targeted?: boolean;
+  /** Same: all the letters he knows, to fill in the choices of a targeted fight (never stored). */
+  spare?: string[];
   focus?: string; // letter picked on the home screen
   target?: Target; // targeted revision, set by the parent
 }
@@ -305,11 +307,10 @@ export function shuffle<T>(a: T[]): T[] {
   return b;
 }
 
-const SPICE_VOWELS = ["a", "i", "o", "u", "é", "e"];
-
 /**
- * Letter choices: the answer, the focus letter (always there), look-alikes, other known letters,
- * then common vowels to make it less obvious.
+ * Letter choices: the answer, the focus letter (always there), look-alikes, other known letters.
+ * Only letters the parent has turned on: a letter he has not learned never shows up, even as a
+ * wrong answer (fewer choices while he knows only a few letters).
  */
 function choices(s: Save, target: string, focus: string | null, n: number): string[] {
   const known = knownSounds(s);
@@ -322,11 +323,9 @@ function choices(s: Save, target: string, focus: string | null, n: number): stri
   // Same kind first: a vowel among vowels is harder to spot than among consonants.
   const kind = GRAPHEME[target].kind;
   shuffle(known.filter((x) => GRAPHEME[x].kind === kind)).forEach(add);
-  const targeted = !!s.settings.targeted; // inside a targeted fight: only the chosen letters, fewer choices if need be
-  if (kind === "v" && !targeted) shuffle(SPICE_VOWELS).forEach(add);
   shuffle(known).forEach(add);
-  if (!targeted) shuffle(SPICE_VOWELS).forEach(add);
-  else for (const x of shuffle(SPICE_VOWELS)) if (out.length < 3) add(x); // never fewer than 3 choices
+  // Inside a targeted fight, the other letters he knows fill in when the chosen ones are too few.
+  if (out.length < 3) shuffle(s.settings.spare ?? []).forEach((x) => out.length < 3 && add(x));
   return shuffle(out);
 }
 
@@ -394,8 +393,9 @@ function complete(s: Save, g: string, focus: string | null, section: Section, bu
 }
 
 /** "Trouve tous les a": a grid with 3 targets among other letters (the focus letter included). */
-function hunt(s: Save, g: string, focus: string | null, section: Section): Ex {
+function hunt(s: Save, g: string, focus: string | null, section: Section): Ex | null {
   const others = choices(s, g, focus, 4).filter((x) => x !== g);
+  if (!others.length) return null; // a single letter known: nothing to hunt among
   const letters = [g, g, g];
   while (letters.length < 8) letters.push(others[letters.length % others.length]);
   return { t: "hunt", section, item: gid(g), g, letters: shuffle(letters) };
@@ -426,7 +426,7 @@ function soundEx(s: Save, g: string, focus: string | null, section: Section, bum
     hunt: () => hunt(s, g, focus, section),
     lettre: () => lettre(s, g, focus, section, bump),
   };
-  return make[kind]() ?? complete(s, g, focus, section, bump) ?? ecoute(g, section) ?? hunt(s, g, focus, section);
+  return make[kind]() ?? complete(s, g, focus, section, bump) ?? ecoute(g, section) ?? hunt(s, g, focus, section) ?? trace(g, section);
 }
 
 /**
@@ -609,7 +609,7 @@ export function starsFor(ok: number, total: number): number {
 function targetSave(s: Save, t: Target): Save {
   const known = knownSounds(s);
   const traps = t.must.flatMap((g) => CONFUSE[g] ?? []).filter((g) => known.includes(g));
-  return { ...s, settings: { ...s.settings, targeted: true, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
+  return { ...s, settings: { ...s.settings, targeted: true, spare: known, classSounds: [...new Set([...t.extra, ...t.must, ...traps])].filter((g) => GRAPHEME[g]) } };
 }
 
 /** Syllables of a targeted revision: each one has a "must" letter (« lu », « re » for e, u + l, r). */

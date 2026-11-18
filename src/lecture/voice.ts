@@ -37,6 +37,7 @@ export const L = {
   perfect: "Parfait ! Trois étoiles !",
   flawless: "Incroyable ! Aucune erreur ! Tu gagnes les étoiles bleues !",
   secretOpen: "Tu as ouvert le jeu secret !",
+  newFriend: "Un nouvel ami rejoint Goku :",
   trainingDone: "Bravo, entraînement terminé !",
   letterDone: "Bravo ! Tu as réussi la lettre…",
   goldDone: "Génial ! Ta lettre passe en or !",
