@@ -5,7 +5,8 @@
 //   the first time, so effort is what earns.
 // - Goku's transformations can't be bought: he grows stronger by himself, one step per letter
 //   cleared, in story order (kid Goku → staff → cloud → Kamehameha → grown up → … → Ultra
-//   Instinct → the 7 Dragon Balls → Shenron). Learning is the main progression.
+//   Instinct → the 7 Dragon Balls → Shenron). Learning is the main progression. A first letter
+//   turned diamond is one more step (that is how he reached Super Saiyan God).
 // - Zénis buy everything around him, and that follows the same timeline: friends and places
 //   appear once Goku has reached their era (Vegeta after the Saiyans arrive, Trunks once he is
 //   Super Saiyan…), so the shop grows with him.
@@ -15,7 +16,7 @@
 // - Senzu beans (+15 s on a mini-game) are cheap, but capped so they don't replace reading.
 
 import { FORMS, LEGENDS, type Form } from "./content";
-import { albumOwned, type Ex, type Save } from "./engine";
+import { albumOwned, clearedList, gid, level, MASTERED, type Ex, type Save } from "./engine";
 
 /** Zénis for a right answer, by exercise difficulty. */
 const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, mots: 4, lettre: 3, complete: 4, fusion: 4, syllabe: 5, trace: 4 };
@@ -90,6 +91,7 @@ export const ITEMS: ShopItem[] = [
   { id: "c-whis", kind: "companion", name: "Whis", price: 1600, img: "whis.png", era: ERA.gods },
   { id: "c-vegeta-god", kind: "companion", name: "Vegeta God", price: 1700, img: "vegeta_god.png", era: ERA.gods },
   { id: "c-beerus", kind: "companion", name: "Beerus", price: 1900, img: "beerus.png", era: ERA.gods },
+  { id: "c-goku-blue", kind: "companion", name: "Goku Blue", price: 1800, img: "goku_blue.png", era: ERA.gods },
   { id: "c-vegeta-blue", kind: "companion", name: "Vegeta Blue", price: 1800, img: "vegeta_blue.png", era: ERA.blue },
   { id: "c-granola", kind: "companion", name: "Granola", price: 2000, img: "granola.png", era: ERA.ui },
   { id: "c-jiren", kind: "companion", name: "Jiren", price: 2200, img: "jiren.png", era: ERA.ui },
@@ -135,8 +137,11 @@ export const GAME_UNLOCK: Record<GameKey, number> = { nuage: 0, kame: 1, bulles:
 
 export const zeni = (s: Save) => s.progress.zeni ?? 0;
 
-/** Goku's current step on the ladder: one step per letter cleared. */
-export const formStep = (s: Save) => Math.min(s.progress.cleared?.length ?? 0, FORMS.length - 1);
+/** Whether a letter has turned diamond. */
+export const hasDiamond = (s: Save) => clearedList(s).some((g) => level(s, gid(g)) >= MASTERED);
+
+/** Goku's current step on the ladder: one step per letter cleared, and one more with a diamond letter. */
+export const formStep = (s: Save) => Math.min(clearedList(s).length + (hasDiamond(s) ? 1 : 0), FORMS.length - 1);
 
 /** Whether Goku has reached the era an item belongs to. */
 export const inEra = (s: Save, item: ShopItem) => formStep(s) >= (item.era ?? 0);

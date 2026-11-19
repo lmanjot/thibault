@@ -70,6 +70,7 @@ export interface Progress {
   practices?: number; // revision fights chosen from the home screen (rematches)
   letterBalls?: number; // dragon balls won with diamond letters, toward the next wish (0-6)
   wishes?: number; // wishes made with 7 of those balls
+  formSeen?: number; // the last step of Goku shown in the power scene
   album?: Record<string, (string | null)[]>; // letter → the legends won with its silver, gold and diamond rounds
   albumNew?: string[]; // legends not seen in the album yet
   albumBase?: Record<string, number>; // rounds each letter had finished when the album started: won back as catch-ups

@@ -457,6 +457,7 @@ export const FRIEND_ATTACKS: Record<string, Attack> = {
   "c-whis": { name: "Bâton divin", say: "Bâton divin !", color: "silver" },
   "c-vegeta-god": { name: "Big Bang Attack", say: "Big bang attaque !", color: "red", shape: "ball" },
   "c-beerus": { name: "Hakai", say: "Hakaï !", color: "purple", shape: "ball" },
+  "c-goku-blue": { name: "Kaméhaméha bleu", say: "Super Kaméhaméha !", color: "blue" },
   "c-vegeta-blue": { name: "Final Flash", say: "Final flash !", color: "blue" },
   "c-granola": { name: "Tir du sniper", say: "Tir du sniper !", color: "green" },
   "c-jiren": { name: "Power Impact", say: "Power impact !", color: "red", shape: "ball" },

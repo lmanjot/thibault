@@ -202,13 +202,16 @@ function Game({ fontClass }: { fontClass: string }) {
     speak([boss.name, L.attacks]);
   }
 
-  /** Back home, through the reward scene when a letter was just cleared. */
+  /** Back home, through the reward scene when Goku just climbed a step (a letter cleared, or a first diamond). */
   function leave(cleared: string[]) {
     stopSpeech();
-    if (cleared.length) {
+    const step = formStep(save);
+    const seen = save.progress.formSeen ?? Math.min(clearedList(save).length, step); // older saves: the steps from letters
+    if (step !== save.progress.formSeen) update({ ...save, progress: { ...save.progress, formSeen: step } });
+    if (cleared.length || step > seen) {
       sfx.power();
       setScreen({ s: "reward", letters: cleared });
-      speak([L.letterDone, soundPart(cleared[cleared.length - 1]), L.newPower, form.name, form.story]);
+      speak([...(cleared.length ? [L.letterDone, soundPart(cleared[cleared.length - 1])] : []), L.newPower, form.name, form.story]);
     } else setScreen({ s: "home" });
   }
 
@@ -429,9 +432,11 @@ function Game({ fontClass }: { fontClass: string }) {
             <p className="lz-reward-kicker">Nouveau pouvoir</p>
             <h2 className="lz-title-sm">{form.name}</h2>
             <p className="lz-reward-story">{form.story}</p>
-            <p className="lz-kigain lz-reward-zeni">
-              +{LETTER_BONUS * screen.letters.length} <Zeni size={34} />
-            </p>
+            {screen.letters.length > 0 && (
+              <p className="lz-kigain lz-reward-zeni">
+                +{LETTER_BONUS * screen.letters.length} <Zeni size={34} />
+              </p>
+            )}
             <button className="lz-round" onClick={() => setScreen({ s: "home" })} aria-label="Continuer">
               <Icon name="arrow" />
             </button>
