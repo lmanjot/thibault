@@ -5,9 +5,23 @@ import { GRAPHEME, type Seg } from "../content";
 import { parseSyl, sylText, type Ex } from "../engine";
 import { soundPart, speak, sfx, sylPart, type Part } from "../audio";
 import { L, PRAISE } from "../voice";
+import { STROKES } from "../strokes";
 import { Icon } from "./bits";
 
 const praise = () => PRAISE[Math.floor(Math.random() * PRAISE.length)];
+
+/** A drawing of a syllable (le, la…) rather than a letter: its item is the syllable. */
+const traceSyl = (ex: Extract<Ex, { t: "trace" }>) => ex.item.startsWith("s:");
+const tracePart = (ex: Extract<Ex, { t: "trace" }>): Part => {
+  if (!traceSyl(ex)) return soundPart(ex.g);
+  const { c, v } = parseSyl(ex.item);
+  return sylPart(c, v);
+};
+const traceText = (ex: Extract<Ex, { t: "trace" }>) => {
+  if (!traceSyl(ex)) return GRAPHEME[ex.g].display;
+  const { c, v } = parseSyl(ex.item);
+  return sylText(c, v);
+};
 
 /** What Goku says when an exercise appears (all from the voice catalog). Exported for pre-loading. */
 export function promptParts(ex: Ex): Part[] {
@@ -27,7 +41,7 @@ export function promptParts(ex: Ex): Part[] {
       return [L.show, sylPart(c, v)];
     }
     case "trace":
-      return [L.trace, soundPart(ex.g)];
+      return traceSyl(ex) ? [L.traceSyl, tracePart(ex)] : [L.trace, soundPart(ex.g)];
   }
 }
 
@@ -459,6 +473,120 @@ interface Glyph {
   near: Uint8Array; // the letter, widened by SLACK
   inkCount: number;
   spine: number; // the letter's length, traced along its middle (about half its outline)
+  guideSize: number; // the height of a small letter, to size the guide
+  guides: Pt[][]; // how to write it: the strokes in order, fitted onto the letters (none for an unknown letter)
+}
+
+/** The writing strokes of each letter of the text, in order, in canvas units. */
+function fitStrokes(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): Pt[][] {
+  const top = (s: string) => y - ctx.measureText(s).actualBoundingBoxAscent;
+  const yX = top("x");
+  const yAsc = top("l");
+  const yDesc = y + ctx.measureText("p").actualBoundingBoxDescent;
+  const vy = (v: number) => (v >= 1 ? yX - (v - 1) * (yX - yAsc) : v >= 0 ? y - v * (y - yX) : y - v * (yDesc - y));
+  const out: Pt[][] = [];
+  const chars = Array.from(text);
+  chars.forEach((ch, i) => {
+    const strokes = STROKES[ch];
+    if (!strokes) return;
+    const px = x + ctx.measureText(chars.slice(0, i).join("")).width;
+    const m = ctx.measureText(ch);
+    const left = px - m.actualBoundingBoxLeft;
+    const w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+    for (const s of strokes) out.push(s.map(([u, v]) => ({ x: left + u * w, y: vy(v) })));
+  });
+  return out;
+}
+
+/** Points every `step` units along a line, with the direction there. */
+function along(line: Pt[], step: number, from = 0) {
+  const out: { p: Pt; dx: number; dy: number }[] = [];
+  let want = from;
+  let done = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1];
+    const b = line[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!len) continue;
+    while (want <= done + len) {
+      const t = (want - done) / len;
+      out.push({ p: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, dx: (b.x - a.x) / len, dy: (b.y - a.y) / len });
+      want += step;
+    }
+    done += len;
+  }
+  return out;
+}
+
+const lengthOf = (line: Pt[]) => line.reduce((n, p, i) => (i ? n + Math.hypot(p.x - line[i - 1].x, p.y - line[i - 1].y) : 0), 0);
+
+/** The part of a line up to a length along it. */
+function lineUpTo(line: Pt[], upTo: number): Pt[] {
+  const out: Pt[] = [line[0]];
+  let done = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1];
+    const b = line[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (done + len >= upTo) {
+      const t = len ? (upTo - done) / len : 0;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      return out;
+    }
+    out.push(b);
+    done += len;
+  }
+  return out;
+}
+
+const DEMO_SPEED = 230; // canvas units a second
+const DEMO_LIFT = 45; // a short pause (as a length) between two strokes
+const DEMO_REST = 230; // and a longer one before showing it again
+
+const NAVY ="rgba(29, 78, 163, 0.7)";
+
+/** The writing guide: arrows along each stroke and its number at the start. */
+function paintGuides(ctx: CanvasRenderingContext2D, guides: Pt[][], size: number) {
+  const r = Math.max(7, Math.min(12, size * 0.2)); // smaller numbers on a syllable of small letters
+  ctx.save();
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.strokeStyle = NAVY;
+  ctx.lineWidth = Math.max(2, r / 4);
+  for (const line of guides) {
+    if (line.length < 2) continue;
+    for (const { p, dx, dy } of along(line, r * 3.8, r * 2.5)) {
+      const s = r * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(p.x - dx * s - dy * s, p.y - dy * s + dx * s);
+      ctx.lineTo(p.x, p.y);
+      ctx.lineTo(p.x - dx * s + dy * s, p.y - dy * s - dx * s);
+      ctx.stroke();
+    }
+  }
+  const placed: Pt[] = [];
+  guides.forEach((line, i) => {
+    let p = line[0];
+    ctx.fillStyle = "#1d4ea3";
+    if (line.length === 1) {
+      // A dot (i, j): marked, with its number beside it.
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      p = { x: p.x + r * 1.4, y: p.y - r * 1.1 };
+    }
+    // Two strokes starting at the same place (the round of a, then its stick): the second number goes above.
+    for (let k = 0; k < 3 && placed.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < r * 2); k++) p = { x: p.x, y: p.y - r * 1.9 };
+    placed.push(p);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${Math.round(r * 1.25)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(i + 1), p.x, p.y + 1);
+  });
+  ctx.restore();
 }
 
 function layoutGlyph(text: string, family: string): Glyph {
@@ -497,7 +625,8 @@ function layoutGlyph(text: string, family: string): Glyph {
     inkCount++;
     if (!ink[i - 1] || !ink[i + 1] || !ink[i - BOX] || !ink[i + BOX]) edge++;
   }
-  return { font, x, y, ink, near, inkCount, spine: edge / 2 };
+  ctx.font = font;
+  return { font, x, y, ink, near, inkCount, spine: edge / 2, guides: fitStrokes(ctx, text, x, y), guideSize: ctx.measureText("x").actualBoundingBoxAscent };
 }
 
 /** How much of the letter the lines cover, how much of the lines stay on it (0 to 1), and whether they stay tidy. */
@@ -551,7 +680,7 @@ function scoreTrace(g: Glyph, lines: Pt[][]) {
 
 /** "Trace la lettre": draw it with a finger over a faint model. Done as soon as it is well covered. */
 function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (ok: boolean) => void }) {
-  const text = GRAPHEME[ex.g].display;
+  const text = traceText(ex);
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const glyph = useRef<Glyph | null>(null);
@@ -561,6 +690,10 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
   const done = useRef(false);
   const [state, setState] = useState<"ask" | "ok" | "ko">("ask");
   const [inked, setInked] = useState(false);
+  const demo = useRef<number | null>(null); // how far the demo dot has written, while it plays
+  const stopDemo = () => {
+    demo.current = null;
+  };
 
   const paint = (win = false) => {
     const cv = canvas.current;
@@ -580,6 +713,31 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
       ctx.strokeStyle = "rgba(29, 78, 163, 0.45)";
       ctx.strokeText(text, g.x, g.y);
       ctx.setLineDash([]);
+      paintGuides(ctx, g.guides, g.guideSize);
+      // The demo: a finger-dot writing the letter, stroke after stroke, until he starts.
+      if (demo.current != null) {
+        let left = demo.current;
+        ctx.lineCap = ctx.lineJoin = "round";
+        for (const line of g.guides) {
+          if (left <= 0) break;
+          const len = lengthOf(line);
+          const part = lineUpTo(line, Math.min(left, len));
+          ctx.strokeStyle = "rgba(244, 123, 32, 0.4)";
+          ctx.lineWidth = PEN * 0.7;
+          ctx.beginPath();
+          part.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          if (part.length === 1) ctx.lineTo(part[0].x + 0.1, part[0].y);
+          ctx.stroke();
+          if (left <= len + DEMO_LIFT) {
+            const head = part[part.length - 1];
+            ctx.fillStyle = "#f47b20";
+            ctx.beginPath();
+            ctx.arc(head.x, head.y, PEN * 0.75, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          left -= len + DEMO_LIFT;
+        }
+      }
     }
     ctx.lineCap = ctx.lineJoin = "round";
     ctx.lineWidth = PEN;
@@ -595,6 +753,7 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
   // Lay the letter out in the game's reading font (script or cursive), once it is loaded.
   useEffect(() => {
     let alive = true;
+    let frame = 0;
     const family = (wrap.current && getComputedStyle(wrap.current).fontFamily) || "sans-serif";
     const ready = document.fonts?.load ? document.fonts.load(`100px ${family}`, text).catch(() => null) : Promise.resolve();
     ready.then(() => {
@@ -603,9 +762,29 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
       if (cv) cv.width = cv.height = Math.round(BOX * Math.min(2, window.devicePixelRatio || 1));
       glyph.current = layoutGlyph(text, family);
       paint();
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+      // Show how to write it, twice, before he starts (stops as soon as he touches the pad).
+      const total = glyph.current.guides.reduce((n, l) => n + lengthOf(l) + DEMO_LIFT, 0);
+      if (!total) return;
+      const t0 = performance.now() + 700;
+      const run = (now: number) => {
+        if (!alive || done.current || lines.current.length) return stopDemo();
+        const d = ((now - t0) / 1000) * DEMO_SPEED;
+        const lap = total + DEMO_REST;
+        if (d >= lap * 2) {
+          stopDemo();
+          return paint();
+        }
+        demo.current = d < 0 ? null : Math.min(total, d % lap);
+        paint();
+        frame = requestAnimationFrame(run);
+      };
+      frame = requestAnimationFrame(run);
     });
     return () => {
       alive = false;
+      cancelAnimationFrame(frame);
+      stopDemo();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
@@ -626,7 +805,7 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
       sfx.bad();
       lines.current = [];
       paint(true); // show the letter as it should be
-      await speak([L.itsThisOne, soundPart(ex.g)]);
+      await speak([L.itsThisOne, tracePart(ex)]);
     }
     await wait(ok ? 300 : 650);
     onResult(ok);
@@ -660,7 +839,7 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
           ref={canvas}
           width={BOX}
           height={BOX}
-          aria-label={`Trace la lettre ${text}`}
+          aria-label={`Trace ${text}`}
           onPointerDown={(e) => {
             if (done.current) return;
             try {
@@ -669,6 +848,7 @@ function Trace({ ex, onResult }: { ex: Extract<Ex, { t: "trace" }>; onResult: (o
               // drawing still works without capture
             }
             drawing.current = true;
+            stopDemo();
             lines.current.push([at(e)]);
             setInked(true);
             paint();

@@ -401,6 +401,9 @@ export type Ex =
 /** "Trace la lettre": draw it with a finger over a faint model. */
 const trace = (g: string, section: Section): Ex => ({ t: "trace", section, item: gid(g), g });
 
+/** The same with a syllable (le, la…): its item is the syllable, so it counts for it. */
+const traceSyl = (id: string, section: Section): Ex => ({ t: "trace", section, item: id, g: parseSyl(id).c });
+
 const rnd = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
 
 export function shuffle<T>(a: T[]): T[] {
@@ -639,14 +642,15 @@ export function buildSession(s: Save): Ex[] {
   // 2. Entraînement
   const train: Ex[] = [];
   if (f) {
-    // The letter being worked on: four times, in different exercises (the majority, with its syllables),
-    // one of them drawing it.
-    train.push(trace(f, "train"));
-    for (let i = 0; i < 3; i++) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t));
     // Two syllables with it: reading is blending, from the start.
     const focusSyls = syllablesWith(s, f);
     const fsyl = focusSyls.length ? pickReview(s, focusSyls, 2) : [];
-    fsyl.forEach((id) => train.push(sylEx(s, id, "train")));
+    // One drawing: the letter, or every other time (once it has syllables) one of them, like « le ».
+    const drawSyl = fsyl.length > 0 && Math.random() < 0.5;
+    // The letter being worked on: four times, in different exercises (the majority, with its syllables).
+    if (!drawSyl) train.push(trace(f, "train"));
+    while (train.length < 4) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t));
+    fsyl.forEach((id, i) => train.push(drawSyl && i === 0 ? traceSyl(id, "train") : sylEx(s, id, "train")));
     for (let i = fsyl.length; i < 2; i++) train.push(soundEx(s, f, f, "train", 0, train[train.length - 1]?.t)); // 6 of 7 on the letter
     // The other known letters fill the rest (at least one), or more of the letter when it is the only one.
     const rest = Math.max(1, 7 - train.length);

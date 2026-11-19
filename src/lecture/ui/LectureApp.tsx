@@ -65,9 +65,12 @@ function Game({ fontClass }: { fontClass: string }) {
     // Dev shortcut to try a mini-game directly: /lecture?jeu=nuage
     const jeu = process.env.NODE_ENV === "development" ? new URLSearchParams(location.search).get("jeu") : null;
     if (jeu === "choix") return { s: "bonus", cleared: [] }; // the game picker
-    // /lecture?jeu=trace: drawing letters (a, e, u, ch).
+    // /lecture?jeu=trace: drawing letters and syllables (le, a, cha, u), or others with &t=s:b|oi,g:z.
     if (jeu === "trace")
-      return { s: "session", exercises: ["a", "e", "u", "ch"].map((g) => ({ t: "trace", section: "train", item: `g:${g}`, g }) as Ex) };
+      return {
+        s: "session",
+        exercises: (new URLSearchParams(location.search).get("t")?.split(",") ?? ["s:l|e", "g:a", "s:ch|a", "g:u"]).map((item) => ({ t: "trace", section: "train", item, g: item.slice(2).split("|")[0] }) as Ex),
+      };
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
     if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };
     if (jeu === "or" || jeu === "diamant" || jeu === "voeu")
