@@ -515,11 +515,14 @@ function Mots({ ex, onResult }: { ex: Extract<Ex, { t: "mots" }>; onResult: (ok:
             aria-label={w.word.w}
           >
             {found.includes(i) && w.segs ? (
-              w.segs.map((sg, j) => (
-                <span key={j} className={sg.text === mark && sg.phon === GRAPHEME[ex.g].phon ? "lz-mark" : ""}>
-                  {sg.text}
-                </span>
-              ))
+              // One line: the tile is a grid, and each letter group would otherwise get its own row.
+              <span>
+                {w.segs.map((sg, j) => (
+                  <span key={j} className={sg.text === mark && sg.phon === GRAPHEME[ex.g].phon ? "lz-mark" : ""}>
+                    {sg.text}
+                  </span>
+                ))}
+              </span>
             ) : (
               w.word.w
             )}

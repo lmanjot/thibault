@@ -64,7 +64,7 @@ const SCHWA_SAY: Record<string, string> = { r: "reu", f: "feu", v: "veu", ch: "c
  * so those are said with a light « e », as in class: « lleu », « reu », « je ».
  */
 const CONSONANT_SAY: Record<string, string> = {
-  l: "lleu",
+  l: "lleu", // said as a held « llllll » (voice-tuning.json): « lleu » sounded like « le »
   r: "reu",
   m: "mmmm",
   s: "ssss",

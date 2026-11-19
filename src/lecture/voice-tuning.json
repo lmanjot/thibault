@@ -97,5 +97,9 @@
   },
   "Whis": {
     "say": "Ouisss"
+  },
+  "lleu": {
+    "say": "llllll",
+    "speed": 0.7
   }
 }

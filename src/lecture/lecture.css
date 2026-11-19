@@ -2397,6 +2397,15 @@
 .lz-step-goku .lz-goku-sm {
   height: 140px;
 }
+/* The 7 dragon balls fit the narrowest card (150 px). */
+.lz-step-goku .lz-balls {
+  gap: 2px;
+  bottom: 0;
+}
+.lz-step-goku .lz-dbsvg {
+  width: 16px;
+  height: 16px;
+}
 .lz-step.is-done {
   background: #f1fbf4 !important;
 }
