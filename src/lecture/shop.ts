@@ -92,6 +92,7 @@ export const ITEMS: ShopItem[] = [
   { id: "c-beerus", kind: "companion", name: "Beerus", price: 1900, img: "beerus.png", era: ERA.gods },
   { id: "c-vegeta-blue", kind: "companion", name: "Vegeta Blue", price: 1800, img: "vegeta_blue.png", era: ERA.blue },
   { id: "c-granola", kind: "companion", name: "Granola", price: 2000, img: "granola.png", era: ERA.ui },
+  { id: "c-jiren", kind: "companion", name: "Jiren", price: 2200, img: "jiren.png", era: ERA.ui },
 
 
   // Legends: never for sale, they join through the letters album (see fillAlbum).

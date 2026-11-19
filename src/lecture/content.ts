@@ -361,6 +361,7 @@ export const FRIEND_ATTACKS: Record<string, Attack> = {
   "c-beerus": { name: "Hakai", say: "Hakaï !", color: "purple", shape: "ball" },
   "c-vegeta-blue": { name: "Final Flash", say: "Final flash !", color: "blue" },
   "c-granola": { name: "Tir du sniper", say: "Tir du sniper !", color: "green" },
+  "c-jiren": { name: "Power Impact", say: "Power impact !", color: "red", shape: "ball" },
 };
 
 /**
@@ -593,7 +594,6 @@ export const LEGENDS: Legend[] = [
     ["gogeta", "Gogeta", "lg_gogeta.png"],
     ["broly", "Broly", "broly.png"],
     ["vegeto", "Vegeto", "lg_vegeto.png"],
-    ["jiren", "Jiren", "jiren.png"],
     ["gohan-beast", "Gohan Beast", "lg_gohan_beast.png"],
     ["freezer", "Freezer", "frieza_new.png"],
     ["broly-legendaire", "Broly légendaire", "lg_broly_legendaire.png"],
