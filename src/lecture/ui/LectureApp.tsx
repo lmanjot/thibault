@@ -38,7 +38,7 @@ import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits
 import { MINI_GAMES, MiniGame, SECRET_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
 import { Album, AlbumButton, NewFriends } from "./Album";
-import { chooseFighter, DIAMOND_BONUS, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
+import { chooseFighter, DIAMOND_BONUS, earnedStep, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
 import "../lecture.css";
 
 type Screen =
@@ -205,13 +205,14 @@ function Game({ fontClass }: { fontClass: string }) {
   /** Back home, through the reward scene when Goku just climbed a step (a letter cleared, or a first diamond). */
   function leave(cleared: string[]) {
     stopSpeech();
-    const step = formStep(save);
-    const seen = save.progress.formSeen ?? Math.min(clearedList(save).length, step); // older saves: the steps from letters
+    const step = earnedStep(save);
+    const seen = formStep(save);
     if (step !== save.progress.formSeen) update({ ...save, progress: { ...save.progress, formSeen: step } });
     if (cleared.length || step > seen) {
+      const power = formFor(step).form;
       sfx.power();
       setScreen({ s: "reward", letters: cleared });
-      speak([...(cleared.length ? [L.letterDone, soundPart(cleared[cleared.length - 1])] : []), L.newPower, form.name, form.story]);
+      speak([...(cleared.length ? [L.letterDone, soundPart(cleared[cleared.length - 1])] : []), L.newPower, power.name, power.story]);
     } else setScreen({ s: "home" });
   }
 

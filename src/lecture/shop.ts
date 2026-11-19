@@ -140,8 +140,14 @@ export const zeni = (s: Save) => s.progress.zeni ?? 0;
 /** Whether a letter has turned diamond. */
 export const hasDiamond = (s: Save) => clearedList(s).some((g) => level(s, gid(g)) >= MASTERED);
 
-/** Goku's current step on the ladder: one step per letter cleared, and one more with a diamond letter. */
-export const formStep = (s: Save) => Math.min(clearedList(s).length + (hasDiamond(s) ? 1 : 0), FORMS.length - 1);
+/** The step Goku has earned: one per letter cleared, and one more with a diamond letter. */
+export const earnedStep = (s: Save) => Math.min(clearedList(s).length + (hasDiamond(s) ? 1 : 0), FORMS.length - 1);
+
+/**
+ * Goku's step as shown: a step earned only appears once its power scene has played, at the end of
+ * a session (older saves: the steps from letters only, so a diamond still brings its scene).
+ */
+export const formStep = (s: Save) => Math.min(earnedStep(s), s.progress.formSeen ?? clearedList(s).length);
 
 /** Whether Goku has reached the era an item belongs to. */
 export const inEra = (s: Save, item: ShopItem) => formStep(s) >= (item.era ?? 0);
