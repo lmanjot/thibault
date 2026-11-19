@@ -34,6 +34,8 @@ export function promptParts(ex: Ex): Part[] {
       return [L.findSound, soundPart(ex.g), L.asIn, ex.word.w, L.slideIt];
     case "hunt":
       return [L.findAll, soundPart(ex.g), L.three];
+    case "mots":
+      return [L.findWords, soundPart(ex.g)];
     case "fusion":
       return [L.fusion, sylPart(ex.c, ex.v), L.fusionSlide];
     case "syllabe": {
@@ -54,6 +56,7 @@ function replayParts(ex: Ex): Part[] {
     case "complete":
       return [soundPart(ex.g), L.asIn, ex.word.w];
     case "hunt":
+    case "mots":
       return [soundPart(ex.g)];
     case "fusion":
       return [L.fusion, sylPart(ex.c, ex.v), L.fusionSlide];
@@ -110,6 +113,7 @@ export function Exercise({ ex, onResult }: { ex: Ex; onResult: (ok: boolean) => 
   }
 
   if (ex.t === "hunt") return <Hunt ex={ex} onResult={onResult} />;
+  if (ex.t === "mots") return <Mots ex={ex} onResult={onResult} />;
   if (ex.t === "trace") return <Trace ex={ex} onResult={onResult} />;
 
   const speaker = (
@@ -454,6 +458,77 @@ function Hunt({ ex, onResult }: { ex: Extract<Ex, { t: "hunt" }>; onResult: (ok:
   );
 }
 
+/**
+ * "Touche les mots qui ont… e": written words, the letter never shown. A word found lights its
+ * letter and is read; a wrong one shakes and is read too, so he hears the sound is not there.
+ */
+function Mots({ ex, onResult }: { ex: Extract<Ex, { t: "mots" }>; onResult: (ok: boolean) => void }) {
+  const [found, setFound] = useState<number[]>([]);
+  const [wrong, setWrong] = useState<number | null>(null);
+  const missed = useRef(false);
+  const done = useRef(false);
+  const total = ex.words.filter((w) => w.ok).length;
+  const mark = GRAPHEME[ex.g].display;
+
+  async function tap(i: number) {
+    if (done.current || found.includes(i)) return;
+    const w = ex.words[i];
+    if (w.ok) {
+      const next = [...found, i];
+      setFound(next);
+      sfx.good();
+      if (next.length === total) {
+        done.current = true;
+        await speak([w.word.w, missed.current ? L.foundAll : praise()]);
+        await wait(300);
+        onResult(!missed.current);
+      } else speak([w.word.w]);
+    } else {
+      missed.current = true;
+      setWrong(i);
+      sfx.bad();
+      speak([L.notHeard, soundPart(ex.g), L.inWord, w.word.w]);
+      setTimeout(() => setWrong(null), 700);
+    }
+  }
+
+  return (
+    <div className="lz-ex">
+      <div className="lz-prompt">
+        <button className="lz-round lz-speaker" onClick={() => speak(promptParts(ex))} aria-label="Réécouter">
+          <Icon name="speaker" size={36} />
+        </button>
+        <div className="lz-hunt-count">
+          {Array.from({ length: total }, (_, i) => (
+            <span key={i} className={i < found.length ? "on" : ""}>
+              {mark}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="lz-mots">
+        {ex.words.map((w, i) => (
+          <button
+            key={i}
+            className={`lz-tile lz-mot ${found.includes(i) ? "is-ok is-found" : ""} ${wrong === i ? "is-ko" : ""}`}
+            onClick={() => tap(i)}
+            aria-label={w.word.w}
+          >
+            {found.includes(i) && w.segs ? (
+              w.segs.map((sg, j) => (
+                <span key={j} className={sg.text === mark && sg.phon === GRAPHEME[ex.g].phon ? "lz-mark" : ""}>
+                  {sg.text}
+                </span>
+              ))
+            ) : (
+              w.word.w
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ——— Trace la lettre ———
 

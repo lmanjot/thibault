@@ -393,6 +393,7 @@ export type Ex =
   | { t: "ecoute"; section: Section; item: string; g: string; word: Word; answer: boolean }
   | { t: "complete"; section: Section; item: string; g: string; word: Word; segs: Seg[]; gap: number; options: string[] }
   | { t: "hunt"; section: Section; item: string; g: string; letters: string[] }
+  | { t: "mots"; section: Section; item: string; g: string; words: { word: Word; segs: Seg[] | null; ok: boolean }[] }
   | { t: "lettre"; section: Section; item: string; g: string; word?: Word; options: string[] }
   | { t: "fusion"; section: Section; item: string; c: string; v: string; options: string[] }
   | { t: "syllabe"; section: Section; item: string; options: string[] }
@@ -509,7 +510,39 @@ function hunt(s: Save, g: string, focus: string | null, section: Section): Ex | 
   return { t: "hunt", section, item: gid(g), g, letters: shuffle(letters) };
 }
 
-type SoundKind = "ecoute" | "lettre" | "complete" | "hunt";
+/**
+ * "Touche les mots qui ont… e": the sound is heard, the letter is never shown, and he finds it
+ * inside written words. No trap: in the right words every such letter makes that sound (petit,
+ * not tasse or jeu), and the other words have none of its letters, even with an accent.
+ */
+const bare = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+export function motsWords(g: string): { good: { word: Word; segs: Seg[] }[]; other: Word[] } {
+  const gr = GRAPHEME[g];
+  const good: { word: Word; segs: Seg[] }[] = [];
+  for (const word of WORDS) {
+    const segs = segment(word);
+    if (!segs) continue;
+    const n = segs.filter((sg) => sg.text === gr.display && sg.phon === gr.phon).length;
+    if (n && n === word.w.split(gr.display).length - 1) good.push({ word, segs });
+  }
+  const letters = [...bare(gr.display)];
+  const other = WORDS.filter((w) => !wordHas(w, gr.phon) && !wordAmbiguous(w, gr.phon) && !letters.some((ch) => bare(w.w).includes(ch)));
+  return { good, other };
+}
+
+export function mots(g: string, section: Section): Ex | null {
+  const { good, other } = motsWords(g);
+  if (!good.length || other.length < 3) return null;
+  const n = good.length >= 3 && Math.random() < 0.5 ? 2 : 1;
+  const words = [
+    ...shuffle(good).slice(0, n).map((x) => ({ word: x.word, segs: x.segs as Seg[] | null, ok: true })),
+    ...shuffle(other).slice(0, 4 - n).map((word) => ({ word, segs: segment(word), ok: false })),
+  ];
+  return { t: "mots", section, item: gid(g), g, words: shuffle(words) };
+}
+
+type SoundKind = "ecoute" | "lettre" | "complete" | "hunt" | "mots";
 
 /** A varied exercise for one sound (never the same kind twice in a row). */
 function soundEx(s: Save, g: string, focus: string | null, section: Section, bump = 0, avoid?: string): Ex {
@@ -518,6 +551,7 @@ function soundEx(s: Save, g: string, focus: string | null, section: Section, bum
     ["ecoute", 25],
     ["hunt", 20],
     ["lettre", 15],
+    ["mots", 20],
   ];
   const pool = weights.filter(([k]) => k !== avoid);
   let r = Math.random() * pool.reduce((n, [, w]) => n + w, 0);
@@ -533,6 +567,7 @@ function soundEx(s: Save, g: string, focus: string | null, section: Section, bum
     complete: () => complete(s, g, focus, section, bump),
     hunt: () => hunt(s, g, focus, section),
     lettre: () => lettre(s, g, focus, section, bump),
+    mots: () => mots(g, section),
   };
   return make[kind]() ?? complete(s, g, focus, section, bump) ?? ecoute(g, section) ?? hunt(s, g, focus, section) ?? trace(g, section);
 }

@@ -978,6 +978,32 @@
   animation: lz-starin 0.4s both;
 }
 
+/* Find the words with a letter */
+.lz-mots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 2vw, 22px);
+  width: min(100%, 760px);
+}
+.lz-tile.lz-mot {
+  min-width: 0;
+  height: clamp(90px, calc(17 * var(--vh, 1vh)), 140px);
+  padding: 0 14px;
+  font-size: clamp(38px, calc(7.5 * var(--vh, 1vh)), 68px);
+  white-space: nowrap;
+}
+/* Phones upright: one word per line, so long words (kangourou) fit. */
+@media (orientation: portrait) and (max-width: 820px) {
+  .lz-mots {
+    grid-template-columns: 1fr;
+    width: min(100%, 420px);
+  }
+  .lz-tile.lz-mot {
+    height: clamp(72px, calc(11 * var(--vh, 1vh)), 110px);
+    font-size: clamp(40px, 12vw, 60px);
+  }
+}
+
 /* Discovery */
 .lz-example {
   display: grid;

@@ -18,7 +18,7 @@ import { FORMS, LEGENDS, type Form } from "./content";
 import { albumOwned, type Ex, type Save } from "./engine";
 
 /** Zénis for a right answer, by exercise difficulty. */
-const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, lettre: 3, complete: 4, fusion: 4, syllabe: 5, trace: 4 };
+const PAY: Record<Ex["t"], number> = { ecoute: 2, hunt: 3, mots: 4, lettre: 3, complete: 4, fusion: 4, syllabe: 5, trace: 4 };
 
 export function zeniFor(ex: Ex, firstTry: boolean, boss: boolean): number {
   const base = firstTry ? PAY[ex.t] : 1;

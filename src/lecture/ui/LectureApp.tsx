@@ -25,6 +25,7 @@ import {
   startLetter,
   roundOf,
   storeSave,
+  mots,
   type Ex,
   type Save,
 } from "../engine";
@@ -70,6 +71,12 @@ function Game({ fontClass }: { fontClass: string }) {
       return {
         s: "session",
         exercises: (new URLSearchParams(location.search).get("t")?.split(",") ?? ["s:l|e", "g:a", "s:ch|a", "g:u"]).map((item) => ({ t: "trace", section: "train", item, g: item.slice(2).split("|")[0] }) as Ex),
+      };
+    // /lecture?jeu=mots: "touche les mots qui ont…" (e, ou, ch, a), or others with &t=on,d.
+    if (jeu === "mots")
+      return {
+        s: "session",
+        exercises: (new URLSearchParams(location.search).get("t")?.split(",") ?? ["e", "ou", "ch", "a"]).map((g) => mots(g, "train")).filter((x): x is Ex => !!x),
       };
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
     if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };

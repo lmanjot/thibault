@@ -207,6 +207,12 @@ export const WORDS: Word[] = [
   { w: "roi", pic: "👑", s: ["r", "oi"] },
   { w: "poisson", pic: "🐟", s: ["p", "oi", "s", "on"] },
   { w: "étoile", pic: "⭐", s: ["é", "t", "oi", "l"] },
+  { w: "judo", pic: "🥋", s: ["j", "u", "d", "o"] },
+  { w: "dindon", pic: "🦃", s: ["d", "in", "d", "on"] },
+  { w: "pantalon", pic: "👖", s: ["p", "an", "t", "a", "l", "on"] },
+  { w: "kangourou", pic: "🦘", s: ["k", "an", "g", "ou", "r", "ou"] },
+  { w: "cheveux", pic: "💇", s: ["ch", "e", "v", "eu"] },
+  { w: "bleu", pic: "🔵", s: ["b", "l", "eu"] },
 ];
 
 // ——— Spelling: which letters write which sound ———

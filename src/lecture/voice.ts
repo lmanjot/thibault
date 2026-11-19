@@ -26,6 +26,7 @@ export const L = {
   itsThisOne: "Presque ! C'est celle-ci…",
   findAll: "Trouve toutes les lettres…",
   three: "Il y en a trois !",
+  findWords: "Touche les mots qui ont le son…",
   foundAll: "Tu les as tous trouvés !",
   fusion: "Pour faire…",
   fusionSlide: "glisse la bonne lettre dans la case !",
