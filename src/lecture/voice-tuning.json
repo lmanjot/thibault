@@ -101,5 +101,9 @@
   "lleu": {
     "say": "llllll",
     "speed": 0.7
+  },
+  "coco": {
+    "say": "Coco !",
+    "speed": 0.85
   }
 }
