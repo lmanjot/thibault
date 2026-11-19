@@ -65,6 +65,8 @@ async function write(code, data, ns) {
  * GET  ?code=ABC123      → { save, updatedAt } (404 if unknown)
  * POST { save }          → creates a code for this save → { code, updatedAt }
  * POST { code, save }    → stores it, unless a newer save is already there (409 with the newer one)
+ * POST { code, save, base } → stores it only if the online save is still the one this device saw (updatedAt = base),
+ *                         otherwise 409 with the online one (La Vallée des Graines)
  * Returns { status, body }.
  */
 async function handle(method, code, bodyText, ns = "lecture-z") {
@@ -96,7 +98,10 @@ async function handle(method, code, bodyText, ns = "lecture-z") {
   if (!CODE.test(c)) return { status: 400, body: { error: "code" } };
   const current = await readLatest(c, ns);
   if (!current) return { status: 404, body: { error: "unknown" } };
-  if (current.updatedAt > updatedAt) return { status: 409, body: current };
+  // base: the version this device last saw online. If another device saved since, this device has not seen it:
+  // refuse (409 with the online one) so the device can choose, instead of a stale game overwriting newer progress.
+  // Without base (Lecture Z), the newer timestamp wins as before.
+  if ("base" in body ? current.updatedAt !== Number(body.base) : current.updatedAt > updatedAt) return { status: 409, body: current };
   await write(c, { save, updatedAt }, ns);
   return { status: 200, body: { code: c, updatedAt } };
 }

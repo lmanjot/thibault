@@ -7,7 +7,7 @@ import {
 import { gridSVG, gridKey } from './geo.js';
 import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS, FR_SKILLS, FR_GROUPS } from './math.js';
 import * as A from './art.js';
-import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, pullNewer } from './sync.js';
+import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, flushSave, pullRemote, markSynced } from './sync.js';
 
 const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -79,27 +79,45 @@ function saveNow() {
   const changed = sig !== lastSig;
   if (changed) { lastSig = sig; S.updatedAt = now(); }
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
-  if (changed) pushSave(S, adoptRemote);
+  if (changed) pushSave(S, onRemote);
 }
-addEventListener('pagehide', saveNow);
+// Leaving the page or hiding it: the last changes are sent at once (not 2 s later, when the page may be gone).
+addEventListener('pagehide', () => { saveNow(); flushSave(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) saveNow();
-  else if (started) pullNewer(S).then((r) => r && adoptRemote(r));
+  if (document.hidden) { saveNow(); flushSave(); }
+  else if (started) pullRemote().then(onRemote);
 });
 
-// A newer game from another device replaces this one (as soon as no window is open).
+// ---- Several devices on one code
+/** Progress of a game: all the XP earned (levels passed + XP of the current level). */
+function progressOf(s) { let t = (s && s.xp) || 0; for (let l = 1; l < ((s && s.lvl) || 1); l++) t += xpNeed(l); return t; }
+/** This device has changes the online save does not have yet. */
+const unsynced = () => { const st = syncState(); return !!st && (S.updatedAt || 0) !== st.at; };
+/**
+ * The online save changed since this device last synced (another device played). If this device has nothing new,
+ * take it. If both played, keep the game with the most progress: the other device's one, or this one (sent again).
+ */
+function onRemote(online) {
+  const st = syncState();
+  if (!online || !online.save || !st || online.updatedAt === st.at) return;
+  if (!unsynced() || progressOf(online.save) > progressOf(S)) { adoptRemote(online.save, online.updatedAt); return; }
+  markSynced(online.updatedAt); // this game goes further: it replaces the online one
+  pushSave(S, onRemote, true);
+}
+// A game from another device replaces this one (as soon as no window is open).
 let pendingRemote = null;
-function adoptRemote(remote) {
+function adoptRemote(remote, at) {
   if (!remote || remote.v !== 1) return;
-  pendingRemote = remote;
+  pendingRemote = { save: remote, at: at ?? remote.updatedAt };
   applyPendingRemote();
 }
 function applyPendingRemote() {
   if (!pendingRemote || layers.length || busy || pl.moving) return;
-  const remote = pendingRemote;
+  const { save: remote, at } = pendingRemote;
   pendingRemote = null;
-  if ((remote.updatedAt || 0) <= (S.updatedAt || 0)) return;
   S = migrate(remote);
+  S.updatedAt = at;
+  markSynced(at);
   lastSig = progressSig(S);
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
   pl.x = S.pos.x; pl.y = S.pos.y; pl.dir = S.pos.dir || 'down'; pl.px = pl.x * 16; pl.py = pl.y * 16;
@@ -2462,8 +2480,7 @@ function syncSection(api) {
           const remote = await askCode(true);
           if (!remote) { api.refresh(); return; }
           api.close();
-          S.updatedAt = 0;
-          adoptRemote(remote);
+          adoptRemote(remote, remote.updatedAt);
         } }, 'J’ai déjà un code')));
   }
   return box;
@@ -2896,7 +2913,7 @@ function titleScreen() {
     popLayer(L);
     startWorld();
     saveNow();
-    if (syncState()) pullNewer(S).then((r) => r && adoptRemote(r));
+    if (syncState()) { if (unsynced()) pushSave(S, onRemote, true); pullRemote().then(onRemote); }
   };
   const useCode = async () => {
     const remote = await askCode(false);
@@ -2919,15 +2936,24 @@ function titleScreen() {
       btns.append(h('button', { class: 'btn ghost', onclick: useCode }, 'J’ai un code'));
     }
   }
-  mainButtons();
-  // A newer game saved on another device under this device's code: continue that one.
-  if (syncState()) pullNewer(saved).then((remote) => {
-    if (!remote || started) return;
-    current = migrate(remote);
-    S = current; applyWorldFlags();
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(current)); } catch { /* private mode */ }
-    mainButtons();
-  });
+  if (!syncState()) mainButtons();
+  else {
+    // Another device may have played under this code: check first (a few seconds at most), then show « Continuer ».
+    btns.append(h('p', { class: 'ask' }, 'Synchronisation…'));
+    Promise.race([pullRemote(), new Promise((r) => setTimeout(() => r(null), 5000))]).then((online) => {
+      if (started) return;
+      const st = syncState();
+      const localNew = current && st && (current.updatedAt || 0) !== st.at;
+      if (online && !(localNew && progressOf(current) > progressOf(online.save))) {
+        current = migrate(online.save);
+        current.updatedAt = online.updatedAt;
+        markSynced(online.updatedAt);
+        S = current; applyWorldFlags();
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify(current)); } catch { /* private mode */ }
+      }
+      mainButtons();
+    });
+  }
   function newGame() {
     btns.innerHTML = '';
     btns.append(h('p', { class: 'ask' }, 'Choisis ton mode de jeu'),

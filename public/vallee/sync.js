@@ -1,6 +1,8 @@
 // La Vallée des Graines — keeps the game in step between devices with a short code (client side),
-// like Lecture Z. The code lives on each device (localStorage); every change is sent a moment later,
-// and the newest save is fetched when the game opens or comes back to the screen. The newest one wins.
+// like Lecture Z. The code lives on each device (localStorage), with `at`: the version of the online save this
+// device last saw (its updatedAt). Every change is sent a moment later (at once when the game is hidden or closed),
+// saying which version it builds on; the server refuses it if another device saved in between (409), and the game
+// then keeps whichever of the two has the most progress. A stale game can no longer overwrite newer progress.
 
 const KEY = 'vallee-sync';
 const API = '/api/vallee-sync';
@@ -49,42 +51,61 @@ export async function fetchCode(code) {
 /** Use this code on this device from now on. */
 export function adoptCode(code, at) { set({ code: cleanCode(code), at }); }
 export function stopSync() { set(null); }
+/** This device now holds the online version saved at `at` (after taking it, or after deciding to replace it). */
+export function markSynced(at) { const s = read(); if (s) set({ ...s, at, error: false }); }
 
-let timer;
-/** Send this save a moment after the last change (several quick changes make one request). */
-export function pushSave(save, onNewer) {
-  const s = read();
-  if (!s) return;
+let timer = 0, latest = null, onConflictCb = null, inFlight = false, again = false;
+/**
+ * Send this save a moment after the last change (several quick changes make one request), or at once (now = true,
+ * when the game is hidden or closed). onConflict({ save, updatedAt }) is called with the online save when another
+ * device saved since this device last synced.
+ */
+export function pushSave(save, onConflict, now = false) {
+  if (!read()) return;
+  latest = save; onConflictCb = onConflict;
   clearTimeout(timer);
-  timer = setTimeout(async () => {
-    try {
-      const r = await fetch(API, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: s.code, save }), keepalive: true,
-      });
-      if (r.status === 409) {
-        // Another device saved something newer meanwhile: take it.
-        const newer = await r.json();
-        set({ code: s.code, at: newer.updatedAt });
-        if (onNewer) onNewer(newer.save);
-        return;
-      }
-      set({ code: s.code, at: r.ok ? save.updatedAt : s.at, error: !r.ok });
-    } catch {
-      set({ ...s, error: true }); // offline: sent with the next change
-    }
-  }, 2000);
+  if (now) send(true); else timer = setTimeout(() => send(false), 2000);
+}
+/** Send what is waiting right away (the page is being hidden or closed). */
+export function flushSave() { if (timer) { clearTimeout(timer); send(true); } }
+
+async function send(closing) {
+  timer = 0;
+  const s = read();
+  if (!s || !latest) return;
+  if (inFlight) { again = true; return; } // one request at a time, so two sends never race each other
+  inFlight = true;
+  const body = JSON.stringify({ code: s.code, save: latest, base: s.at || 0 });
+  const sentAt = latest.updatedAt;
+  try {
+    const r = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+      keepalive: closing && body.length < 60000, // a closing page can only send a small body with keepalive
+    });
+    if (r.status === 409) {
+      const online = await r.json();
+      set({ ...s, error: false });
+      if (onConflictCb) onConflictCb(online);
+    } else if (r.ok) {
+      set({ code: s.code, at: sentAt, error: false });
+    } else set({ ...s, error: true });
+  } catch {
+    set({ ...s, error: true }); // offline: sent with the next change
+  }
+  inFlight = false;
+  if (again) { again = false; if (latest && latest.updatedAt !== (read() || {}).at) send(false); }
 }
 
-/** The online save, if it is newer than this device's. */
-export async function pullNewer(local) {
+/** The online save { save, updatedAt } if it changed since this device last synced, else null. */
+export async function pullRemote() {
   const s = read();
   if (!s) return null;
   try {
-    const remote = await fetchCode(s.code);
-    if (!remote) return null;
-    set({ code: s.code, at: remote.updatedAt, error: false });
-    return (remote.updatedAt || 0) > ((local && local.updatedAt) || 0) ? remote : null;
+    const r = await fetch(`${API}?code=${encodeURIComponent(s.code)}`, { cache: 'no-store' });
+    if (!r.ok) { set({ ...s, error: r.status !== 404 }); return null; }
+    const online = await r.json();
+    set({ ...read(), error: false });
+    return online && online.save && online.updatedAt !== s.at ? online : null;
   } catch {
     set({ ...s, error: true });
     return null;
