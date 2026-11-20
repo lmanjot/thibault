@@ -2764,6 +2764,37 @@ function pressA() {
   if (top) { if (top.onA) top.onA(); return; }
   if (mode === 'world' && !busy && !pl.moving) interact();
 }
+/**
+ * A tap (or a click) on the map: if what was tapped is right next to the player (or the garden plot he stands on),
+ * he turns to it and acts on it, as with A. Returns true if something happened.
+ */
+function tapAt(clientX, clientY) {
+  if (mode !== 'world' || layers.length || busy || pl.moving) return false;
+  const r = cv.getBoundingClientRect();
+  const tx = Math.floor(((clientX - r.left) * DPR / SCALE + camX) / 16);
+  let ty = Math.floor(((clientY - r.top) * DPR / SCALE + camY) / 16);
+  let ent = entAt(tx, ty), o = ent ? null : objAt.get(tx + ty * W);
+  if (!ent && !o) {
+    // people and animals are drawn taller than their tile: a tap on their head lands on the tile above
+    const e2 = entAt(tx, ty + 1), o2 = objAt.get(tx + (ty + 1) * W);
+    if (e2) { ent = e2; ty++; } else if (o2 && o2.type === 'npc') { o = o2; ty++; } else return false;
+  }
+  // exactly what was tapped (not what the player faces): the plot under him, or a thing next to him
+  const act = async () => {
+    busy = true;
+    try { await (ent ? (ent.wild ? onWild(ent) : onFarmAnimal(ent)) : handle(o)); } finally { busy = false; afterChange(); }
+  };
+  if (o && o.type === 'plot' && objAt.get(pl.x + pl.y * W) === o) { act(); return true; }
+  for (const [d, [dx, dy]] of Object.entries(DIRS)) {
+    const nx = pl.x + dx, ny = pl.y + dy;
+    if (ent ? entAt(nx, ny) === ent : objAt.get(nx + ny * W) === o) {
+      pl.dir = d;
+      act();
+      return true;
+    }
+  }
+  return false;
+}
 function pressB() {
   const top = layers[layers.length - 1];
   if (top) { if (top.onB) top.onB(); return; }
@@ -2828,7 +2859,7 @@ function buildTouch() {
 function setupSwipeStick() {
   const knob = h('i');
   const ring = h('div', { class: 'joy' }, knob);
-  let id = null, ox = 0, oy = 0, dir = null;
+  let id = null, ox = 0, oy = 0, dir = null, sx = 0, sy = 0, st = 0, moved = false;
   const set = (d) => {
     if (dir) { const i = held.indexOf(dir); if (i >= 0) held.splice(i, 1); }
     dir = d;
@@ -2838,7 +2869,7 @@ function setupSwipeStick() {
   cv.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' || id !== null || mode !== 'world' || layers.length) return;
     e.preventDefault();
-    id = e.pointerId; ox = e.clientX; oy = e.clientY;
+    id = e.pointerId; ox = sx = e.clientX; oy = sy = e.clientY; st = performance.now(); moved = false;
     try { cv.setPointerCapture(id); } catch { /* synthetic pointer */ }
     knob.style.transform = '';
     place(); ui.append(ring);
@@ -2847,15 +2878,22 @@ function setupSwipeStick() {
     if (e.pointerId !== id) return;
     let dx = e.clientX - ox, dy = e.clientY - oy;
     const dist = Math.hypot(dx, dy), FOLLOW = 50, SHOW = 26, DEAD = 12;
+    if (Math.hypot(e.clientX - sx, e.clientY - sy) >= DEAD) moved = true;
     if (dist > FOLLOW) { ox = e.clientX - (dx / dist) * FOLLOW; oy = e.clientY - (dy / dist) * FOLLOW; dx = e.clientX - ox; dy = e.clientY - oy; place(); }
     const k = Math.min(1, SHOW / Math.max(1, Math.hypot(dx, dy)));
     knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
     if (layers.length) { set(null); return; }
     set(dist < DEAD ? null : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
   });
-  const end = (e) => { if (e.pointerId !== id) return; id = null; set(null); ring.remove(); };
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null; set(null); ring.remove();
+    if (e.type === 'pointerup' && !moved && performance.now() - st < 450) tapAt(e.clientX, e.clientY); // a tap, not a slide
+  };
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
+  // with a mouse (computer), a click on a thing next to the player does the same
+  cv.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && e.button === 0) tapAt(e.clientX, e.clientY); });
 }
 setupSwipeStick();
 // In a menu or a multiple-choice question on a touch screen, a swipe anywhere moves the highlight (A then validates).
