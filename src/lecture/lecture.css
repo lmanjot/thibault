@@ -5015,8 +5015,11 @@
 .lz-album .lz-title-sm {
   color: #fff;
 }
+/* The reading font: in the comic display font, « 26 / 77 » read as « 26 / 11 ». */
 .lz-album-count {
-  font-family: var(--lz-display), Impact, sans-serif;
+  font-family: "Andika", system-ui, sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
 }
 .lz-album-scroll {
   flex: 1;
