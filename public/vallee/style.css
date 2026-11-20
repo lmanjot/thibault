@@ -547,3 +547,9 @@ button.row:hover { background: #f1f4ff; }
 .frsum { margin: 0 0 8px; padding: 6px 10px; background: #f2f6ff; border: 2px solid #c8d4f0; border-radius: 10px; font-size: 14px; }
 .frbox .frgroup { margin: 10px 0 0; font-size: 15px; color: #3a4a78; }
 .frbox .diffrow .btn { white-space: normal; }
+
+/* Tablets (both sides at least 600px): bigger A / B buttons, phones keep their size. */
+@media (min-width: 600px) and (min-height: 600px) {
+  .ab { width: 210px; height: 154px; }
+  .abtn, .bbtn { width: 92px; height: 92px; font-size: 34px; border-width: 4px; }
+}
