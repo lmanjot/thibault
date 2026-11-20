@@ -119,7 +119,12 @@ async function handle(method, code, bodyText, ns = "lecture-z") {
   const c = normalize(body.code);
   if (!CODE.test(c)) return { status: 400, body: { error: "code" } };
   const current = await readLatest(c, ns);
-  if (!current) return { status: 404, body: { error: "unknown" } };
+  // A code the store doesn't know (the store was recreated empty in November 2026): the device that holds the
+  // game uploads it again under its own code, so every device refills the new store with its next save.
+  if (!current) {
+    await write(c, { save, updatedAt }, ns);
+    return { status: 200, body: { code: c, updatedAt } };
+  }
   // base: the version this device last saw online. If another device saved since, this device has not seen it:
   // refuse (409 with the online one) so the device can choose, instead of a stale game overwriting newer progress.
   // Without base (Lecture Z), the newer timestamp wins as before.
