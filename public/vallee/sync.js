@@ -68,13 +68,25 @@ export function pushSave(save, onConflict, now = false) {
 }
 /** Send what is waiting right away (the page is being hidden or closed). */
 export function flushSave() { if (timer) { clearTimeout(timer); send(true); } }
+/**
+ * The « Sauvegarder » button: send this save now and say how it went —
+ * 'ok' (online), 'conflict' (another device had saved: onConflict decided which game to keep), 'error' (no connection).
+ */
+export async function saveOnlineNow(save, onConflict) {
+  if (!read()) return 'nosync';
+  latest = save; onConflictCb = onConflict;
+  clearTimeout(timer); timer = 0;
+  while (inFlight) await new Promise((r) => setTimeout(r, 100));
+  return send(false);
+}
 
 async function send(closing) {
   timer = 0;
   const s = read();
-  if (!s || !latest) return;
-  if (inFlight) { again = true; return; } // one request at a time, so two sends never race each other
+  if (!s || !latest) return 'nosync';
+  if (inFlight) { again = true; return 'queued'; } // one request at a time, so two sends never race each other
   inFlight = true;
+  let status = 'error';
   const body = JSON.stringify({ code: s.code, save: latest, base: s.at || 0 });
   const sentAt = latest.updatedAt;
   try {
@@ -85,15 +97,21 @@ async function send(closing) {
     if (r.status === 409) {
       const online = await r.json();
       set({ ...s, error: false });
+      status = 'conflict';
       if (onConflictCb) onConflictCb(online);
     } else if (r.ok) {
       set({ code: s.code, at: sentAt, error: false });
+      status = 'ok';
     } else set({ ...s, error: true });
   } catch {
-    set({ ...s, error: true }); // offline: sent with the next change
+    set({ ...s, error: true });
   }
   inFlight = false;
   if (again) { again = false; if (latest && latest.updatedAt !== (read() || {}).at) send(false); }
+  // Not sent (offline, server down): try again in a minute, as long as this device has progress the online save lacks.
+  // The device keeps everything meanwhile, and the game also sends it when it is hidden, closed or opened again.
+  else if (status === 'error' && !timer) timer = setTimeout(() => { if (latest && latest.updatedAt !== (read() || {}).at) send(false); }, 60000);
+  return status;
 }
 
 /** The online save { save, updatedAt } if it changed since this device last synced, else null. */

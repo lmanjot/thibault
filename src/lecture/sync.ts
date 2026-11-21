@@ -1,5 +1,5 @@
 // Lecture Z — keeps the progress in step between devices with a short code (client side).
-// The code lives on each device (localStorage); every change is sent a moment later, and the
+// The code lives on each device (localStorage); changes go online now and then (see pushSave), and the
 // newest save is fetched when the game opens or comes back to the screen. The newest one wins.
 
 import type { Save } from "./engine";
@@ -70,33 +70,68 @@ export function stopSync() {
   set(null);
 }
 
+// Each send costs a paid storage operation (the free plan allows 2,000 a month), so the progress is not sent after
+// every answer: at most once every 10 minutes while playing, 2 minutes after the last change (a pause, or the game
+// left open), and at once when the game is hidden or closed. The device itself keeps every change at once (storeSave).
+const EVERY = 10 * 60 * 1000;
+const IDLE = 2 * 60 * 1000;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let lastSent = 0;
+let pending: { save: Save; onNewer?: (s: Save) => void } | null = null;
 
-/** Send this save a moment after the last change (several quick changes make one request). */
+/** Queue this save for the online copy (see above for when it goes). */
 export function pushSave(save: Save, onNewer?: (s: Save) => void) {
-  const s = read();
-  if (!s) return;
+  if (!read()) return;
+  pending = { save, onNewer };
   clearTimeout(timer);
-  timer = setTimeout(async () => {
-    try {
-      const r = await fetch(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: s.code, save }),
-        keepalive: true,
-      });
-      if (r.status === 409) {
-        // Another device saved something newer meanwhile: take it.
-        const newer = (await r.json()) as { save: Save; updatedAt: number };
-        set({ code: s.code, at: newer.updatedAt });
-        onNewer?.(newer.save);
-        return;
-      }
-      set({ code: s.code, at: r.ok ? save.updatedAt : s.at, error: !r.ok });
-    } catch {
-      set({ ...s, error: true }); // offline: sent with the next change
+  const wait = Math.min(IDLE, Math.max(1500, lastSent + EVERY - Date.now()));
+  timer = setTimeout(() => void send(false), wait);
+}
+
+async function send(closing: boolean) {
+  clearTimeout(timer);
+  timer = undefined;
+  const s = read();
+  const job = pending;
+  if (!s || !job) return;
+  pending = null;
+  lastSent = Date.now();
+  const body = JSON.stringify({ code: s.code, save: job.save });
+  try {
+    const r = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: closing && body.length < 60000, // a closing page can only send a small body with keepalive
+    });
+    if (r.status === 409) {
+      // Another device saved something newer meanwhile: take it.
+      const newer = (await r.json()) as { save: Save; updatedAt: number };
+      set({ code: s.code, at: newer.updatedAt });
+      job.onNewer?.(newer.save);
+      return;
     }
-  }, 1500);
+    set({ code: s.code, at: r.ok ? job.save.updatedAt : s.at, error: !r.ok });
+    if (!r.ok) retry(job);
+  } catch {
+    set({ ...s, error: true });
+    retry(job);
+  }
+}
+/** Not sent (offline): keep it and try again in a minute, unless a newer save is already waiting. */
+function retry(job: { save: Save; onNewer?: (s: Save) => void }) {
+  if (pending) return;
+  pending = job;
+  if (!timer) timer = setTimeout(() => void send(false), 60000);
+}
+// Hidden (another app, screen off) or closed: what is waiting goes at once.
+if (typeof window !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && pending) void send(true);
+  });
+  window.addEventListener("pagehide", () => {
+    if (pending) void send(true);
+  });
 }
 
 /** The online save, if it is newer than this device's. */

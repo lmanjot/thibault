@@ -7,7 +7,7 @@ import {
 import { gridSVG, gridKey } from './geo.js';
 import { makeProblem, checkAnswer, renderQ, fmt, CATS, MEASURE_CATS, OP_NAMES, NEW_CONCEPTS, LESSONS, FR_SKILLS, FR_GROUPS } from './math.js';
 import * as A from './art.js';
-import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, flushSave, pullRemote, markSynced } from './sync.js';
+import { syncState, formatCode, cleanCode, createCode, fetchCode, adoptCode, stopSync, pushSave, flushSave, pullRemote, markSynced, saveOnlineNow } from './sync.js';
 
 const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
@@ -72,6 +72,18 @@ function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400);
 // Only real progress (not walking around) counts as a change worth sending to the online save.
 const progressSig = (s) => { const { pos, updatedAt, ...rest } = s; return JSON.stringify(rest); };
 let lastSig = '';
+// The online save costs a paid storage operation per send, so not every watering or harvest is sent: a milestone
+// (level, objective, badge, building, tool, hat, creature, plot) goes at once, other progress at most every 10 min
+// while playing, and whatever is left when the game is hidden or closed. The device itself saves everything at once.
+const milestoneSig = (s) => JSON.stringify([s.lvl, Object.keys(s.objDone || {}).length, Object.keys(s.badges || {}).length, Object.keys(s.built || {}).length, s.tools, (s.hats || []).length, Object.keys(s.creatures || {}).length, s.plotBuys]);
+const ONLINE_EVERY = 10 * 60 * 1000;
+let lastMilestone = '', lastSent = 0;
+function sendOnline(force) {
+  const m = milestoneSig(S);
+  if (!force && m === lastMilestone && Date.now() - lastSent < ONLINE_EVERY) return;
+  lastMilestone = m; lastSent = Date.now();
+  pushSave(S, onRemote, force);
+}
 function saveNow() {
   if (!started) return;
   S.pos = { x: pl.x, y: pl.y, dir: pl.dir };
@@ -79,12 +91,32 @@ function saveNow() {
   const changed = sig !== lastSig;
   if (changed) { lastSig = sig; S.updatedAt = now(); }
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch { /* private mode */ }
-  if (changed) pushSave(S, onRemote);
+  if (changed) {
+    sendOnline(false);
+    // The game left open without playing (tablet on the sofa, then the laptop): after 2 min with no progress,
+    // what the online save lacks goes up, so the other device finds it. Steady play never waits that long.
+    clearTimeout(idleSend);
+    idleSend = setTimeout(() => { if (started && unsynced()) sendOnline(true); }, IDLE_SEND);
+  }
 }
-// Leaving the page or hiding it: the last changes are sent at once (not 2 s later, when the page may be gone).
-addEventListener('pagehide', () => { saveNow(); flushSave(); });
+const IDLE_SEND = 2 * 60 * 1000;
+let idleSend = 0;
+/** The « Sauvegarder » menu entry: saved on this device at once, and online when there is a code. */
+async function saveMenu() {
+  saveNow();
+  if (!syncState()) return say('Ta partie est sauvegardée sur cet appareil. Pour la continuer sur un autre appareil, crée un code dans Options.');
+  lastMilestone = milestoneSig(S); lastSent = Date.now();
+  clearTimeout(idleSend);
+  const r = await saveOnlineNow(S, onRemote);
+  if (r === 'ok') return say('Ta partie est sauvegardée, sur cet appareil et en ligne.');
+  if (r === 'conflict') return say('Un autre appareil avait joué entre-temps : la partie qui va le plus loin est gardée.');
+  return say('Pas de connexion pour l’instant. Ta partie est sauvegardée sur cet appareil et partira en ligne dès que possible.');
+}
+// Leaving the page or hiding it: what the online save does not have yet is sent at once.
+function sendLeft() { saveNow(); if (unsynced()) sendOnline(true); else flushSave(); }
+addEventListener('pagehide', sendLeft);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { saveNow(); flushSave(); }
+  if (document.hidden) sendLeft();
   else if (started) pullRemote().then(onRemote);
 });
 
@@ -2259,10 +2291,11 @@ async function openMenu() {
   if (busy) return;
   busy = true;
   try {
-    const k = await choose('Menu', ['Sac', 'Carnet', 'Options', 'Fermer']);
+    const k = await choose('Menu', ['Sac', 'Carnet', 'Sauvegarder', 'Options', 'Fermer']);
     if (k === 0) await bagPanel();
     else if (k === 1) await carnetPanel('badges');
-    else if (k === 2) await optionsPanel();
+    else if (k === 2) await saveMenu();
+    else if (k === 3) await optionsPanel();
   } finally { busy = false; }
 }
 async function bagPanel() {
@@ -2459,7 +2492,8 @@ function syncSection(api) {
     box.append(
       h('p', { class: 'small' }, 'Sur un autre appareil, ouvre le jeu, choisis « J’ai un code » et tape :'),
       h('div', { class: 'synccode' }, formatCode(s.code)),
-      h('p', { class: 'syncstat' + (s.error ? ' off' : '') }, s.error ? 'Hors ligne : la partie sera envoyée au prochain changement.' : 'Synchronisé : tes progrès sont envoyés tout seuls.'),
+      h('p', { class: 'syncstat' + (s.error ? ' off' : '') }, s.error ? 'Hors ligne : la partie est gardée sur cet appareil et partira en ligne dès que possible.'
+        : `Dernière sauvegarde en ligne : ${s.at ? new Date(s.at).toLocaleString('fr-CH', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}.${unsynced() ? ' Tes derniers progrès sont sur cet appareil : ils partent en ligne quand tu quittes le jeu (ou avec « Sauvegarder » dans le menu).' : ''}`),
       h('button', { class: 'btn sm ghost', onclick: async () => {
         if (await confirm('Ne plus synchroniser cet appareil ? La partie reste ici.', 'Oui', 'Non')) { stopSync(); api.refresh(); }
       } }, 'Ne plus synchroniser cet appareil'));
@@ -2947,6 +2981,7 @@ function titleScreen() {
     S = state;
     started = true;
     lastSig = progressSig(S);
+    lastMilestone = milestoneSig(S); lastSent = Date.now(); // the next send waits for a milestone or 10 min
     if (!S.updatedAt) S.updatedAt = now();
     popLayer(L);
     startWorld();
