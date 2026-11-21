@@ -72,16 +72,14 @@ function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400);
 // Only real progress (not walking around) counts as a change worth sending to the online save.
 const progressSig = (s) => { const { pos, updatedAt, ...rest } = s; return JSON.stringify(rest); };
 let lastSig = '';
-// The online save costs a paid storage operation per send, so not every watering or harvest is sent: a milestone
-// (level, objective, badge, building, tool, hat, creature, plot) goes at once, other progress at most every 10 min
-// while playing, and whatever is left when the game is hidden or closed. The device itself saves everything at once.
-const milestoneSig = (s) => JSON.stringify([s.lvl, Object.keys(s.objDone || {}).length, Object.keys(s.badges || {}).length, Object.keys(s.built || {}).length, s.tools, (s.hats || []).length, Object.keys(s.creatures || {}).length, s.plotBuys]);
+// The online save costs a paid storage operation per send, so progress goes online at most every 10 min while
+// playing, 2 min after the last change (a pause, or the game left open), when the game is hidden or closed, and
+// with « Sauvegarder ». The device itself saves every change at once, so nothing is lost in between.
 const ONLINE_EVERY = 10 * 60 * 1000;
-let lastMilestone = '', lastSent = 0;
+let lastSent = 0;
 function sendOnline(force) {
-  const m = milestoneSig(S);
-  if (!force && m === lastMilestone && Date.now() - lastSent < ONLINE_EVERY) return;
-  lastMilestone = m; lastSent = Date.now();
+  if (!force && Date.now() - lastSent < ONLINE_EVERY) return;
+  lastSent = Date.now();
   pushSave(S, onRemote, force);
 }
 function saveNow() {
@@ -105,7 +103,7 @@ let idleSend = 0;
 async function saveMenu() {
   saveNow();
   if (!syncState()) return say('Ta partie est sauvegardée sur cet appareil. Pour la continuer sur un autre appareil, crée un code dans Options.');
-  lastMilestone = milestoneSig(S); lastSent = Date.now();
+  lastSent = Date.now();
   clearTimeout(idleSend);
   const r = await saveOnlineNow(S, onRemote);
   if (r === 'ok') return say('Ta partie est sauvegardée, sur cet appareil et en ligne.');
@@ -2981,7 +2979,7 @@ function titleScreen() {
     S = state;
     started = true;
     lastSig = progressSig(S);
-    lastMilestone = milestoneSig(S); lastSent = Date.now(); // the next send waits for a milestone or 10 min
+    lastSent = Date.now(); // the next send waits 10 min (or a pause, or leaving the game)
     if (!S.updatedAt) S.updatedAt = now();
     popLayer(L);
     startWorld();
