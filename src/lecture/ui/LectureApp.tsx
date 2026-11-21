@@ -30,7 +30,7 @@ import {
   type Save,
 } from "../engine";
 import { loadRecordings, loadVoice, namePart, sfx, soundPart, speak, stopSpeech } from "../audio";
-import { pullNewer, pushSave } from "../sync";
+import { pullNewer, pushSave, sendSaveNow } from "../sync";
 import { L } from "../voice";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
@@ -133,6 +133,10 @@ function Game({ fontClass }: { fontClass: string }) {
   useEffect(() => {
     screenRef.current = screen.s;
   });
+  // Back on the home screen (after a training, the shop, the album…): what is waiting goes online now.
+  useEffect(() => {
+    if (screen.s === "home") sendSaveNow();
+  }, [screen.s]);
   useEffect(() => {
     const check = () => {
       if (document.visibilityState !== "visible" || screenRef.current !== "home") return;
@@ -267,6 +271,7 @@ function Game({ fontClass }: { fontClass: string }) {
       s.progress.beaten = [...(s.progress.beaten ?? []), boss.name];
     }
     update(s);
+    sendSaveNow(); // the end of a training: its progress goes online now (never during one)
     setScreen({ s: "result", stars, earned, boss, cleared, medal, perfect, secret, friends: won.map((l) => l.id) });
     if (medal || perfect || legend) sfx.power();
     const friendLine = legend ? [L.newFriend, legend.name] : [];

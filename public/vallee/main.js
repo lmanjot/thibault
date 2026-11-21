@@ -72,9 +72,9 @@ function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400);
 // Only real progress (not walking around) counts as a change worth sending to the online save.
 const progressSig = (s) => { const { pos, updatedAt, ...rest } = s; return JSON.stringify(rest); };
 let lastSig = '';
-// The online save costs a paid storage operation per send, so progress goes online at most every 10 min while
-// playing, 2 min after the last change (a pause, or the game left open), when the game is hidden or closed, and
-// with « Sauvegarder ». The device itself saves every change at once, so nothing is lost in between.
+// The online save costs a paid storage operation per send, so progress goes online at each new level, at most every
+// 10 min while playing, 2 min after the last change (a pause, or the game left open), when the game is hidden or
+// closed, and with « Sauvegarder ». The device itself saves every change at once, so nothing is lost in between.
 const ONLINE_EVERY = 10 * 60 * 1000;
 let lastSent = 0;
 function sendOnline(force) {
@@ -825,6 +825,7 @@ function levelUp(L) {
     icons.push(A.iconURL('graine:' + seed));
     if (L % 5 === 0) { addItem('engrais', 2); lines.push('2 engrais'); icons.push(A.iconURL('engrais')); }
   }
+  saveNow(); sendOnline(true); // a new level goes online at once (it also restarts the 10-minute wait)
   celebrate({ title: `Niveau ${L} !`, lines, icons, foot: nx ? `Prochain : ${nx}` : null, kind: 'level' });
 }
 const curObj = () => OBJECTIVES.find((o) => !S.objDone[o.id]) || OBJECTIVES[OBJECTIVES.length - 1];

@@ -70,32 +70,26 @@ export function stopSync() {
   set(null);
 }
 
-// Each send costs a paid storage operation (the free plan allows 2,000 a month), so the progress is not sent after
-// every answer: at most once every 10 minutes while playing, 2 minutes after the last change (a pause, or the game
-// left open), and at once when the game is hidden or closed. The device itself keeps every change at once (storeSave).
-const EVERY = 10 * 60 * 1000;
-const IDLE = 2 * 60 * 1000;
-let timer: ReturnType<typeof setTimeout> | undefined;
-let lastSent = 0;
+// Each send costs a paid storage operation (the free plan allows 2,000 a month), so a change only waits here:
+// it goes online at the end of a training and back on the home screen (sendSaveNow, called by the app), and when
+// the game is hidden or closed — never during a training. The device itself keeps every change at once (storeSave).
 let pending: { save: Save; onNewer?: (s: Save) => void } | null = null;
 
-/** Queue this save for the online copy (see above for when it goes). */
+/** Keep this save for the next online send (see above for when it goes). */
 export function pushSave(save: Save, onNewer?: (s: Save) => void) {
   if (!read()) return;
   pending = { save, onNewer };
-  clearTimeout(timer);
-  const wait = Math.min(IDLE, Math.max(1500, lastSent + EVERY - Date.now()));
-  timer = setTimeout(() => void send(false), wait);
+}
+/** End of a training, or back on the home screen: what is waiting goes online now. */
+export function sendSaveNow() {
+  if (pending) void send(false);
 }
 
 async function send(closing: boolean) {
-  clearTimeout(timer);
-  timer = undefined;
   const s = read();
   const job = pending;
   if (!s || !job) return;
   pending = null;
-  lastSent = Date.now();
   const body = JSON.stringify({ code: s.code, save: job.save });
   try {
     const r = await fetch(API, {
@@ -118,11 +112,9 @@ async function send(closing: boolean) {
     retry(job);
   }
 }
-/** Not sent (offline): keep it and try again in a minute, unless a newer save is already waiting. */
+/** Not sent (offline): keep it for the next send (end of a training, home screen, hidden), unless a newer one waits. */
 function retry(job: { save: Save; onNewer?: (s: Save) => void }) {
-  if (pending) return;
-  pending = job;
-  if (!timer) timer = setTimeout(() => void send(false), 60000);
+  if (!pending) pending = job;
 }
 // Hidden (another app, screen off) or closed: what is waiting goes at once.
 if (typeof window !== "undefined") {
