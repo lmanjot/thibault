@@ -22,8 +22,7 @@ async function handle(text, audio) {
     GradingSystem: "HundredMark",
     Granularity: "Phoneme",
     Dimension: "Comprehensive",
-    EnableMiscue: true,
-    PhonemeAlphabet: "IPA",
+    EnableMiscue: true, // IPA names are not offered for French: the sounds come back with Azure's own names
   };
   const url = `https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=fr-FR&format=detailed`;
   const r = await fetch(url, {
