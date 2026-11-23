@@ -27,7 +27,7 @@ export interface SessionResult {
 function devAnswer(ex: Ex): string {
   if (ex.t === "ecoute") return ex.answer ? "yes" : "no";
   if (ex.t === "fusion") return ex.v;
-  if (ex.t === "syllabe") return ex.item;
+  if (ex.t === "syllabe" || ex.t === "dire") return ex.item;
   return ex.g;
 }
 

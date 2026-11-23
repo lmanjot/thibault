@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { GRAPHEME, GRAPHEMES } from "../content";
-import { activeTarget, availableSyllables, gid, level, newSave, parseSyl, sylText, targetSyllables, today, type Save, type Target } from "../engine";
+import { activeTarget, availableSyllables, gid, level, newSave, parseSyl, READ_ALOUD_SHARES, sylText, targetSyllables, today, type ReadAloud, type Save, type Target } from "../engine";
 import { hasRecording, loadRecordings, saveRecording, speak, soundPart } from "../audio";
 import { Icon, Pips } from "./bits";
 import { VoiceLines } from "./VoiceLines";
@@ -166,6 +166,8 @@ export function Parent({ save, onChange, onClose }: { save: Save; onChange: (s: 
 
         <TargetPanel save={save} set={set} />
 
+        <ReadAloudPanel save={save} set={set} />
+
         <section>
           <h3>Écriture</h3>
           <div className="lz-seg">
@@ -290,6 +292,49 @@ function SyncPanel({ save, onChange }: { save: Save; onChange: (s: Save) => void
         </>
       )}
       {msg && <p className="lz-hint lz-sync-msg">{msg}</p>}
+    </section>
+  );
+}
+
+/** Read aloud: on or off, and how many of the exercises ask him to read a syllable into the microphone. */
+function ReadAloudPanel({ save, set }: { save: Save; set: (patch: Partial<Save["settings"]>) => void }) {
+  const ra: ReadAloud = save.settings.readAloud ?? { on: false, share: 20 };
+  const put = (patch: Partial<ReadAloud>) => set({ readAloud: { ...ra, ...patch } });
+  const syls = availableSyllables(save).length;
+  const per = Math.max(1, Math.round((11 * ra.share) / 100));
+  return (
+    <section>
+      <h3>Lecture à voix haute</h3>
+      <p className="lz-hint">
+        Une syllabe s&apos;affiche (la, ri, mo…) : l&apos;enfant touche le micro et la lit. Le son est envoyé au service de
+        reconnaissance vocale de Microsoft (Azure) pour être noté ; il n&apos;est pas gardé. Sans micro ou sans connexion, la question redevient
+        « trouve la syllabe ».
+      </p>
+      <div className="lz-seg">
+        <button className={!ra.on ? "on" : ""} onClick={() => put({ on: false })}>
+          Désactivée
+        </button>
+        <button className={ra.on ? "on" : ""} onClick={() => put({ on: true })}>
+          Activée
+        </button>
+      </div>
+      {ra.on && (
+        <>
+          <p className="lz-hint">Part des exercices à lire à voix haute :</p>
+          <div className="lz-seg">
+            {READ_ALOUD_SHARES.map((p) => (
+              <button key={p} className={ra.share === p ? "on" : ""} onClick={() => put({ share: p })}>
+                {p} %
+              </button>
+            ))}
+          </div>
+          <p className="lz-hint">
+            {syls
+              ? `Environ ${per} question${per > 1 ? "s" : ""} sur 11 par entraînement, prises parmi ${syls} syllabe${syls > 1 ? "s" : ""}.`
+              : "Pas encore de syllabe possible : il faut au moins une consonne et une voyelle reconnues."}
+          </p>
+        </>
+      )}
     </section>
   );
 }

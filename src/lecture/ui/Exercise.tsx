@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { GRAPHEME, type Seg } from "../content";
 import { parseSyl, sylText, type Ex } from "../engine";
-import { soundPart, speak, sfx, sylPart, type Part } from "../audio";
+import { soundPart, speak, sfx, stopSpeech, sylPart, type Part } from "../audio";
+import { GOOD_SCORE, listen } from "../listen";
 import { L, PRAISE } from "../voice";
 import { STROKES } from "../strokes";
 import { Icon } from "./bits";
@@ -44,6 +45,8 @@ export function promptParts(ex: Ex): Part[] {
     }
     case "trace":
       return traceSyl(ex) ? [L.traceSyl, tracePart(ex)] : [L.trace, soundPart(ex.g)];
+    case "dire":
+      return [L.readAloud]; // never the syllable itself: he reads it
   }
 }
 
@@ -115,6 +118,7 @@ export function Exercise({ ex, onResult }: { ex: Ex; onResult: (ok: boolean) => 
   if (ex.t === "hunt") return <Hunt ex={ex} onResult={onResult} />;
   if (ex.t === "mots") return <Mots ex={ex} onResult={onResult} />;
   if (ex.t === "trace") return <Trace ex={ex} onResult={onResult} />;
+  if (ex.t === "dire") return <Dire ex={ex} onResult={onResult} />;
 
   const speaker = (
     <button className="lz-round lz-speaker" onClick={() => speak(replayParts(ex))} aria-label="Réécouter">
@@ -267,7 +271,71 @@ export function Exercise({ ex, onResult }: { ex: Ex; onResult: (ok: boolean) => 
   );
 }
 
-type DragState = { o: string; dx: number; dy: number; scale: number; mode: "drag" | "fly" | "back" };
+/**
+ * « Lis à voix haute »: the syllable is shown, he touches the microphone and reads it.
+ * Read well → right. Not quite → one more try, then Goku says it and he repeats it (no longer counts as right).
+ * Nothing heard → he is asked to speak louder. No microphone, refused or offline → the same syllable to find by tapping.
+ */
+function Dire({ ex, onResult }: { ex: Extract<Ex, { t: "dire" }>; onResult: (ok: boolean) => void }) {
+  const { c, v } = parseSyl(ex.item);
+  const text = sylText(c, v);
+  const [phase, setPhase] = useState<"idle" | "rec" | "wait" | "ok" | "ko" | "tap">("idle");
+  const misses = useRef(0);
+  const silences = useRef(0);
+
+  async function go() {
+    if (phase !== "idle") return;
+    stopSpeech();
+    sfx.tap();
+    setPhase("rec");
+    const r = await listen(text, () => setPhase("wait"));
+    if (r.kind === "unavailable") return setPhase("tap");
+    if (r.kind === "silence") {
+      silences.current += 1;
+      if (silences.current >= 3) return setPhase("tap"); // he'd rather not talk today: tap it instead
+      setPhase("idle");
+      return void speak([L.speakUp]);
+    }
+    if (r.score >= GOOD_SCORE) {
+      setPhase("ok");
+      sfx.good();
+      await speak([sylPart(c, v), praise()]);
+      await wait(300);
+      return onResult(misses.current < 2); // right after Goku said it himself: not counted as read alone
+    }
+    misses.current += 1;
+    if (misses.current === 1) {
+      setPhase("idle");
+      return void speak([L.readAgain]);
+    }
+    if (misses.current === 2) {
+      setPhase("idle");
+      return void speak([L.repeatAfter, sylPart(c, v)]);
+    }
+    setPhase("ko");
+    sfx.bad();
+    await speak([L.wanted, sylPart(c, v)]);
+    await wait(650);
+    onResult(false);
+  }
+
+  if (phase === "tap") return <Exercise ex={ex.tap} onResult={onResult} />;
+  return (
+    <div className="lz-ex lz-dire">
+      <div className="lz-prompt">
+        <button className="lz-round lz-speaker" onClick={() => speak([L.readAloud])} aria-label="Réécouter">
+          <Icon name="speaker" size={36} />
+        </button>
+      </div>
+      <div className={`lz-tile syl lz-dire-syl ${phase === "ok" ? "is-ok" : phase === "ko" ? "is-ko" : ""}`}>{text}</div>
+      <button className={`lz-dire-mic is-${phase}`} onClick={go} disabled={phase !== "idle"} aria-label="Lire à voix haute">
+        <Icon name="mic" size={56} />
+      </button>
+    </div>
+  );
+}
+
+type DragState ={ o: string; dx: number; dy: number; scale: number; mode: "drag" | "fly" | "back" };
 
 /** Size the tile should have to fit exactly in the gap. */
 function gapFit(tile: DOMRect, gap: DOMRect) {

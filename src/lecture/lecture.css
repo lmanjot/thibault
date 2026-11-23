@@ -5432,3 +5432,54 @@
 .lz-fighters > :last-child {
   margin-right: auto;
 }
+
+/* ——— Lis à voix haute: the syllable, and a big microphone to touch before reading ——— */
+.lz-dire {
+  display: grid;
+  justify-items: center;
+  gap: clamp(18px, 3.5vh, 34px);
+}
+.lz-dire-syl {
+  min-width: clamp(220px, 34vw, 340px);
+  height: clamp(150px, calc(27 * var(--vh, 1vh)), 230px);
+  font-size: clamp(96px, calc(17 * var(--vh, 1vh)), 150px);
+}
+.lz-dire-mic {
+  display: grid;
+  place-items: center;
+  width: clamp(104px, 15vh, 132px);
+  height: clamp(104px, 15vh, 132px);
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(180deg, var(--navy-2), var(--navy));
+  box-shadow: 0 7px 0 #0b1f47, 0 12px 24px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.12s, background 0.2s;
+}
+.lz-dire-mic:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 #0b1f47;
+}
+.lz-dire-mic.is-rec {
+  background: linear-gradient(180deg, #ef4b52, #c1272e);
+  box-shadow: 0 7px 0 #7d1419;
+  animation: lz-mic 1s ease-in-out infinite;
+}
+.lz-dire-mic.is-wait {
+  background: linear-gradient(180deg, #8f97ad, #6b7590);
+  box-shadow: 0 7px 0 #474e63;
+}
+.lz-dire-mic.is-ok,
+.lz-dire-mic.is-ko {
+  opacity: 0.4;
+}
+@keyframes lz-mic {
+  0%,
+  100% {
+    outline: 0 solid rgba(239, 75, 82, 0.55);
+  }
+  50% {
+    outline: 18px solid rgba(239, 75, 82, 0);
+  }
+}

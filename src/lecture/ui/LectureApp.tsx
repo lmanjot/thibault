@@ -10,6 +10,7 @@ import {
   type Fight,
   buildBoss,
   buildSession,
+  withReadAloud,
   focusSound,
   gid,
   level,
@@ -77,6 +78,12 @@ function Game({ fontClass }: { fontClass: string }) {
       return {
         s: "session",
         exercises: (new URLSearchParams(location.search).get("t")?.split(",") ?? ["e", "ou", "ch", "a"]).map((g) => mots(g, "train")).filter((x): x is Ex => !!x),
+      };
+    // /lecture?jeu=dire: reading syllables aloud (la, ri, mo), or others with &t=s:l|u,s:m|a.
+    if (jeu === "dire")
+      return {
+        s: "session",
+        exercises: (new URLSearchParams(location.search).get("t")?.split(",") ?? ["s:l|a", "s:r|i", "s:m|o"]).map((item) => ({ t: "dire", section: "train", item, tap: { t: "syllabe", section: "train", item, options: [item, "s:l|i", "s:m|a"].filter((x, i, a) => a.indexOf(x) === i) } }) as Ex),
       };
     // /lecture?jeu=or, ?jeu=diamant, ?jeu=voeu: the result screen with a gold or diamond letter.
     if (jeu === "parfait") return { s: "result", stars: 3, earned: 95, cleared: [], perfect: true, secret: true };
@@ -186,7 +193,7 @@ function Game({ fontClass }: { fontClass: string }) {
 
   function start() {
     sfx.unlock();
-    setScreen({ s: "session", exercises: buildSession(save!) });
+    setScreen({ s: "session", exercises: withReadAloud(save!, buildSession(save!)) });
   }
 
   function startBoss() {
@@ -353,7 +360,7 @@ function Game({ fontClass }: { fontClass: string }) {
             </button>
             <button
               className="lz-cta lz-cta-boss"
-              onClick={() => setScreen({ s: "session", exercises: buildBoss(save, screen.fight), boss: screen.boss, fight: screen.fight })}
+              onClick={() => setScreen({ s: "session", exercises: withReadAloud(save, buildBoss(save, screen.fight)), boss: screen.boss, fight: screen.fight })}
             >
               <Icon name="fist" size={34} /> Combattre !
             </button>

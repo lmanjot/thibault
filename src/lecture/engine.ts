@@ -39,7 +39,15 @@ export interface Settings {
   spare?: string[];
   focus?: string; // letter picked on the home screen
   target?: Target; // targeted revision, set by the parent
+  readAloud?: ReadAloud; // syllables read aloud into the microphone, set by the parent
 }
+
+/** Read aloud (parent space): this share of each session's exercises asks him to read a syllable aloud. */
+export interface ReadAloud {
+  on: boolean;
+  share: number; // percent of the exercises (10, 20, 30, 50)
+}
+export const READ_ALOUD_SHARES = [10, 20, 30, 50];
 
 /**
  * Targeted revision (parent space): while on, the home revision fight works only these letters.
@@ -398,7 +406,9 @@ export type Ex =
   | { t: "lettre"; section: Section; item: string; g: string; word?: Word; options: string[] }
   | { t: "fusion"; section: Section; item: string; c: string; v: string; options: string[] }
   | { t: "syllabe"; section: Section; item: string; options: string[] }
-  | { t: "trace"; section: Section; item: string; g: string };
+  | { t: "trace"; section: Section; item: string; g: string }
+  // "Lis à voix haute": a syllable read into the microphone; tap = the same syllable to find, if the mic can't be used.
+  | { t: "dire"; section: Section; item: string; tap: Ex };
 
 /** "Trace la lettre": draw it with a finger over a faint model. */
 const trace = (g: string, section: Section): Ex => ({ t: "trace", section, item: gid(g), g });
@@ -792,6 +802,36 @@ function targetExercises(s: Save, t: Target, n: number, section: (i: number) => 
     const i = out.findIndex((e) => e.section === "train" && e.t !== "trace" && e.item === gid(g));
     if (i >= 0) out[i] = trace(g, "train");
   });
+  return out;
+}
+
+/**
+ * Read aloud: when the parent turned it on, about this share of the exercises becomes « lis à voix haute ».
+ * Syllable exercises are turned first (the same syllable is read instead of found); then others, with a
+ * syllable made with their letter when there is one. Never a drawing. Nothing changes while no syllable exists.
+ */
+export function withReadAloud(s: Save, exs: Ex[]): Ex[] {
+  const ra = s.settings.readAloud;
+  if (!ra?.on || !ra.share || !exs.length) return exs;
+  const syls = [...new Set([...availableSyllables(s), ...exs.filter((e) => e.item.startsWith("s:")).map((e) => e.item)])];
+  if (!syls.length) return exs;
+  const want = Math.max(1, Math.round((exs.length * ra.share) / 100));
+  const order = [
+    ...shuffle(exs.flatMap((e, i) => (e.t !== "trace" && e.item.startsWith("s:") ? [i] : []))),
+    ...shuffle(exs.flatMap((e, i) => (e.t !== "trace" && !e.item.startsWith("s:") ? [i] : []))),
+  ];
+  const out = [...exs];
+  const used = new Set<string>();
+  for (const i of order.slice(0, want)) {
+    const e = exs[i];
+    const g = e.item.startsWith("g:") ? e.item.slice(2) : null;
+    const fresh = (xs: string[]) => (xs.some((x) => !used.has(x)) ? xs.filter((x) => !used.has(x)) : xs); // not the same one twice
+    const own = g ? fresh(syls.filter((x) => sylHas(x, g))) : [];
+    const id = e.item.startsWith("s:") ? e.item : pickReview(s, own.length ? own : fresh(syls), 1)[0];
+    used.add(id);
+    const tap = (e.t === "syllabe" || e.t === "fusion") && e.item === id ? e : sylEx(s, id, e.section);
+    out[i] = { t: "dire", section: e.section, item: id, tap };
+  }
   return out;
 }
 

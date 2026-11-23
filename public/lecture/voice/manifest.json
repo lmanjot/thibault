@@ -640,7 +640,11 @@
   "langue": "f77ba963eb70.mp3",
   "pouce": "e2a89bdfd954.mp3",
   "princesse": "ea1e311a34ea.mp3",
-  "Goku Blue": "89c66245ede1.mp3"
+  "Goku Blue": "89c66245ede1.mp3",
+  "Lis à voix haute ! Touche le micro, et lis.": "b2530fbe804d.mp3",
+  "Presque ! Essaie encore une fois.": "f73a4b40405d.mp3",
+  "Écoute bien, et répète après moi…": "4e32c3e5621f.mp3",
+  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "b2df9f1e63bf.mp3"
  },
  "sig": {
   "Saibaman": "35d836fef2",
@@ -1281,6 +1285,10 @@
   "langue": "7ffc5a445f",
   "pouce": "5f9eb41805",
   "princesse": "155578ec21",
-  "Goku Blue": "785f4cceb9"
+  "Goku Blue": "785f4cceb9",
+  "Lis à voix haute ! Touche le micro, et lis.": "00e6360b05",
+  "Presque ! Essaie encore une fois.": "c15f07f1d1",
+  "Écoute bien, et répète après moi…": "e41038478c",
+  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "90b9bbb631"
  }
 }
