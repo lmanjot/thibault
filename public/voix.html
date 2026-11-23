@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Lis à voix haute — test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Bangers&display=swap" />
+<style>
+  /* Test page for reading syllables aloud: the top is for the child, the bottom for the parent. */
+  :root {
+    --gi: #f47b20; --gi-dark: #b9470c; --navy: #12306b; --navy-2: #1d4ea3;
+    --ki: #ffd23f; --paper: #fffaf0; --ink: #1a1a2e; --ok: #1f9d55; --mid: #e89a1c; --ko: #8a8fa3;
+    --shadow: 0 6px 0 rgba(18, 48, 107, 0.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink); font-family: "Andika", system-ui, sans-serif;
+    background: radial-gradient(circle at 50% 18%, #ffe9a8 0, #ffc861 30%, var(--gi) 75%, var(--gi-dark) 100%) fixed;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-family: "Bangers", system-ui; letter-spacing: 1px; color: var(--navy); text-align: center; font-size: 34px; margin: 4px 0 14px; }
+
+  .stage { display: grid; justify-items: center; gap: 18px; padding: 8px 0 22px; }
+  .syll {
+    font-weight: 700; font-size: clamp(110px, 30vw, 190px); line-height: 1; color: var(--navy);
+    background: var(--paper); border-radius: 28px; padding: 18px 46px 28px; box-shadow: var(--shadow);
+    min-width: 62%; text-align: center; transition: transform .25s;
+  }
+  .syll.pop { animation: pop .5s ease; }
+  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.12) rotate(-2deg); } 100% { transform: scale(1); } }
+
+  .mic {
+    width: 112px; height: 112px; border-radius: 50%; border: 0; cursor: pointer;
+    background: var(--navy-2); color: #fff; box-shadow: var(--shadow); display: grid; place-items: center;
+    transition: transform .1s, background .2s;
+  }
+  .mic:active { transform: translateY(3px); }
+  .mic svg { width: 52px; height: 52px; }
+  .mic.rec { background: #d6333a; animation: pulse 1s infinite; }
+  .mic.wait { background: #6b7590; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(214,51,58,.6), var(--shadow); } 50% { box-shadow: 0 0 0 18px rgba(214,51,58,0), var(--shadow); } }
+
+  .verdict { min-height: 48px; font-family: "Bangers", system-ui; font-size: 40px; letter-spacing: 1px; text-align: center; color: var(--navy); }
+  .verdict.ok { color: var(--ok); } .verdict.mid { color: #a35f00; } .verdict.ko { color: #4b5068; }
+
+  .panel { background: rgba(255, 250, 240, .94); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); margin-top: 8px; }
+  .panel h2 { margin: 0 0 10px; font-size: 18px; color: var(--navy); }
+  .picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .picker button {
+    font: 700 22px "Andika", system-ui; border: 2px solid var(--navy-2); color: var(--navy); background: #fff;
+    border-radius: 12px; padding: 4px 14px; cursor: pointer;
+  }
+  .picker button.on { background: var(--navy-2); color: #fff; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row input { font: 18px "Andika", system-ui; padding: 6px 10px; border-radius: 10px; border: 2px solid #c9cfe0; width: 150px; }
+  .row button, .small { font: 700 16px "Andika", system-ui; border: 0; border-radius: 10px; padding: 8px 14px; background: var(--navy); color: #fff; cursor: pointer; }
+  .hint { font-size: 14px; color: #4b5068; margin: 8px 0 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 6px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #e6e1d4; vertical-align: top; }
+  th { color: #4b5068; font-weight: 400; font-size: 13px; }
+  .score { font-weight: 700; }
+  .s-ok { color: var(--ok); } .s-mid { color: #a35f00; } .s-ko { color: #c0262d; }
+  .ph { font-size: 13px; color: #4b5068; }
+  .err { color: #c0262d; font-size: 15px; }
+  @media (max-width: 520px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lis à voix haute</h1>
+
+  <section class="stage">
+    <div class="syll" id="syll">ra</div>
+    <button class="mic" id="mic" aria-label="Lire">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.59a6 6 0 0 0 5-5.91Z"/></svg>
+    </button>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Syllabes</h2>
+    <div class="picker" id="picker"></div>
+    <div class="row">
+      <input id="add" placeholder="ajouter : mu" autocomplete="off" />
+      <button id="addBtn">Ajouter</button>
+      <button id="next">Suivante au hasard</button>
+    </div>
+    <p class="hint">Touchez le micro, il lit la syllabe, l'enregistrement s'arrête tout seul après un petit silence. Pour tester si la reconnaissance fait la différence, demandez-lui exprès « la » quand « ra » est affiché.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Essais</h2>
+    <div id="error" class="err"></div>
+    <table>
+      <thead><tr><th>Syllabe</th><th>Entendu</th><th>Score</th><th class="hide-sm">Sons</th><th></th></tr></thead>
+      <tbody id="log"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const SYLLABLES = ["ra", "la", "ma", "li", "lo", "ri", "ro", "mi", "mo", "lu", "ru", "mu"];
+let list = [...SYLLABLES];
+let target = "ra";
+const $ = (id) => document.getElementById(id);
+
+function drawPicker() {
+  $("picker").innerHTML = "";
+  for (const s of list) {
+    const b = document.createElement("button");
+    b.textContent = s;
+    b.className = s === target ? "on" : "";
+    b.onclick = () => setTarget(s);
+    $("picker").appendChild(b);
+  }
+}
+function setTarget(s) {
+  target = s;
+  $("syll").textContent = s;
+  $("verdict").textContent = ""; $("verdict").className = "verdict";
+  drawPicker();
+}
+$("addBtn").onclick = () => {
+  const s = $("add").value.trim().toLowerCase();
+  if (s && /^[a-zàâéèêëîïôûùç]{1,12}$/.test(s) && !list.includes(s)) { list.push(s); setTarget(s); }
+  $("add").value = "";
+};
+$("next").onclick = () => {
+  const others = list.filter((s) => s !== target);
+  setTarget(others[Math.floor(Math.random() * others.length)] || target);
+};
+drawPicker();
+
+// ——— Recording: raw samples → 16 kHz mono WAV, stopped by a short silence after the voice ———
+let stream = null, ctx = null, busy = false;
+
+async function record() {
+  if (!stream) stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === "suspended") await ctx.resume();
+  const src = ctx.createMediaStreamSource(stream);
+  const proc = ctx.createScriptProcessor(2048, 1, 1);
+  const chunks = [];
+  const rate = ctx.sampleRate;
+  const frame = 2048 / rate;
+  return new Promise((resolve) => {
+    let t = 0, floor = 0, floorN = 0, voiced = 0, lastVoice = 0, done = false;
+    proc.onaudioprocess = (e) => {
+      if (done) return;
+      const d = e.inputBuffer.getChannelData(0);
+      chunks.push(new Float32Array(d));
+      let sum = 0; for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+      const rms = Math.sqrt(sum / d.length);
+      t += frame;
+      if (t < 0.25) { floor += rms; floorN++; return; }    // the room's own noise, first quarter second
+      const thr = Math.max(0.015, (floor / Math.max(1, floorN)) * 3);
+      if (rms > thr) { voiced += frame; lastVoice = t; }
+      const spoke = voiced > 0.12;
+      if ((spoke && t - lastVoice > 0.7) || t > 4.5 || (!spoke && t > 3.5)) {
+        done = true;
+        proc.disconnect(); src.disconnect();
+        resolve({ samples: concat(chunks), rate, spoke });
+      }
+    };
+    src.connect(proc); proc.connect(ctx.destination);
+  });
+}
+function concat(chunks) {
+  const out = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+function toWav16k(samples, rate) {
+  const ratio = rate / 16000, n = Math.floor(samples.length / ratio);
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.min(samples.length, Math.floor((i + 1) * ratio));
+    let s = 0; for (let j = a; j < b; j++) s += samples[j];
+    s = Math.max(-1, Math.min(1, s / Math.max(1, b - a)));
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+const cls = (s) => (s >= 80 ? "ok" : s >= 60 ? "mid" : "ko");
+
+$("mic").onclick = async () => {
+  if (busy) return;
+  busy = true; $("error").textContent = "";
+  const mic = $("mic"), verdict = $("verdict");
+  const asked = target;
+  mic.className = "mic rec"; verdict.className = "verdict"; verdict.textContent = "";
+  try {
+    const { samples, rate, spoke } = await record();
+    mic.className = "mic wait";
+    if (!spoke) { verdict.textContent = "Je n'ai rien entendu"; addRow(asked, null, null); return; }
+    const wav = toWav16k(samples, rate);
+    verdict.textContent = "…";
+    const t0 = performance.now();
+    const r = await fetch(`/api/lecture-pronounce?text=${encodeURIComponent(asked)}`, { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav });
+    const data = await r.json().catch(() => ({}));
+    const ms = Math.round(performance.now() - t0);
+    if (!r.ok) {
+      verdict.textContent = "";
+      $("error").textContent = data.error === "no-key" ? "La clé Azure n'est pas encore installée sur le serveur." : `Erreur ${r.status} ${data.error || ""} ${data.code || ""} ${data.detail || ""}`;
+      addRow(asked, wav, { error: true });
+      return;
+    }
+    const s = data.score ?? 0;
+    const k = data.status === "Success" ? cls(s) : "ko";
+    verdict.className = `verdict ${k}`;
+    verdict.textContent = k === "ok" ? "Bravo !" : k === "mid" ? "Presque !" : "On réessaie ?";
+    if (k === "ok") { $("syll").classList.remove("pop"); void $("syll").offsetWidth; $("syll").classList.add("pop"); }
+    addRow(asked, wav, { ...data, ms });
+  } catch (e) {
+    $("error").textContent = e && e.name === "NotAllowedError" ? "Le micro est refusé : autorisez-le dans le navigateur." : String(e);
+  } finally {
+    mic.className = "mic"; busy = false;
+  }
+};
+
+function addRow(asked, wav, data) {
+  const tr = document.createElement("tr");
+  const td = (html, c) => { const x = document.createElement("td"); x.innerHTML = html; if (c) x.className = c; tr.appendChild(x); return x; };
+  const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  td(`<b>${esc(asked)}</b>`);
+  if (!data) { td("<i>rien</i>"); td("–"); td("", "hide-sm"); }
+  else if (data.error) { td("<i>erreur</i>"); td("–"); td("", "hide-sm"); }
+  else {
+    const words = data.words || [];
+    td(`${esc(data.heard) || "<i>rien</i>"}${words.some((w) => w.error !== "None") ? `<div class="ph">${words.map((w) => `${esc(w.word)}: ${esc(w.error)}`).join(", ")}</div>` : ""}`);
+    td(`<span class="score s-${cls(data.score)}">${data.score}</span><div class="ph">${data.status !== "Success" ? esc(data.status) : `${data.ms} ms`}</div>`);
+    td(words.map((w) => w.phonemes.map((p) => `${esc(p.p)} <span class="s-${cls(p.score)}">${p.score}</span>`).join(" · ")).join(" | "), "ph hide-sm");
+  }
+  const play = td("");
+  if (wav) {
+    const b = document.createElement("button");
+    b.className = "small"; b.textContent = "▶";
+    b.onclick = () => new Audio(URL.createObjectURL(wav)).play();
+    play.appendChild(b);
+  }
+  $("log").prepend(tr);
+}
+</script>
+</body>
+</html>
