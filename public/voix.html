@@ -190,6 +190,9 @@ function toWav16k(samples, rate) {
   return new Blob([buf], { type: "audio/wav" });
 }
 
+// Azure's answers, in French.
+const ERRORS = { Mispronunciation: "mal prononcé", Omission: "pas entendu", Insertion: "en trop", UnexpectedBreak: "coupé", MissingBreak: "attaché" };
+const STATUS = { NoMatch: "pas reconnu", InitialSilenceTimeout: "silence", BabbleTimeout: "trop de bruit", Error: "erreur" };
 const cls = (s) => (s >= 80 ? "ok" : s >= 60 ? "mid" : "ko");
 
 $("mic").onclick = async () => {
@@ -210,7 +213,7 @@ $("mic").onclick = async () => {
     const ms = Math.round(performance.now() - t0);
     if (!r.ok) {
       verdict.textContent = "";
-      $("error").textContent = data.error === "no-key" ? "La clé Azure n'est pas encore installée sur le serveur." : `Erreur ${r.status} ${data.error || ""} ${data.code || ""} ${data.detail || ""}`;
+      $("error").textContent = data.error === "no-key" ? "La clé Azure n'est pas encore installée sur le serveur." : `Le serveur n'a pas pu noter cet essai (erreur ${r.status}${data.code ? `, Azure ${data.code}` : ""}).`;
       addRow(asked, wav, { error: true });
       return;
     }
@@ -221,7 +224,7 @@ $("mic").onclick = async () => {
     if (k === "ok") { $("syll").classList.remove("pop"); void $("syll").offsetWidth; $("syll").classList.add("pop"); }
     addRow(asked, wav, { ...data, ms });
   } catch (e) {
-    $("error").textContent = e && e.name === "NotAllowedError" ? "Le micro est refusé : autorisez-le dans le navigateur." : String(e);
+    $("error").textContent = e && e.name === "NotAllowedError" ? "Le micro est refusé : autorisez-le dans le navigateur." : e && e.name === "NotFoundError" ? "Aucun micro trouvé sur cet appareil." : "Problème de connexion : réessayez.";
   } finally {
     mic.className = "mic"; busy = false;
   }
@@ -236,8 +239,9 @@ function addRow(asked, wav, data) {
   else if (data.error) { td("<i>erreur</i>"); td("–"); td("", "hide-sm"); }
   else {
     const words = data.words || [];
-    td(`${esc(data.heard) || "<i>rien</i>"}${words.some((w) => w.error !== "None") ? `<div class="ph">${words.map((w) => `${esc(w.word)}: ${esc(w.error)}`).join(", ")}</div>` : ""}`);
-    td(`<span class="score s-${cls(data.score)}">${data.score}</span><div class="ph">${data.status !== "Success" ? esc(data.status) : `${data.ms} ms`}</div>`);
+    const heard = String(data.heard || "").replace(/[.!?]+$/, "");
+    td(`${esc(heard) || "<i>rien</i>"}${words.some((w) => w.error !== "None") ? `<div class="ph">${words.map((w) => `${esc(w.word)} : ${ERRORS[w.error] || "erreur"}`).join(", ")}</div>` : ""}`);
+    td(`<span class="score s-${cls(data.score)}">${data.score}</span><div class="ph">${data.status !== "Success" ? STATUS[data.status] || "pas reconnu" : `${(data.ms / 1000).toFixed(1).replace(".", ",")} s`}</div>`);
     td(words.map((w) => w.phonemes.map((p) => `${esc(p.p)} <span class="s-${cls(p.score)}">${p.score}</span>`).join(" · ")).join(" | "), "ph hide-sm");
   }
   const play = td("");
