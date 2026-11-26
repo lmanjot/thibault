@@ -108,5 +108,34 @@
   },
   "sé": {
     "say": "zé"
+  },
+  "Je suis Shenron, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu.": {
+    "expression": 0.35,
+    "speed": 0.92,
+    "say": "Je suis Shenrone, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu."
+  },
+  "Ton vœu est exaucé ! Voici un jeu rien que pour toi : le vol de Shenron !": {
+    "expression": 0.35,
+    "speed": 0.92,
+    "say": "Ton vœu est exaucé ! Voici un jeu rien que pour toi : le vol de Shenrone !"
+  },
+  "Écoute bien… Sur la planète Namek, il y a d'autres boules de cristal, encore plus puissantes. Leur dragon, Polunga, exauce trois vœux ! Gagne des lettres en diamant pour les trouver.": {
+    "expression": 0.35,
+    "speed": 0.92
+  },
+  "Je suis Polunga, le dragon de Namek ! Tu as rassemblé les sept boules de Namek. Je vais exaucer trois vœux. Choisis !": {
+    "expression": 0.35,
+    "speed": 0.92
+  },
+  "Vœu exaucé !": {
+    "expression": 0.35,
+    "speed": 0.92
+  },
+  "Tes vœux sont exaucés ! Les boules de Namek s'envolent aux quatre coins de la planète… Retrouve-les avec tes lettres en diamant !": {
+    "expression": 0.35,
+    "speed": 0.92
+  },
+  "Avec Shenron, attrape les boules avec la lettre…": {
+    "say": "Avec Shenrone, attrape les boules avec la lettre…"
   }
 }

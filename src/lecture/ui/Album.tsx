@@ -28,7 +28,8 @@ export function Album({ save, onChange, onClose, onShop }: { save: Save; onChang
   const [fresh] = useState(() => new Set(view.progress.albumNew ?? []));
   const letters = save.settings.classSounds.filter((g) => GRAPHEME[g]); // only the letters turned on
   // Friends bought with zénis in Bulma's shop live in the album too.
-  const shopFriends = ITEMS.filter((i) => i.kind === "companion" && !i.legend && i.img);
+  const shopFriends = ITEMS.filter((i) => i.kind === "companion" && !i.legend && i.img && (!i.wish || owns(save, i.id))); // a dragon's friend only once given
+
   const bought = shopFriends.filter((i) => owns(save, i.id));
   const owned = albumOwned(view).length + bought.length;
   const kid = formStep(save) < 4;

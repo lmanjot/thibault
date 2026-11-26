@@ -3,7 +3,7 @@
 // Goku clip (public/lecture/voice, generated once by scripts/gen-voice.mts), the device voice.
 
 import { WORDS } from "./content";
-import { LETTER_NAME, soundSay, sylSay } from "./voice";
+import { D, LETTER_NAME, soundSay, sylSay } from "./voice";
 
 /** A piece of speech: a catalog line, or a sound/syllable that a parent recording can replace. */
 export type Part = string | { rec: string; fallback: string };
@@ -117,6 +117,9 @@ function preloadAll() {
 /** Picture words are said quickly by the voice: they play a little slower to match the sentences. */
 const WORD_RATE = 0.82;
 const wordTexts = new Set(WORDS.map((w) => w.w));
+/** The dragons speak with the same voice, slower and deeper (the pitch follows the speed). */
+const DRAGON_RATE = 0.8;
+const dragonTexts = new Set<string>(Object.values(D));
 
 /** Re-read the clip list (after a sentence was regenerated from the parent space). */
 export function reloadVoice(): Promise<void> {
@@ -211,13 +214,13 @@ function sayText(text: string): Promise<void> {
 let current: HTMLAudioElement | null = null;
 
 /** Plays a clip; resolves false if it could not be played (missing file, decode error). */
-function playUrl(url: string, rate = 1, volume = 1): Promise<boolean> {
+function playUrl(url: string, rate = 1, volume = 1, deep = false): Promise<boolean> {
   // Never wait here (phones only allow sound right after a tap): play the in-memory copy if it is
   // there, else straight from the network while it is being kept for next time.
   if (!memory.has(url)) keep(url);
   return new Promise((res) => {
     const a = audioFor(url);
-    a.preservesPitch = true; // slower, not deeper
+    a.preservesPitch = !deep; // slower, not deeper (except the dragons)
     a.playbackRate = rate;
     a.volume = volume;
     current = a;
@@ -259,8 +262,9 @@ export async function speak(parts: Part[]): Promise<void> {
     const url = rec ?? clipUrl(textOf(p));
     // If a clip can't be played (e.g. replaced since the page loaded), say it with the device voice
     // rather than skipping a word.
-    const rate = !rec && wordTexts.has(textOf(p)) ? WORD_RATE : 1;
-    if (!url || !(await playUrl(url, rate))) await sayText(textOf(p));
+    const deep = !rec && dragonTexts.has(textOf(p));
+    const rate = deep ? DRAGON_RATE : !rec && wordTexts.has(textOf(p)) ? WORD_RATE : 1;
+    if (!url || !(await playUrl(url, rate, 1, deep))) await sayText(textOf(p));
     // A short breath between the pieces of an assembled sentence.
     if (i < parts.length - 1) await new Promise((r) => setTimeout(r, 120));
   }

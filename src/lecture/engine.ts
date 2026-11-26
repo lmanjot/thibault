@@ -77,7 +77,10 @@ export interface Progress {
   beaten?: string[]; // names of the bosses beaten, so the story moves on
   practices?: number; // revision fights chosen from the home screen (rematches)
   letterBalls?: number; // dragon balls won with diamond letters, toward the next wish (0-6)
-  wishes?: number; // wishes made with 7 of those balls
+  wishes?: number; // Shenron's wishes (the first 7 balls, the Earth's); then the balls are Namek's
+  wishSeen?: number; // Shenron's wishes whose scene has played
+  porunga?: number; // times Porunga was called (7 balls of Namek)
+  porungaLeft?: number; // Porunga's wishes not chosen yet (3 each time)
   formSeen?: number; // the last step of Goku shown in the power scene
   album?: Record<string, (string | null)[]>; // letter → the legends won with its silver, gold and diamond rounds
   albumNew?: string[]; // legends not seen in the album yet

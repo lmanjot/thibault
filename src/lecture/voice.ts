@@ -3,6 +3,7 @@
 // scripts/gen-voice.mts and stored in public/lecture/voice/ (no live text-to-speech).
 
 import { ITEMS } from "./shop";
+import { WISHES } from "./dragons";
 import { ATTACK_LINES, BOSSES, FORMS, GRAPHEME, GRAPHEMES, LEGENDS, NO_SYLLABLE_VOWELS, WORDS } from "./content";
 
 /** Fixed lines, in Goku's voice. */
@@ -52,8 +53,22 @@ export const L = {
   wish: "Les sept boules de cristal ! Shenron exauce ton vœu !",
   newPower: "Goku gagne un nouveau pouvoir !",
   popAll: "Touche les boules avec la lettre…",
+  diamondNamek: "Incroyable ! Ta lettre est en diamant ! Tu gagnes une boule de cristal de Namek !",
+  wishNamek: "Les sept boules de Namek ! Polunga va exaucer trois vœux !",
+  dragonSky: "Regarde ! Le ciel devient tout noir…",
+  volGo: "Avec Shenron, attrape les boules avec la lettre…",
   newRecord: "Nouveau record ! Tu es trop fort !",
   gameOver: "Fin du jeu ! Bien joué !",
+} as const;
+
+/** The dragons' lines: the same voice, played lower and slower (see audio.ts). */
+export const D = {
+  shenronHello: "Je suis Shenron, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu.",
+  shenronGift: "Ton vœu est exaucé ! Voici un jeu rien que pour toi : le vol de Shenron !",
+  shenronNamek: "Écoute bien… Sur la planète Namek, il y a d'autres boules de cristal, encore plus puissantes. Leur dragon, Polunga, exauce trois vœux ! Gagne des lettres en diamant pour les trouver.",
+  porungaHello: "Je suis Polunga, le dragon de Namek ! Tu as rassemblé les sept boules de Namek. Je vais exaucer trois vœux. Choisis !",
+  porungaGranted: "Vœu exaucé !",
+  porungaBye: "Tes vœux sont exaucés ! Les boules de Namek s'envolent aux quatre coins de la planète… Retrouve-les avec tes lettres en diamant !",
 } as const;
 
 export const PRAISE = ["Bravo !", "Super !", "Génial !", "Trop fort !", "Waouh, quelle puissance !", "Tu deviens super fort !", "Incroyable !", "Ouiii, c'est ça !"];
@@ -134,6 +149,8 @@ export function allClips(): Clip[] {
   const add = (text: string, short = false, word = false) =>
     text && !out.has(text) && out.set(text, { text, short, ...(word ? { word } : {}) });
   Object.values(L).forEach((t) => add(t));
+  Object.values(D).forEach((t) => add(t));
+  Object.values(WISHES).forEach((w) => add(w.name)); // said when Porunga grants it
   PRAISE.forEach((t) => add(t));
   BOSSES.forEach((b) => add(b.name, true));
   LEGENDS.forEach((l) => add(l.name, true)); // said when one joins, or tapped in the album

@@ -20,7 +20,9 @@ export const MINI_GAMES = [
 ] as const;
 /** The secret game: opened only by a session without a single mistake. */
 export const SECRET_GAME = { id: "instinct", name: "Ultra Instinct", img: "goku_ui.png" } as const;
-export type GameId = (typeof MINI_GAMES)[number]["id"] | typeof SECRET_GAME.id;
+/** Shenron's game: his wish, after the first 7 dragon balls (never for sale). */
+export const VOL_GAME = { id: "vol", name: "Le vol de Shenron", img: "shenron.png" } as const;
+export type GameId = (typeof MINI_GAMES)[number]["id"] | typeof SECRET_GAME.id | typeof VOL_GAME.id;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 let nextId = 1;
@@ -1161,6 +1163,254 @@ function Instinct({ onDone, level, seconds }: GameProps) {
   );
 }
 
+// ——— Le vol de Shenron (Shenron's wish): steer the dragon, swallow the orbs with the letter asked ———
+
+interface Orb {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  letter: string; // "" for a dragon ball (bonus)
+  stars: number;
+  born: number;
+  eaten?: number; // when swallowed
+  wrong?: number; // when bumped with the wrong letter
+}
+interface VolW {
+  time: number;
+  score: number;
+  x: number; // head, share of the width
+  y: number; // share of the height
+  a: number; // heading (radians, 0 = right, screen y down)
+  path: { x: number; y: number }[]; // past head positions, newest first
+  len: number; // body segments
+  orbs: Orb[];
+  spawn: number;
+  target: string;
+  pops: { id: number; x: number; y: number; t: number; text: string; good: boolean }[];
+}
+
+const VOL_GAP = 0.034; // between body segments (shares of the height)
+const VOL_MIN = 7;
+const VOL_MAX = 38;
+const VOL_EDGE = 0.06;
+
+function Vol({ letters, onDone, level, seconds }: GameProps & { letters: string[] }) {
+  const pace = paceOf(level);
+  const pool = letters.length ? letters : ["a", "i", "o"];
+  const others = pool.length > 1 ? pool : ["a", "i", "o", "u"];
+  const box = useRef<HTMLDivElement>(null);
+  // Width / height of the screen (the game fills it).
+  const [ar] = useState(() => (typeof window === "undefined" ? 1.5 : window.innerWidth / Math.max(1, window.innerHeight)));
+  const finger = useRef<{ x: number; y: number } | null>(null);
+
+  const { world, phase, count } = useGame<VolW>(
+    () => ({ time: 0, score: 0, x: 0.3, y: 0.55, a: 0, path: [], len: VOL_MIN, orbs: [], spawn: 0.3, target: pool[Math.floor(Math.random() * pool.length)], pops: [] }),
+    (w, dt) => {
+      let { a, len, score, spawn, target } = w;
+      // Turn toward the finger (a dragon turns in a curve, never on the spot).
+      const f = finger.current;
+      if (f) {
+        const want = Math.atan2(f.y - w.y, (f.x - w.x) * ar);
+        const near = Math.hypot((f.x - w.x) * ar, f.y - w.y) < 0.03;
+        if (!near) {
+          let d = want - a;
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          const turn = 5.5 * dt;
+          a += Math.max(-turn, Math.min(turn, d));
+        }
+      }
+      const v = (0.34 + Math.min(0.12, w.time * 0.003)) * pace;
+      let x = w.x + (Math.cos(a) * v * dt) / ar;
+      let y = w.y + Math.sin(a) * v * dt;
+      // Bounce off the edges of the sky.
+      if (x < VOL_EDGE || x > 1 - VOL_EDGE) {
+        a = Math.PI - a;
+        x = Math.min(1 - VOL_EDGE, Math.max(VOL_EDGE, x));
+      }
+      if (y < VOL_EDGE + 0.06 || y > 1 - VOL_EDGE) {
+        a = -a;
+        y = Math.min(1 - VOL_EDGE, Math.max(VOL_EDGE + 0.06, y));
+      }
+      const path = [{ x, y }, ...w.path].slice(0, 400);
+      const pops = w.pops.filter((p) => w.time - p.t < 0.7);
+
+      const orbs: Orb[] = [];
+      for (const o of w.orbs) {
+        if (o.eaten !== undefined) {
+          if (w.time - o.eaten < 0.35) orbs.push(o);
+          continue;
+        }
+        if (w.time - o.born > 10) continue; // drifted too long: it fades away
+        let { vx, vy } = o;
+        let ox = o.x + vx * dt;
+        let oy = o.y + vy * dt;
+        if (ox < 0.08 || ox > 0.92) vx = -vx;
+        if (oy < 0.2 || oy > 0.9) vy = -vy;
+        ox = Math.min(0.92, Math.max(0.08, ox));
+        oy = Math.min(0.9, Math.max(0.2, oy));
+        const hit = Math.hypot((ox - x) * ar, oy - y) < 0.085;
+        if (hit && !(o.wrong !== undefined && w.time - o.wrong < 0.8)) {
+          if (!o.letter || o.letter === target) {
+            const gain = o.letter ? level : 3 * level;
+            score += gain;
+            len = Math.min(VOL_MAX, len + (o.letter ? 2 : 3));
+            sfx.good();
+            pops.push({ id: nextId++, x: ox, y: oy, t: w.time, text: `+${gain}`, good: true });
+            orbs.push({ ...o, x: ox, y: oy, eaten: w.time });
+            continue;
+          }
+          // The wrong letter: it bounces away, and the dragon gets a little shorter.
+          sfx.bad();
+          len = Math.max(VOL_MIN, len - 1);
+          orbs.push({ ...o, x: ox, y: oy, vx: Math.cos(a) * 0.35, vy: Math.sin(a) * 0.35, wrong: w.time });
+          continue;
+        }
+        const slow = o.wrong !== undefined ? 0.96 : 1; // a bumped orb slows down again
+        orbs.push({ ...o, x: ox, y: oy, vx: vx * slow, vy: vy * slow });
+      }
+
+      spawn -= dt;
+      const live = orbs.filter((o) => o.eaten === undefined);
+      if (spawn <= 0 && live.length < 7) {
+        spawn = rand(0.7, 1.1) / pace;
+        const ball = Math.random() < 0.08;
+        const wantTarget = live.filter((o) => o.letter === target).length < 2 || Math.random() < 0.4;
+        const wrongs = others.filter((l) => l !== target);
+        const letter = ball ? "" : wantTarget || !wrongs.length ? target : wrongs[Math.floor(Math.random() * wrongs.length)];
+        // Away from the dragon's head, so it can be seen coming.
+        let ox = rand(0.12, 0.88);
+        let oy = rand(0.25, 0.85);
+        for (let k = 0; k < 6 && Math.hypot((ox - x) * ar, oy - y) < 0.3; k++) {
+          ox = rand(0.12, 0.88);
+          oy = rand(0.25, 0.85);
+        }
+        const ang = rand(0, Math.PI * 2);
+        const sp = rand(0.02, 0.06);
+        orbs.push({ id: nextId++, x: ox, y: oy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, letter, stars: 1 + Math.floor(Math.random() * 7), born: w.time });
+      }
+
+      // A new letter to find every 15 seconds.
+      if (Math.floor(w.time / 15) !== Math.floor((w.time - dt) / 15) && pool.length > 1) {
+        const choices = pool.filter((l) => l !== target);
+        target = choices[Math.floor(Math.random() * choices.length)];
+      }
+      return { ...w, x, y, a, path, len, orbs, spawn, score, target, pops };
+    },
+    seconds,
+  );
+
+  const target = world.target;
+  useEffect(() => {
+    if (phase === "count" || phase === "play") speak([L.volGo, soundPart(target)]);
+  }, [target, phase]);
+
+  const aim = (e: RPointerEvent) => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    finger.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+
+  // The body: points along the path the head took, one every VOL_GAP.
+  const body: { x: number; y: number; a: number }[] = [];
+  {
+    let need = VOL_GAP;
+    let acc = 0;
+    for (let i = 1; i < world.path.length && body.length < world.len; i++) {
+      const p = world.path[i - 1];
+      const q = world.path[i];
+      acc += Math.hypot((q.x - p.x) * ar, q.y - p.y);
+      if (acc >= need) {
+        body.push({ x: q.x, y: q.y, a: Math.atan2(p.y - q.y, (p.x - q.x) * ar) });
+        need += VOL_GAP;
+      }
+    }
+  }
+  const deg = (world.a * 180) / Math.PI;
+  const flip = Math.cos(world.a) < 0; // keep the head upright when flying left
+
+  return (
+    <div
+      ref={box}
+      className="lz-game lz-game-vol"
+      onPointerDown={(e) => {
+        aim(e);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // capture is a nicety
+        }
+      }}
+      onPointerMove={(e) => finger.current && aim(e)}
+      onPointerUp={() => (finger.current = null)}
+      onPointerCancel={() => (finger.current = null)}
+    >
+      <div className="lz-vol-stars" aria-hidden />
+      <Hud score={world.score} time={world.time} icon="✦" seconds={seconds} />
+      <button className="lz-bulles-target lz-vol-target" onPointerDown={(e) => e.stopPropagation()} onClick={() => speak([soundPart(target)])} aria-label="Lettre à attraper">
+        <span className="lz-read">{GRAPHEME[target]?.display ?? target}</span>
+      </button>
+      {world.orbs.map((o) => (
+        <span
+          key={o.id}
+          className={`lz-vol-orb ${o.letter ? "" : "is-ball"} ${o.eaten !== undefined ? "is-eaten" : ""} ${o.wrong !== undefined && world.time - o.wrong < 0.5 ? "is-wrong" : ""} ${world.time - o.born > 8.5 ? "is-fading" : ""}`}
+          style={{ left: `${o.x * 100}%`, top: `${o.y * 100}%` }}
+          aria-hidden
+        >
+          {o.letter ? <span className="lz-read">{GRAPHEME[o.letter]?.display ?? o.letter}</span> : <DragonBall stars={o.stars} size={56} />}
+        </span>
+      ))}
+      {body
+        .map((b, i) => (
+          <span
+            key={i}
+            className={`lz-vol-seg ${i === body.length - 1 ? "is-tail" : ""}`}
+            style={{
+              left: `${b.x * 100}%`,
+              top: `${b.y * 100}%`,
+              transform: `translate(-50%, -50%) rotate(${(b.a * 180) / Math.PI}deg) scale(${1 - (0.55 * i) / Math.max(VOL_MIN, body.length)})`,
+            }}
+            aria-hidden
+          />
+        ))
+        .reverse()}
+      <span className="lz-vol-head" style={{ left: `${world.x * 100}%`, top: `${world.y * 100}%`, transform: `translate(-50%, -50%) rotate(${deg}deg) scaleY(${flip ? -1 : 1})` }} aria-hidden>
+        <DragonHead />
+      </span>
+      {world.pops.map((p) => (
+        <span key={p.id} className="lz-catch good" style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
+          <span className="lz-sparks" aria-hidden />
+          <span className="lz-pop-text">{p.text}</span>
+        </span>
+      ))}
+      {phase === "play" && world.time < 5 && <span className="lz-route-tip">Guide Shenron avec ton doigt !</span>}
+      <Overlay phase={phase} count={count} score={world.score} game="vol" onDone={onDone} />
+    </div>
+  );
+}
+
+/** Shenron's head, facing right: green scales, red eyes, horns, whiskers. */
+function DragonHead() {
+  return (
+    <svg viewBox="0 -6 120 98" width="100%" height="100%">
+      <path d="M8 30 Q30 4 62 10 Q60 0 50 -4" fill="none" stroke="#8a5a1c" strokeWidth="5" strokeLinecap="round" />
+      <path d="M14 26 Q34 8 56 16 Q66 2 76 -2" fill="none" stroke="#a8742a" strokeWidth="5" strokeLinecap="round" />
+      <path d="M2 34 Q4 16 34 16 L82 22 Q108 26 114 40 Q116 50 104 54 L72 58 Q60 74 30 72 Q6 70 2 50 Z" fill="#3f9b3a" stroke="#1d5a1d" strokeWidth="3" />
+      <path d="M40 58 L104 54 Q100 64 86 66 L50 70 Q40 68 40 58 Z" fill="#f2dfa0" stroke="#1d5a1d" strokeWidth="2.5" />
+      <path d="M76 58 l4 7 l4 -7 M88 57 l4 6 l4 -7" fill="#fff" stroke="#1d5a1d" strokeWidth="1.5" />
+      <ellipse cx="74" cy="32" rx="9" ry="6" fill="#fff" stroke="#1d5a1d" strokeWidth="2" />
+      <circle cx="77" cy="32" r="4" fill="#d81b1b" />
+      <path d="M62 24 Q74 18 88 26" fill="none" stroke="#1d5a1d" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="106" cy="40" r="2.5" fill="#1d5a1d" />
+      <path d="M100 48 Q120 70 104 88" fill="none" stroke="#e8d37a" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M96 50 Q108 78 88 90" fill="none" stroke="#e8d37a" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M20 22 l-8 -10 l14 4 M32 18 l-4 -12 l12 8" fill="#3f9b3a" stroke="#1d5a1d" strokeWidth="2" />
+    </svg>
+  );
+}
+
 export function MiniGame({
   id,
   letters,
@@ -1184,6 +1434,7 @@ export function MiniGame({
   if (id === "memoire") return <Memoire onDone={onDone} level={level} seconds={seconds} />;
   if (id === "route") return <Route onDone={onDone} level={level} seconds={seconds} goku={goku} />;
   if (id === "baton") return <Baton onDone={onDone} level={level} seconds={seconds} />;
+  if (id === "vol") return <Vol letters={letters} onDone={onDone} level={level} seconds={seconds} />;
   if (id === "instinct") return <Instinct onDone={onDone} level={level} seconds={seconds} />;
   return <Boules letters={letters} onDone={onDone} level={level} seconds={seconds} />;
 }

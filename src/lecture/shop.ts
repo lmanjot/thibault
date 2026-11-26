@@ -59,6 +59,7 @@ export interface ShopItem {
   level?: number;
   era?: number; // Goku must have reached this step of the ladder
   legend?: boolean; // not for sale: joins through the letters album
+  wish?: boolean; // not for sale: a dragon's wish (see dragons.ts)
 }
 
 export type GameKey = "nuage" | "kame" | "bulles" | "memoire" | "route" | "baton";
@@ -98,6 +99,8 @@ export const ITEMS: ShopItem[] = [
 
 
   // Legends: never for sale, they join through the letters album (see fillAlbum).
+  // Porunga's wish: he becomes a friend (never sold; the price only keeps him from counting as free).
+  { id: "c-porunga", kind: "companion", name: "Polunga", price: 9999, img: "porunga.png", wish: true },
   ...LEGENDS.map((l): ShopItem => ({ id: l.id, kind: "companion", name: l.name, price: 0, img: l.img, legend: true })),
 
   // Places, in story order.
@@ -160,7 +163,7 @@ export const owns = (s: Save, id: string) => {
 };
 
 export function canBuy(s: Save, item: ShopItem): boolean {
-  if (item.legend) return false;
+  if (item.legend || item.wish) return false;
   if (item.kind === "senzu") return (s.progress.senzu ?? 0) < SENZU_MAX && zeni(s) >= item.price;
   if (owns(s, item.id) || zeni(s) < item.price || !inEra(s, item)) return false;
   if (item.kind === "game" && item.game) return !gameOpen(s, item.game);
@@ -204,7 +207,7 @@ export interface Fighter {
 }
 
 export function fighters(s: Save, form: Form): Fighter[] {
-  const friends = ITEMS.filter((i) => i.kind === "companion" && i.img && owns(s, i.id)).map((i) => ({
+  const friends = ITEMS.filter((i) => i.kind === "companion" && !i.wish && i.img && owns(s, i.id)).map((i) => ({
     id: i.id,
     name: i.name,
     img: (form.kid && i.imgKid) || i.img!,

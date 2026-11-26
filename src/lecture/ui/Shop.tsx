@@ -59,7 +59,7 @@ export function Shop({
   const eraLabel = (item: ShopItem) => `après « ${FORMS[item.era ?? 0].name} »`;
 
   // Legends are not sold: they live in the letters album.
-  const items = ITEMS.filter((i) => !i.legend && (tab === "game" ? i.kind === "game" || i.kind === "level" : i.kind === tab));
+  const items = ITEMS.filter((i) => !i.legend && !i.wish && (tab === "game" ? i.kind === "game" || i.kind === "level" : i.kind === tab));
 
   return (
     <div className="lz-shop">

@@ -33,10 +33,12 @@ import {
 import { loadRecordings, loadVoice, namePart, sfx, soundPart, speak, stopSpeech } from "../audio";
 import { pullNewer, pushSave, sendSaveNow } from "../sync";
 import { L } from "../voice";
+import { addBall, ballSeries, pendingDragon, volOpen, type Dragon } from "../dragons";
+import { Wish } from "./Wish";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
 import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
-import { MINI_GAMES, MiniGame, SECRET_GAME, type GameId } from "./games";
+import { MINI_GAMES, MiniGame, SECRET_GAME, VOL_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
 import { Album, AlbumButton, NewFriends } from "./Album";
 import { chooseFighter, DIAMOND_BONUS, earnedStep, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
@@ -51,7 +53,8 @@ type Screen =
   | { s: "bonus"; game?: GameId; cleared: string[]; extra?: number }
   | { s: "shop"; tab?: "companion" }
   | { s: "album" }
-  | { s: "parent" };
+  | { s: "parent" }
+  | { s: "wish"; dragon: Dragon };
 
 const noop = () => () => {};
 
@@ -92,7 +95,9 @@ function Game({ fontClass }: { fontClass: string }) {
     // /lecture?jeu=amis: several friends at once (an old save opening its album); ?jeu=album: the album.
     if (jeu === "amis") return { s: "result", stars: 2, earned: 40, cleared: [], friends: ["r-tenshinhan", "r-chichi", "r-kaio", "r-gotenks", "r-satan", "d-gogeta"] };
     if (jeu === "album") return { s: "album" };
-    return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
+    // /lecture?jeu=shenron, ?jeu=polunga: the dragon's scene (it changes the save, like the real one).
+    if (jeu === "shenron" || jeu === "polunga") return { s: "wish", dragon: jeu === "shenron" ? "shenron" : "porunga" };
+    return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id || jeu === VOL_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
   useEffect(() => {
@@ -136,9 +141,12 @@ function Game({ fontClass }: { fontClass: string }) {
   }
 
   // When the game opens or comes back to the screen, take the progress made on another device.
-  const screenRef = useRef(screen.s);
+  // Seven dragon balls: the dragon's scene comes first, on the home screen (also a wish won before the scene existed).
+  const dragon = pendingDragon(save);
+  const shown = screen.s === "home" && dragon ? "wish" : screen.s;
+  const screenRef = useRef(shown);
   useEffect(() => {
-    screenRef.current = screen.s;
+    screenRef.current = shown;
   });
   // Back on the home screen (after a training, the shop, the album…): what is waiting goes online now.
   useEffect(() => {
@@ -244,14 +252,14 @@ function Game({ fontClass }: { fontClass: string }) {
       medal = { letter: worked, kind };
       medalBonus = kind === "or" ? GOLD_BONUS : DIAMOND_BONUS;
       if (kind === "diamant") {
-        const balls = (s.progress.letterBalls ?? 0) + 1;
-        medal.balls = balls;
-        if (balls >= 7) {
+        // A dragon ball: the Earth's first, then Namek's. The seventh calls the dragon (his scene plays on the home screen).
+        const ball = addBall(s);
+        medal.balls = ball.balls;
+        medal.series = ball.series;
+        if (ball.dragon) {
           medal.wish = true;
           medalBonus += WISH_BONUS;
-          s.progress.wishes = (s.progress.wishes ?? 0) + 1;
-          s.progress.letterBalls = 0;
-        } else s.progress.letterBalls = balls;
+        }
       }
     }
     // Each round finished on a letter (silver, gold, diamond) brings a legend into the album; the
@@ -285,7 +293,11 @@ function Game({ fontClass }: { fontClass: string }) {
     speak(
       medal
         ? [
-            ...(medal.wish ? [L.diamondDone, L.wish] : [medal.kind === "or" ? L.goldDone : L.diamondDone]),
+            ...(medal.kind === "or"
+              ? [L.goldDone]
+              : medal.series === "namek"
+                ? [L.diamondNamek, ...(medal.wish ? [L.wishNamek] : [])]
+                : [L.diamondDone, ...(medal.wish ? [L.wish] : [])]),
             ...friendLine,
           ]
         : boss
@@ -307,7 +319,7 @@ function Game({ fontClass }: { fontClass: string }) {
       }}
       style={aura?.color ? ({ ["--aura-custom" as string]: aura.color } as React.CSSProperties) : undefined}
     >
-      {screen.s === "home" && (
+      {screen.s === "home" && !dragon && (
         <Home
           save={save}
           onTrain={start}
@@ -486,6 +498,29 @@ function Game({ fontClass }: { fontClass: string }) {
       )}
 
       {screen.s === "parent" && <Parent save={save} onChange={update} onClose={() => setScreen({ s: "home" })} />}
+
+      {shown === "wish" && (
+        <Wish
+          key={screen.s === "wish" ? screen.dragon : dragon}
+          dragon={screen.s === "wish" ? screen.dragon : dragon!}
+          save={save}
+          onChange={(s) => {
+            // The scene came up by itself on the home screen: keep it on until he leaves it (the wish just
+            // made means nothing is waiting any more).
+            if (screen.s !== "wish" && dragon) setScreen({ s: "wish", dragon });
+            update(s);
+          }}
+          onPlay={() => {
+            stopSpeech();
+            sfx.unlock();
+            setScreen({ s: "bonus", game: VOL_GAME.id, cleared: [] });
+          }}
+          onClose={() => {
+            stopSpeech();
+            setScreen({ s: "home" });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -578,6 +613,7 @@ function Home({
               "Puissance maximale !"
             )}
           </span>
+          <BallQuest save={save} />
         </div>
 
         {letters.length > 0 && (
@@ -653,6 +689,25 @@ function Home({
       </div>
       <AlbumButton save={save} onClick={onAlbum} />
       <HoldButton onHold={onParent} />
+    </div>
+  );
+}
+
+/** The dragon balls won so far with diamond letters: the Earth's 7 (Shenron), then Namek's (Porunga). */
+function BallQuest({ save }: { save: Save }) {
+  const namek = ballSeries(save) === "namek";
+  const got = save.progress.letterBalls ?? 0;
+  const label = namek ? "Boules de Namek" : "Boules de cristal";
+  return (
+    <div className={`lz-quest ${namek ? "is-namek" : ""}`} aria-label={`${label} : ${got} sur 7`} title="Une boule pour chaque lettre en diamant">
+      <span className="lz-quest-label">{label}</span>
+      <span className="lz-quest-balls">
+        {Array.from({ length: 7 }, (_, i) => (
+          <span key={i} className={i < got ? "is-got" : ""}>
+            <DragonBall stars={i + 1} size={26} className={namek ? "is-namek" : ""} />
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
@@ -740,6 +795,21 @@ function Bonus({
               </button>
             );
           })}
+          {/* Shenron's game: his wish, after the first 7 dragon balls (diamond letters). */}
+          <button
+            className={`lz-gamecard is-dragon ${volOpen(save) ? "" : "is-locked"}`}
+            disabled={!volOpen(save)}
+            onClick={() => onPick(VOL_GAME.id, senzu)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={ASSET(VOL_GAME.img)} alt="" />
+            <span className="lz-gamecard-name">{VOL_GAME.name}</span>
+            {!volOpen(save) && (
+              <span className="lz-gamecard-lock">
+                <Icon name="lock" size={22} /> 7 boules de cristal
+              </span>
+            )}
+          </button>
           <div className="lz-gamecard is-locked is-secret" aria-label="Jeu secret">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={ASSET(SECRET_GAME.img)} alt="" />
@@ -762,7 +832,7 @@ function Bonus({
         </div>
       </div>
     );
-  return <MiniGame key={game} id={game} letters={letters} level={game === SECRET_GAME.id ? 1 : gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
+  return <MiniGame key={game} id={game} letters={letters} level={game === SECRET_GAME.id || game === VOL_GAME.id ? 1 : gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
 }
 
 /** « e · u » */
@@ -781,21 +851,25 @@ interface Medal {
   letter: string;
   kind: "or" | "diamant";
   balls?: number; // dragon balls collected with diamond letters, this one included
-  wish?: boolean; // the seventh: Shenron's wish
+  wish?: boolean; // the seventh: the dragon comes
+  series?: "terre" | "namek"; // the Earth's balls, or Namek's (after Shenron's wish)
 }
 
 function MedalBanner({ medal }: { medal: Medal }) {
   const got = medal.wish ? 7 : (medal.balls ?? 0);
+  const namek = medal.series === "namek";
   return (
     <div className={`lz-medal is-${medal.kind}`}>
       <span className="lz-medal-tile lz-read">{GRAPHEME[medal.letter]?.display}</span>
       <div>
-        <p className="lz-medal-title">{medal.wish ? "Shenron exauce ton vœu !" : medal.kind === "or" ? "Lettre en or !" : "Lettre en diamant !"}</p>
+        <p className="lz-medal-title">
+          {medal.wish ? (namek ? "Polunga arrive : 3 vœux !" : "Shenron exauce ton vœu !") : medal.kind === "or" ? "Lettre en or !" : "Lettre en diamant !"}
+        </p>
         {medal.kind === "diamant" && (
-          <div className="lz-medal-balls" aria-label={`${got} boules de cristal sur 7`}>
+          <div className="lz-medal-balls" aria-label={`${got} boules de cristal${namek ? " de Namek" : ""} sur 7`}>
             {Array.from({ length: 7 }, (_, i) => (
               <span key={i} className={i < got ? "is-got" : ""}>
-                <DragonBall stars={i + 1} size={32} />
+                <DragonBall stars={i + 1} size={32} className={namek ? "is-namek" : ""} />
               </span>
             ))}
           </div>

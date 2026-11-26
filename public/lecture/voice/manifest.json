@@ -644,7 +644,22 @@
   "Lis à voix haute ! Touche le micro, et lis.": "b2530fbe804d.mp3",
   "Presque ! Essaie encore une fois.": "f73a4b40405d.mp3",
   "Écoute bien, et répète après moi…": "4e32c3e5621f.mp3",
-  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "b2df9f1e63bf.mp3"
+  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "b2df9f1e63bf.mp3",
+  "Incroyable ! Ta lettre est en diamant ! Tu gagnes une boule de cristal de Namek !": "19233d30a946.mp3",
+  "Les sept boules de Namek ! Polunga va exaucer trois vœux !": "10386dac55dc.mp3",
+  "Regarde ! Le ciel devient tout noir…": "6a6da2a8a0d1.mp3",
+  "Avec Shenron, attrape les boules avec la lettre…": "061bd790a591.mp3",
+  "Je suis Shenron, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu.": "266e5dc50895.mp3",
+  "Ton vœu est exaucé ! Voici un jeu rien que pour toi : le vol de Shenron !": "87fe3219557f.mp3",
+  "Écoute bien… Sur la planète Namek, il y a d'autres boules de cristal, encore plus puissantes. Leur dragon, Polunga, exauce trois vœux ! Gagne des lettres en diamant pour les trouver.": "d28a47c63f47.mp3",
+  "Je suis Polunga, le dragon de Namek ! Tu as rassemblé les sept boules de Namek. Je vais exaucer trois vœux. Choisis !": "877ac45f0d7f.mp3",
+  "Vœu exaucé !": "4543a63b2f3e.mp3",
+  "Tes vœux sont exaucés ! Les boules de Namek s'envolent aux quatre coins de la planète… Retrouve-les avec tes lettres en diamant !": "1018fd1f400b.mp3",
+  "Une montagne de zénis !": "ce6eddf41604.mp3",
+  "Des haricots magiques !": "c13f4d2dd5da.mp3",
+  "Tous tes jeux plus forts !": "0c2ab184f704.mp3",
+  "Polunga devient ton ami !": "b87c84aa5a8f.mp3",
+  "Polunga": "65c02a6db323.mp3"
  },
  "sig": {
   "Saibaman": "35d836fef2",
@@ -1289,6 +1304,21 @@
   "Lis à voix haute ! Touche le micro, et lis.": "00e6360b05",
   "Presque ! Essaie encore une fois.": "c15f07f1d1",
   "Écoute bien, et répète après moi…": "e41038478c",
-  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "90b9bbb631"
+  "Je ne t'ai pas entendu ! Parle un peu plus fort.": "90b9bbb631",
+  "Incroyable ! Ta lettre est en diamant ! Tu gagnes une boule de cristal de Namek !": "25ff88d3c1",
+  "Les sept boules de Namek ! Polunga va exaucer trois vœux !": "d1e594b8d2",
+  "Regarde ! Le ciel devient tout noir…": "b85e6160ee",
+  "Avec Shenron, attrape les boules avec la lettre…": "2ccc92d6ae",
+  "Je suis Shenron, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu.": "ed2b15b0a6",
+  "Ton vœu est exaucé ! Voici un jeu rien que pour toi : le vol de Shenron !": "696d6d75e7",
+  "Écoute bien… Sur la planète Namek, il y a d'autres boules de cristal, encore plus puissantes. Leur dragon, Polunga, exauce trois vœux ! Gagne des lettres en diamant pour les trouver.": "045833f79b",
+  "Je suis Polunga, le dragon de Namek ! Tu as rassemblé les sept boules de Namek. Je vais exaucer trois vœux. Choisis !": "437aaf8ef4",
+  "Vœu exaucé !": "ed5bc2fd02",
+  "Tes vœux sont exaucés ! Les boules de Namek s'envolent aux quatre coins de la planète… Retrouve-les avec tes lettres en diamant !": "b161fde6f5",
+  "Une montagne de zénis !": "39f2fbadb0",
+  "Des haricots magiques !": "b782ee2418",
+  "Tous tes jeux plus forts !": "ae669fb53f",
+  "Polunga devient ton ami !": "184ace12d8",
+  "Polunga": "b327af445b"
  }
 }
