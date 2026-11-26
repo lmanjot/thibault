@@ -97,9 +97,9 @@ function toWav16k(samples: Float32Array, rate: number): Blob {
 
 /**
  * Syllables read differently from how Azure says them, scored against a spelling of how they are read
- * (« se » is read « ze »: against « se » a good « ze » scores 0, against « zeu » 95). Keep in step with voice-tuning.json.
+ * (« sé » is read « zé »: against « sé » a good « zé » scores 25, against « zé » 90). Keep in step with voice-tuning.json.
  */
-const READ_AS: Record<string, string> = { se: "zeu", "sé": "zé" };
+const READ_AS: Record<string, string> = { "sé": "zé" };
 
 /** Listen to him reading `text` (« la ») and score it. onRecorded: the recording is over, the score is on its way. */
 export async function listen(text: string, onRecorded?: () => void): Promise<Heard> {
