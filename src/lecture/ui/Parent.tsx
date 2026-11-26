@@ -222,7 +222,7 @@ function SyncPanel({ save, onChange }: { save: Save; onChange: (s: Save) => void
 
   async function join() {
     const code = typed.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (code.length !== 6) return setMsg("Le code a 6 caractères, par exemple K7P-4QX.");
+    if (code.length !== 6) return setMsg("Le code a 6 lettres et chiffres : il est affiché ici, sur l’appareil où il a joué.");
     setBusy(true);
     setMsg(null);
     try {
@@ -279,7 +279,7 @@ function SyncPanel({ save, onChange }: { save: Save; onChange: (s: Save) => void
               className="lz-sync-input"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              placeholder="J'ai un code : K7P-4QX"
+              placeholder="J'ai un code : tape-le ici"
               maxLength={8}
               autoCapitalize="characters"
               autoCorrect="off"

@@ -2525,7 +2525,7 @@ function askCode(replacing) {
     const msg = h('p', { class: 'small codemsg' });
     const go = async () => {
       const code = cleanCode(input.value);
-      if (code.length !== 6) { msg.textContent = 'Le code a 6 lettres et chiffres, par exemple K7P-4QX.'; return; }
+      if (code.length !== 6) { msg.textContent = 'Le code a 6 lettres et chiffres : regarde dans Options, sur l’appareil où tu as joué.'; return; }
       msg.textContent = 'Recherche…';
       try {
         const remote = await fetchCode(code);
@@ -2536,7 +2536,7 @@ function askCode(replacing) {
       } catch { msg.textContent = 'Pas de connexion. Réessaie plus tard.'; }
     };
     const P = panel('J’ai un code', (body) => {
-      input = h('input', { class: 'codein', maxlength: 8, placeholder: 'K7P-4QX', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', onkeydown: (e) => { if (e.key === 'Enter') go(); } });
+      input = h('input', { class: 'codein', maxlength: 8, placeholder: 'Tape ton code', autocapitalize: 'characters', autocomplete: 'off', spellcheck: 'false', onkeydown: (e) => { if (e.key === 'Enter') go(); } });
       body.append(h('p', { class: 'small' }, 'Tape le code affiché dans les Options de ton autre appareil.'), input, h('button', { class: 'btn big', onclick: go }, 'Récupérer ma partie'), msg);
       setTimeout(() => input.focus(), 50);
     });
