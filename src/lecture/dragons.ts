@@ -47,7 +47,7 @@ export function seeShenron(s: Save) {
 
 // ——— Porunga's wishes ———
 
-export type WishId = "zeni" | "senzu" | "jeux" | "ami";
+export type WishId = "jeu" | "zeni" | "senzu" | "jeux" | "ami";
 
 export interface WishOption {
   id: WishId;
@@ -57,6 +57,9 @@ export interface WishOption {
 
 export const PORUNGA_ZENI = 1000;
 export const PORUNGA_FRIEND = "c-porunga";
+/** Porunga's game, « Le vaisseau pour Namek »: a wish, never for sale. */
+export const NAMEK_GAME_WISH = "w-namek";
+export const namekOpen = (s: Save) => (s.progress.owned ?? []).includes(NAMEK_GAME_WISH);
 
 const GAMES: GameKey[] = ["nuage", "kame", "bulles", "memoire", "route", "baton"];
 
@@ -67,6 +70,7 @@ function nextLevels(s: Save): string[] {
 }
 
 export const WISHES: Record<WishId, WishOption> = {
+  jeu: { id: "jeu", name: "Un nouveau jeu : le vaisseau pour Namek !", img: "bg_namek.png" },
   zeni: { id: "zeni", name: "Une montagne de zénis !", img: "zeni" },
   senzu: { id: "senzu", name: "Des haricots magiques !", img: "senzu" },
   jeux: { id: "jeux", name: "Tous tes jeux plus forts !", img: "goku_kid_cloud.png" },
@@ -76,6 +80,7 @@ export const WISHES: Record<WishId, WishOption> = {
 /** What can still be wished for (one of each per visit; zénis always, so there is always a choice). */
 export function wishOptions(s: Save, chosen: WishId[]): WishOption[] {
   const ok: Record<WishId, boolean> = {
+    jeu: !namekOpen(s),
     zeni: true,
     senzu: (s.progress.senzu ?? 0) < SENZU_MAX,
     jeux: nextLevels(s).length > 0,
@@ -87,6 +92,7 @@ export function wishOptions(s: Save, chosen: WishId[]): WishOption[] {
 
 /** Grant one of Porunga's wishes (changes the save passed in). */
 export function grantWish(s: Save, id: WishId) {
+  if (id === "jeu") s.progress.owned = [...(s.progress.owned ?? []), NAMEK_GAME_WISH];
   if (id === "zeni") s.progress.zeni = zeni(s) + PORUNGA_ZENI;
   if (id === "senzu") s.progress.senzu = SENZU_MAX;
   if (id === "jeux") {

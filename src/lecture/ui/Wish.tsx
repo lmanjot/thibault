@@ -28,7 +28,7 @@ export function Wish({
   dragon: Dragon;
   save: Save;
   onChange: (s: Save) => void;
-  onPlay: () => void; // Shenron's game, right away
+  onPlay: (game: "vol" | "namek") => void; // the dragon's game, right away
   onClose: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("sky");
@@ -144,7 +144,7 @@ export function Wish({
       {(phase === "gift" || phase === "namek") && (
         <div className="lz-dragon-card lz-panel">
           <p className="lz-dragon-kicker">Shenron exauce ton vœu</p>
-          <button className="lz-dragon-game" onClick={onPlay}>
+          <button className="lz-dragon-game" onClick={() => onPlay("vol")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={ASSET("shenron.png")} alt="" />
             <span>
@@ -165,7 +165,7 @@ export function Wish({
             </div>
           )}
           <div className="lz-row">
-            <button className="lz-cta" onClick={onPlay}>
+            <button className="lz-cta" onClick={() => onPlay("vol")}>
               <Icon name="play" size={30} /> Jouer !
             </button>
             <button className="lz-round" onClick={onClose} aria-label="Continuer">
@@ -209,9 +209,16 @@ export function Wish({
         <div className="lz-dragon-card lz-panel">
           <p className="lz-dragon-kicker">Tes vœux sont exaucés !</p>
           <p className="lz-dragon-text">Les boules de Namek s&apos;envolent… Retrouve-les avec tes lettres en diamant !</p>
-          <button className="lz-round" onClick={onClose} aria-label="Continuer">
-            <Icon name="arrow" />
-          </button>
+          <div className="lz-row">
+            {chosen.includes("jeu") && (
+              <button className="lz-cta" onClick={() => onPlay("namek")}>
+                <Icon name="play" size={30} /> Le vaisseau pour Namek
+              </button>
+            )}
+            <button className="lz-round" onClick={onClose} aria-label="Continuer">
+              <Icon name="arrow" />
+            </button>
+          </div>
         </div>
       )}
     </div>

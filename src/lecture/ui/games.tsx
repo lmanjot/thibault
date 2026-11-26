@@ -22,7 +22,9 @@ export const MINI_GAMES = [
 export const SECRET_GAME = { id: "instinct", name: "Ultra Instinct", img: "goku_ui.png" } as const;
 /** Shenron's game: his wish, after the first 7 dragon balls (never for sale). */
 export const VOL_GAME = { id: "vol", name: "Le vol de Shenron", img: "shenron.png" } as const;
-export type GameId = (typeof MINI_GAMES)[number]["id"] | typeof SECRET_GAME.id | typeof VOL_GAME.id;
+/** One of Porunga's wishes (never for sale). */
+export const NAMEK_GAME = { id: "namek", name: "Le vaisseau pour Namek", img: "bg_namek.png" } as const;
+export type GameId = (typeof MINI_GAMES)[number]["id"] | typeof SECRET_GAME.id | typeof VOL_GAME.id | typeof NAMEK_GAME.id;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 let nextId = 1;
@@ -1411,6 +1413,298 @@ function DragonHead() {
   );
 }
 
+// ——— Le vaisseau pour Namek (one of Porunga's wishes): an arcade flight. The ship follows the finger and
+// fires by itself at Freezer's soldiers; dodge the asteroids, pick up Namek's 7 dragon balls, and beat
+// Freezer himself at the end. No letters: this one is just for fun. ———
+
+interface Foe2 {
+  id: number;
+  kind: "soldier" | "saibaman" | "rock" | "ball" | "zap"; // zap: Freezer's blast
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  hp: number;
+  stars: number;
+  hitAt?: number;
+  dead?: number;
+}
+interface NamekW {
+  time: number;
+  score: number;
+  x: number; // ship, shares of the screen
+  y: number;
+  tx: number;
+  ty: number;
+  shots: { id: number; x: number; y: number }[];
+  fire: number;
+  foes: Foe2[];
+  spawn: number;
+  got: boolean[]; // Namek's 7 balls picked up
+  wish?: number; // when the 7 were gathered
+  hurt: number; // last time the ship was hit
+  boss?: { y: number; hp: number; max: number; hitAt: number; dead?: number; zap: number };
+  pops: { id: number; x: number; y: number; t: number; text: string; good: boolean }[];
+}
+
+const SHIP_R = 0.07; // ship radius (shares of the height)
+const BOSS_X = 0.82;
+const FOE_IMG: Record<string, string> = { soldier: "soldier.png", saibaman: "saibaman.png" };
+
+function Namek({ onDone, level, seconds }: GameProps) {
+  const pace = paceOf(level);
+  const box = useRef<HTMLDivElement>(null);
+  // Width / height of the screen (the game fills it).
+  const [ar] = useState(() => (typeof window === "undefined" ? 1.5 : window.innerWidth / Math.max(1, window.innerHeight)));
+  const bossAt = Math.max(15, seconds - 16); // Freezer comes for the last stretch
+
+  const { world, setWorld, phase, count } = useGame<NamekW>(
+    () => ({ time: 0, score: 0, x: 0.2, y: 0.55, tx: 0.2, ty: 0.55, shots: [], fire: 0, foes: [], spawn: 0.6, got: Array(7).fill(false), hurt: -9, pops: [] }),
+    (w, dt) => {
+      let { score, spawn, fire, got, wish, hurt, boss } = w;
+      const pops = w.pops.filter((p) => w.time - p.t < 0.8);
+      const x = w.x + (w.tx - w.x) * Math.min(1, dt * 9);
+      const y = w.y + (w.ty - w.y) * Math.min(1, dt * 9);
+      const near = (ax: number, ay: number, bx: number, by: number, r: number) => Math.hypot((ax - bx) * ar, ay - by) < r;
+
+      // The ship fires by itself.
+      let shots = w.shots.map((s) => ({ ...s, x: s.x + 1.3 * dt })).filter((s) => s.x < 1.05);
+      fire -= dt;
+      if (fire <= 0) {
+        fire = 0.22;
+        shots.push({ id: nextId++, x: x + 0.05, y });
+      }
+
+      // Freezer's arrival, for the last stretch.
+      if (!boss && w.time >= bossAt) {
+        const max = Math.round(30 * pace);
+        boss = { y: 0.5, hp: max, max, hitAt: -9, zap: 1.5 };
+        sfx.charge();
+        speak([L.friezaComes]);
+      }
+
+      const foes: Foe2[] = [];
+      for (const f of w.foes) {
+        if (f.dead !== undefined) {
+          if (w.time - f.dead < 0.4) foes.push(f);
+          continue;
+        }
+        const fx = f.x + f.vx * dt;
+        let fy = f.y + f.vy * dt;
+        let vy = f.vy;
+        if (fy < 0.15 || fy > 0.92) {
+          vy = -vy;
+          fy = Math.min(0.92, Math.max(0.15, fy));
+        }
+        if (fx < -0.12) continue;
+        let foe: Foe2 = { ...f, x: fx, y: fy, vy };
+        // Picked up, or bumped into the ship.
+        if (near(fx, fy, x, y, SHIP_R + 0.05)) {
+          if (f.kind === "ball") {
+            score += 5;
+            sfx.good();
+            const fresh = !got[f.stars - 1];
+            got = got.map((g, i) => g || i === f.stars - 1);
+            pops.push({ id: nextId++, x: fx, y: fy, t: w.time, text: "+5", good: true });
+            if (fresh && got.every(Boolean)) {
+              score += 30;
+              wish = w.time;
+              got = Array(7).fill(false);
+              sfx.power();
+              pops.push({ id: nextId++, x: 0.5, y: 0.4, t: w.time, text: "+30", good: true });
+            }
+            continue;
+          }
+          if (w.time - hurt > 1.2) {
+            hurt = w.time;
+            score = Math.max(0, score - 3);
+            sfx.hit();
+            pops.push({ id: nextId++, x, y: y - 0.08, t: w.time, text: "−3", good: false });
+          }
+          if (f.kind !== "rock") continue; // a soldier or a blast that hits the ship is gone
+        }
+        // Hit by a shot (balls and Freezer's blasts can't be shot).
+        if (f.kind !== "ball" && f.kind !== "zap") {
+          const shot = shots.find((s) => near(s.x, s.y, fx, fy, 0.075));
+          if (shot) {
+            shots = shots.filter((s) => s !== shot);
+            foe = { ...foe, hp: foe.hp - 1, hitAt: w.time };
+            if (foe.hp <= 0) {
+              const gain = f.kind === "rock" ? 1 : 2;
+              score += gain;
+              sfx.good();
+              pops.push({ id: nextId++, x: fx, y: fy, t: w.time, text: `+${gain}`, good: true });
+              foes.push({ ...foe, dead: w.time });
+              continue;
+            }
+          }
+        }
+        foes.push(foe);
+      }
+
+      // Freezer: moves up and down, throws blasts, falls after enough hits.
+      if (boss && boss.dead === undefined) {
+        const by = 0.52 + Math.sin(w.time * 1.1) * 0.22;
+        let { hp, hitAt, zap } = boss;
+        for (const s of shots) {
+          if (s.x > BOSS_X - 0.06 && Math.abs(s.y - by) < 0.14) {
+            hp -= 1;
+            hitAt = w.time;
+            s.x = 2; // spent
+          }
+        }
+        shots = shots.filter((s) => s.x < 1.5);
+        zap -= dt;
+        if (zap <= 0) {
+          zap = rand(1.3, 2) / pace;
+          const dx = (x - BOSS_X) * ar;
+          const dy = y - by;
+          const d = Math.hypot(dx, dy) || 1;
+          const sp = 0.38 * pace;
+          foes.push({ id: nextId++, kind: "zap", x: BOSS_X - 0.05, y: by, vx: ((dx / d) * sp) / ar, vy: (dy / d) * sp, hp: 1, stars: 1 });
+        }
+        let dead: number | undefined;
+        if (hp <= 0) {
+          dead = w.time;
+          score += 50;
+          sfx.boom();
+          speak([L.friezaBeaten]);
+          pops.push({ id: nextId++, x: BOSS_X, y: by, t: w.time, text: "+50", good: true });
+        }
+        boss = { ...boss, y: by, hp: Math.max(0, hp), hitAt, zap, dead };
+      }
+
+      // New enemies, asteroids and Namek's balls (fewer once Freezer is there).
+      spawn -= dt;
+      if (spawn <= 0) {
+        spawn = (rand(0.55, 0.9) / pace) * (boss ? 2.2 : 1);
+        const r = Math.random();
+        const missing = got.map((g, i) => (g ? 0 : i + 1)).filter(Boolean);
+        const kind: Foe2["kind"] = r < 0.18 ? "ball" : r < 0.45 ? "rock" : r < 0.75 ? "soldier" : "saibaman";
+        const speed = (kind === "rock" ? rand(0.16, 0.24) : kind === "ball" ? 0.18 : rand(0.22, 0.32)) * pace;
+        foes.push({
+          id: nextId++,
+          kind,
+          x: 1.08,
+          y: rand(0.2, 0.88),
+          vx: -speed,
+          vy: kind === "saibaman" ? rand(-0.25, 0.25) : kind === "rock" ? rand(-0.05, 0.05) : 0,
+          hp: kind === "rock" ? 3 : 1,
+          stars: missing.length ? missing[Math.floor(Math.random() * missing.length)] : 1 + Math.floor(Math.random() * 7),
+        });
+      }
+      return { ...w, x, y, shots, fire, foes, spawn, score, got, wish, hurt, boss, pops };
+    },
+    seconds,
+  );
+
+  useEffect(() => {
+    if (phase === "count") speak([L.shipGo]);
+  }, [phase]);
+
+  // The ship follows the finger, a little in front of it so the finger doesn't hide it.
+  const grab = useRef<{ fx: number; fy: number; sx: number; sy: number } | null>(null);
+  const press = (e: RPointerEvent) => {
+    grab.current = { fx: e.clientX, fy: e.clientY, sx: world.tx, sy: world.ty };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // capture is a nicety
+    }
+  };
+  const steer = (e: RPointerEvent) => {
+    const g = grab.current;
+    const r = box.current?.getBoundingClientRect();
+    if (!g || !r) return;
+    const tx = Math.min(0.62, Math.max(0.06, g.sx + ((e.clientX - g.fx) / r.width) * 1.3));
+    const ty = Math.min(0.92, Math.max(0.14, g.sy + ((e.clientY - g.fy) / r.height) * 1.3));
+    setWorld((w) => ({ ...w, tx, ty }));
+  };
+
+  const hurt = world.time - world.hurt < 1.2;
+  const tilt = Math.max(-16, Math.min(16, (world.ty - world.y) * 120));
+  const trip = Math.min(1, world.time / seconds);
+  const wishing = world.wish !== undefined && world.time - world.wish < 2.4;
+  const b = world.boss;
+
+  return (
+    <div ref={box} className={`lz-game lz-game-namek ${wishing ? "is-wish" : ""}`} onPointerDown={press} onPointerMove={steer} onPointerUp={() => (grab.current = null)} onPointerCancel={() => (grab.current = null)}>
+      <div className="lz-namek-stars" aria-hidden />
+      <div className="lz-namek-planet" style={{ ["--trip" as string]: trip }} aria-hidden />
+      <Hud score={world.score} time={world.time} icon="✦" seconds={seconds} />
+      <div className="lz-collect lz-namek-collect" aria-label="Boules de Namek trouvées">
+        {world.got.map((g, i) => (
+          <span key={i} className={`lz-collect-slot ${g ? "is-got" : ""}`}>
+            <DragonBall stars={i + 1} size={30} className="is-namek" />
+          </span>
+        ))}
+      </div>
+      {world.shots.map((s) => (
+        <span key={s.id} className="lz-shot" style={{ left: `${s.x * 100}%`, top: `${s.y * 100}%` }} aria-hidden />
+      ))}
+      {world.foes.map((f) => (
+        <span
+          key={f.id}
+          className={`lz-nfoe is-${f.kind} ${f.dead !== undefined ? "is-dead" : ""} ${f.hitAt !== undefined && world.time - f.hitAt < 0.12 ? "is-hit" : ""}`}
+          style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%` }}
+          aria-hidden
+        >
+          {f.kind === "ball" ? (
+            <DragonBall stars={f.stars} size={52} className="is-namek" />
+          ) : f.kind === "rock" || f.kind === "zap" ? null : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={ASSET(FOE_IMG[f.kind])} alt="" draggable={false} />
+          )}
+        </span>
+      ))}
+      {b && (
+        <div className={`lz-nboss ${b.dead !== undefined ? "is-dead" : ""} ${world.time - b.hitAt < 0.1 ? "is-hit" : ""}`} style={{ left: `${BOSS_X * 100}%`, top: `${b.y * 100}%` }}>
+          <div className="lz-hp">
+            <div style={{ width: `${(b.hp / b.max) * 100}%` }} />
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ASSET("frieza_new.png")} alt="Freezer" draggable={false} />
+        </div>
+      )}
+      <span className={`lz-ship ${hurt ? "is-hurt" : ""}`} style={{ left: `${world.x * 100}%`, top: `${world.y * 100}%`, transform: `translate(-50%, -50%) rotate(${tilt}deg)` }} aria-hidden>
+        <span className="lz-ship-flame" />
+        <ShipSvg />
+      </span>
+      {world.pops.map((p) => (
+        <span key={p.id} className={`lz-catch ${p.good ? "good" : "bad"}`} style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}>
+          {p.good && <span className="lz-sparks" aria-hidden />}
+          <span className="lz-pop-text">{p.text}</span>
+        </span>
+      ))}
+      {wishing && (
+        <div className="lz-wish" aria-hidden>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={ASSET("porunga.png")} alt="" />
+          <span className="lz-wish-text">Polunga !</span>
+        </div>
+      )}
+      {phase === "play" && world.time < 5 && <span className="lz-route-tip">Pilote avec ton doigt : le vaisseau tire tout seul !</span>}
+      <Overlay phase={phase} count={count} score={world.score} game="namek" onDone={onDone} />
+    </div>
+  );
+}
+
+/** The round Capsule Corp ship Goku flies to Namek, seen from the side, nose to the right. */
+function ShipSvg() {
+  return (
+    <svg viewBox="0 0 140 100" width="100%" height="100%">
+      <path d="M30 78 L14 96 L40 88 Z M30 22 L14 4 L40 12 Z" fill="#c9ced8" stroke="#3a4152" strokeWidth="3" strokeLinejoin="round" />
+      <ellipse cx="70" cy="50" rx="56" ry="40" fill="#f4f6fa" stroke="#3a4152" strokeWidth="4" />
+      <path d="M18 62 Q70 82 124 60" fill="none" stroke="#f5b400" strokeWidth="7" />
+      <ellipse cx="92" cy="40" rx="18" ry="14" fill="#6fd3ff" stroke="#3a4152" strokeWidth="3" />
+      <ellipse cx="86" cy="35" rx="6" ry="4" fill="#fff" opacity="0.8" />
+      <text x="36" y="52" fontSize="15" fontWeight="900" fill="#3a4152" fontFamily="sans-serif">CC</text>
+      <circle cx="40" cy="30" r="3" fill="#3a4152" />
+      <circle cx="40" cy="70" r="3" fill="#3a4152" />
+    </svg>
+  );
+}
+
 export function MiniGame({
   id,
   letters,
@@ -1434,6 +1728,7 @@ export function MiniGame({
   if (id === "memoire") return <Memoire onDone={onDone} level={level} seconds={seconds} />;
   if (id === "route") return <Route onDone={onDone} level={level} seconds={seconds} goku={goku} />;
   if (id === "baton") return <Baton onDone={onDone} level={level} seconds={seconds} />;
+  if (id === "namek") return <Namek onDone={onDone} level={level} seconds={seconds} />;
   if (id === "vol") return <Vol letters={letters} onDone={onDone} level={level} seconds={seconds} />;
   if (id === "instinct") return <Instinct onDone={onDone} level={level} seconds={seconds} />;
   return <Boules letters={letters} onDone={onDone} level={level} seconds={seconds} />;

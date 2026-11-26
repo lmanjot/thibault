@@ -659,7 +659,11 @@
   "Des haricots magiques !": "c13f4d2dd5da.mp3",
   "Tous tes jeux plus forts !": "0c2ab184f704.mp3",
   "Polunga devient ton ami !": "b87c84aa5a8f.mp3",
-  "Polunga": "65c02a6db323.mp3"
+  "Polunga": "65c02a6db323.mp3",
+  "Un nouveau jeu : le vaisseau pour Namek !": "6ea7b4a14566.mp3",
+  "En route pour Namek ! Pilote le vaisseau, il tire tout seul. Évite les astéroïdes, et attrape les boules de cristal !": "bca9547868a0.mp3",
+  "Attention ! Voilà Freezer !": "c9286f1c09b8.mp3",
+  "Freezer est vaincu ! Tu es trop fort !": "c57d04dc49e3.mp3"
  },
  "sig": {
   "Saibaman": "35d836fef2",
@@ -1319,6 +1323,10 @@
   "Des haricots magiques !": "b782ee2418",
   "Tous tes jeux plus forts !": "ae669fb53f",
   "Polunga devient ton ami !": "184ace12d8",
-  "Polunga": "b327af445b"
+  "Polunga": "b327af445b",
+  "Un nouveau jeu : le vaisseau pour Namek !": "0a58fda9ea",
+  "En route pour Namek ! Pilote le vaisseau, il tire tout seul. Évite les astéroïdes, et attrape les boules de cristal !": "8af2bd4b02",
+  "Attention ! Voilà Freezer !": "2876f008a8",
+  "Freezer est vaincu ! Tu es trop fort !": "f04d7dc131"
  }
 }

@@ -33,12 +33,12 @@ import {
 import { loadRecordings, loadVoice, namePart, sfx, soundPart, speak, stopSpeech } from "../audio";
 import { pullNewer, pushSave, sendSaveNow } from "../sync";
 import { L } from "../voice";
-import { addBall, ballSeries, pendingDragon, volOpen, type Dragon } from "../dragons";
+import { addBall, ballSeries, namekOpen, pendingDragon, volOpen, type Dragon } from "../dragons";
 import { Wish } from "./Wish";
 import { Session, type SessionResult } from "./Session";
 import { Parent } from "./Parent";
 import { DragonBall, FighterPicker, Goku, Icon, Pips, Stars, Zeni } from "./bits";
-import { MINI_GAMES, MiniGame, SECRET_GAME, VOL_GAME, type GameId } from "./games";
+import { MINI_GAMES, MiniGame, NAMEK_GAME, SECRET_GAME, VOL_GAME, type GameId } from "./games";
 import { Shop } from "./Shop";
 import { Album, AlbumButton, NewFriends } from "./Album";
 import { chooseFighter, DIAMOND_BONUS, earnedStep, FLAWLESS_BONUS, equipped, fighterOf, fighters, formStep, GAME_UNLOCK, gameLevel, gameOpen, GOLD_BONUS, ITEM, LETTER_BONUS, WISH_BONUS, LETTER_BOSS_BONUS, PERFECT_BONUS, PRACTICE_BOSS_BONUS, REVISION_BOSS_BONUS, SENZU_SECONDS, SESSION_BONUS, zeni } from "../shop";
@@ -97,7 +97,7 @@ function Game({ fontClass }: { fontClass: string }) {
     if (jeu === "album") return { s: "album" };
     // /lecture?jeu=shenron, ?jeu=polunga: the dragon's scene (it changes the save, like the real one).
     if (jeu === "shenron" || jeu === "polunga") return { s: "wish", dragon: jeu === "shenron" ? "shenron" : "porunga" };
-    return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id || jeu === VOL_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
+    return MINI_GAMES.some((g) => g.id === jeu) || jeu === SECRET_GAME.id || jeu === VOL_GAME.id || jeu === NAMEK_GAME.id ? { s: "bonus", game: jeu as GameId, cleared: [] } : { s: "home" };
   });
 
   useEffect(() => {
@@ -510,10 +510,10 @@ function Game({ fontClass }: { fontClass: string }) {
             if (screen.s !== "wish" && dragon) setScreen({ s: "wish", dragon });
             update(s);
           }}
-          onPlay={() => {
+          onPlay={(game) => {
             stopSpeech();
             sfx.unlock();
-            setScreen({ s: "bonus", game: VOL_GAME.id, cleared: [] });
+            setScreen({ s: "bonus", game, cleared: [] });
           }}
           onClose={() => {
             stopSpeech();
@@ -810,6 +810,23 @@ function Bonus({
               </span>
             )}
           </button>
+          {/* Porunga's game: one of his wishes (7 balls of Namek). Shown once Shenron's wish has told of Namek. */}
+          {volOpen(save) && (
+            <button
+              className={`lz-gamecard is-dragon is-namek ${namekOpen(save) ? "" : "is-locked"}`}
+              disabled={!namekOpen(save)}
+              onClick={() => onPick(NAMEK_GAME.id, senzu)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={ASSET(NAMEK_GAME.img)} alt="" />
+              <span className="lz-gamecard-name">{NAMEK_GAME.name}</span>
+              {!namekOpen(save) && (
+                <span className="lz-gamecard-lock">
+                  <Icon name="lock" size={22} /> vœu de Polunga
+                </span>
+              )}
+            </button>
+          )}
           <div className="lz-gamecard is-locked is-secret" aria-label="Jeu secret">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={ASSET(SECRET_GAME.img)} alt="" />
@@ -832,7 +849,7 @@ function Bonus({
         </div>
       </div>
     );
-  return <MiniGame key={game} id={game} letters={letters} level={game === SECRET_GAME.id || game === VOL_GAME.id ? 1 : gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
+  return <MiniGame key={game} id={game} letters={letters} level={game === SECRET_GAME.id || game === VOL_GAME.id || game === NAMEK_GAME.id ? 1 : gameLevel(save, game)} extra={extra} goku={fighter.img} beam={attackFor(fighter.id, formStep(save)).color} onDone={onDone} />;
 }
 
 /** « e · u » */

@@ -57,6 +57,9 @@ export const L = {
   wishNamek: "Les sept boules de Namek ! Polunga va exaucer trois vœux !",
   dragonSky: "Regarde ! Le ciel devient tout noir…",
   volGo: "Avec Shenron, attrape les boules avec la lettre…",
+  shipGo: "En route pour Namek ! Pilote le vaisseau, il tire tout seul. Évite les astéroïdes, et attrape les boules de cristal !",
+  friezaComes: "Attention ! Voilà Freezer !",
+  friezaBeaten: "Freezer est vaincu ! Tu es trop fort !",
   newRecord: "Nouveau record ! Tu es trop fort !",
   gameOver: "Fin du jeu ! Bien joué !",
 } as const;
