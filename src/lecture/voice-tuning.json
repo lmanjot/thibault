@@ -106,9 +106,6 @@
     "say": "Coco !",
     "speed": 0.85
   },
-  "sé": {
-    "say": "zé"
-  },
   "Je suis Shenron, le dragon sacré ! Tu as rassemblé les sept boules de cristal. Je vais exaucer ton vœu.": {
     "expression": 0.35,
     "speed": 0.92,

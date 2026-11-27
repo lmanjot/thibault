@@ -95,12 +95,6 @@ function toWav16k(samples: Float32Array, rate: number): Blob {
   return new Blob([buf], { type: "audio/wav" });
 }
 
-/**
- * Syllables read differently from how Azure says them, scored against a spelling of how they are read
- * (« sé » is read « zé »: against « sé » a good « zé » scores 25, against « zé » 90). Keep in step with voice-tuning.json.
- */
-const READ_AS: Record<string, string> = { "sé": "zé" };
-
 /** Listen to him reading `text` (« la ») and score it. onRecorded: the recording is over, the score is on its way. */
 export async function listen(text: string, onRecorded?: () => void): Promise<Heard> {
   if (!navigator.mediaDevices?.getUserMedia) return { kind: "unavailable" };
@@ -115,7 +109,7 @@ export async function listen(text: string, onRecorded?: () => void): Promise<Hea
   try {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 10000);
-    const r = await fetch(`/api/lecture-pronounce?text=${encodeURIComponent(READ_AS[text] ?? text)}`, {
+    const r = await fetch(`/api/lecture-pronounce?text=${encodeURIComponent(text)}`, {
       method: "POST",
       headers: { "Content-Type": "audio/wav" },
       body: toWav16k(rec.samples, rec.rate),
