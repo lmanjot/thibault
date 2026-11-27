@@ -3,8 +3,8 @@
 // expected syllable to /api/lecture-pronounce, where Azure Speech scores how well it was read (0-100).
 // The microphone is released after each recording, so it is never left on between questions.
 
-/** From this score a reading counts as right (a different syllable scores near 0). */
-export const GOOD_SCORE = 60;
+/** From this score a reading counts as right (a close but wrong one, « veu » read for « feu », scores about 50). */
+export const GOOD_SCORE = 55;
 
 export type Heard =
   | { kind: "scored"; score: number; heard: string }
@@ -106,20 +106,35 @@ export async function listen(text: string, onRecorded?: () => void): Promise<Hea
   }
   if (!rec.spoke) return { kind: "silence" };
   onRecorded?.();
-  try {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 10000);
-    const r = await fetch(`/api/lecture-pronounce?text=${encodeURIComponent(text)}`, {
+  const wav = toWav16k(rec.samples, rec.rate);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  const score = async (ref: string): Promise<Heard> => {
+    const r = await fetch(`/api/lecture-pronounce?text=${encodeURIComponent(ref)}`, {
       method: "POST",
       headers: { "Content-Type": "audio/wav" },
-      body: toWav16k(rec.samples, rec.rate),
+      body: wav,
       signal: ctl.signal,
     });
-    clearTimeout(timer);
-    if (!r.ok) return { kind: "unavailable" };
+    if (!r.ok) throw new Error(String(r.status));
     const data = (await r.json()) as { status?: string; score?: number; heard?: string };
     return { kind: "scored", score: data.status === "Success" ? (data.score ?? 0) : 0, heard: data.heard ?? "" };
+  };
+  try {
+    // A consonant + « e » (be, le, ve…) is read « beu », « leu », « veu »: Azure takes some of them as
+    // that and some as the bare spelling (a good « veu » scores 0 against « ve », a good « le » 0 against
+    // « leu »), so it is scored against both and the better one counts.
+    const refs = SCHWA.test(text) ? [text, `${text}u`] : [text];
+    const all = await Promise.allSettled(refs.map(score));
+    const ok = all.flatMap((a) => (a.status === "fulfilled" && a.value.kind === "scored" ? [a.value] : []));
+    if (!ok.length) return { kind: "unavailable" };
+    return ok.reduce((a, b) => (b.score > a.score ? b : a));
   } catch {
     return { kind: "unavailable" };
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+/** A syllable made of consonants and a final « e » (be, le, che…). */
+const SCHWA = /^[bcdfghjklmnpqrstvwxz]+e$/;
