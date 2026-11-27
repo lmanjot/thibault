@@ -623,16 +623,40 @@ function itemEx(s: Save, id: string, focus: string | null, section: Section, bum
   return id.startsWith("g:") ? soundEx(s, id.slice(2), focus, section, bump) : sylEx(s, id, section, bump);
 }
 
-/** Pick review items: weak and not seen for a while come first. */
-function pickReview(s: Save, pool: string[], n: number): string[] {
+/** The letters an item is made of: « g:l » → l, « s:v|é » → v and é. */
+const lettersOf = (id: string): string[] => (id.startsWith("s:") ? Object.values(parseSyl(id)) : [id.slice(2)]);
+
+/**
+ * Pick review items: weak and not seen for a while come first, with enough chance that every letter
+ * comes back, and each pick making the items with the same letters less likely (« vé » then « vu » then
+ * « vou » was the whole session when the newest letter was V).
+ */
+function pickReview(s: Save, pool: string[], n: number, avoid: string[] = []): string[] {
   const t = today();
   const scored = pool.map((id) => {
     const st = stat(s, id);
     const age = st.last ? daysBetween(st.last, t) : 7;
     const due = st.level >= CLEARED ? age >= 2 : true; // cleared letters still come back, less often
-    return { id, score: (due ? 10 : 0) + Math.max(0, CLEARED - st.level) * 3 + Math.min(age, 14) + Math.random() * 4 };
+    return { id, score: (due ? 8 : 0) + Math.max(0, CLEARED - st.level) * 2 + Math.min(age, 10) + Math.random() * 10 };
   });
-  return scored.sort((a, b) => b.score - a.score).slice(0, n).map((x) => x.id);
+  const seen = new Map<string, number>();
+  for (const g of avoid) seen.set(g, (seen.get(g) ?? 0) + 1);
+  const out: string[] = [];
+  while (out.length < n && scored.length) {
+    let best = 0;
+    let bestScore = -Infinity;
+    scored.forEach((x, i) => {
+      const v = x.score - lettersOf(x.id).reduce((p, g) => p + 7 * (seen.get(g) ?? 0), 0);
+      if (v > bestScore) {
+        bestScore = v;
+        best = i;
+      }
+    });
+    const [pick] = scored.splice(best, 1);
+    out.push(pick.id);
+    for (const g of lettersOf(pick.id)) seen.set(g, (seen.get(g) ?? 0) + 1);
+  }
+  return out;
 }
 
 export function itemOf(e: Ex): string {
@@ -830,7 +854,8 @@ export function withReadAloud(s: Save, exs: Ex[]): Ex[] {
     const g = e.item.startsWith("g:") ? e.item.slice(2) : null;
     const fresh = (xs: string[]) => (xs.some((x) => !used.has(x)) ? xs.filter((x) => !used.has(x)) : xs); // not the same one twice
     const own = g ? fresh(syls.filter((x) => sylHas(x, g))) : [];
-    const id = e.item.startsWith("s:") ? e.item : pickReview(s, own.length ? own : fresh(syls), 1)[0];
+    // Other letters than the syllables already read aloud in this session (not « vé », « vu », « vou » in a row).
+    const id = e.item.startsWith("s:") ? e.item : pickReview(s, own.length ? own : fresh(syls), 1, [...used].flatMap(lettersOf))[0];
     used.add(id);
     const tap = (e.t === "syllabe" || e.t === "fusion") && e.item === id ? e : sylEx(s, id, e.section);
     out[i] = { t: "dire", section: e.section, item: id, tap };
