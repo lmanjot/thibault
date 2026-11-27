@@ -128,9 +128,69 @@ async function handle(method, code, bodyText, ns = "lecture-z") {
   // base: the version this device last saw online. If another device saved since, this device has not seen it:
   // refuse (409 with the online one) so the device can choose, instead of a stale game overwriting newer progress.
   // Without base (Lecture Z), the newer timestamp wins as before.
-  if ("base" in body ? current.updatedAt !== Number(body.base) : current.updatedAt > updatedAt) return { status: 409, body: current };
+  if ("base" in body) {
+    if (current.updatedAt !== Number(body.base)) return { status: 409, body: current };
+  } else if (ns === "lecture-z" && current.save) {
+    // Lecture Z: a device that missed the other's saves (left open since yesterday, an older tablet) must not
+    // erase what was read meanwhile. The two are merged, progress kept from both; when the result differs from
+    // what this device sent, it is stored as a newer save and sent back (409) so the device takes it.
+    const incomingNewer = updatedAt >= current.updatedAt;
+    const merged = mergeLecture(incomingNewer ? save : current.save, incomingNewer ? current.save : save);
+    if (JSON.stringify(merged.progress) === JSON.stringify(save.progress)) {
+      if (!incomingNewer) return { status: 409, body: current };
+    } else {
+      if (!incomingNewer && JSON.stringify(merged.progress) === JSON.stringify(current.save.progress)) return { status: 409, body: current };
+      const at = Math.max(updatedAt, current.updatedAt) + 1;
+      merged.updatedAt = at;
+      const data = { save: merged, updatedAt: at };
+      await write(c, data, ns);
+      return { status: 409, body: data };
+    }
+  } else if (current.updatedAt > updatedAt) return { status: 409, body: current };
   await write(c, { save, updatedAt }, ns);
   return { status: 200, body: { code: c, updatedAt } };
 }
 
-module.exports = { handle };
+// ——— Lecture Z: two saves of the same game, merged without losing progress ———
+
+const union = (a, b) => (a || b ? [...(a || []), ...(b || []).filter((x) => !(a || []).includes(x))] : undefined);
+const ballsOf = (p) => ((p.wishes || 0) + (p.porunga || 0)) * 7 + (p.letterBalls || 0);
+
+/**
+ * newer: the save with the latest timestamp (its settings, zénis, equipment, fights are kept);
+ * older: the other one, whose progress is added: letters read later, days played, things owned, album,
+ * dragon balls. Exported for the tests.
+ */
+function mergeLecture(newer, older) {
+  const out = JSON.parse(JSON.stringify(newer));
+  const p = out.progress;
+  const o = (older && older.progress) || {};
+  if (!p) return out;
+  p.items = p.items || {};
+  for (const [k, it] of Object.entries(o.items || {})) {
+    const mine = p.items[k];
+    if (!mine || String(it.last || "") > String(mine.last || "")) p.items[k] = it;
+  }
+  p.playDays = (union(p.playDays, o.playDays) || []).sort();
+  for (const k of ["cleared", "owned", "beaten", "albumDefi", "albumNew"]) {
+    const u = union(p[k], o[k]);
+    if (u) p[k] = u;
+  }
+  p.bosses = Math.max(p.bosses || 0, o.bosses || 0);
+  for (const k of ["form", "formSeen", "wishSeen"]) if (p[k] != null || o[k] != null) p[k] = Math.max(p[k] || 0, o[k] || 0);
+  if (o.levels) {
+    p.levels = p.levels || {};
+    for (const [g, l] of Object.entries(o.levels)) p.levels[g] = Math.max(p.levels[g] || 0, l || 0);
+  }
+  if (o.album) {
+    p.album = p.album || {};
+    for (const [letter, rounds] of Object.entries(o.album)) {
+      const mine = p.album[letter] || [];
+      p.album[letter] = rounds.map((r, i) => mine[i] || r).concat(mine.slice(rounds.length));
+    }
+  }
+  if (ballsOf(o) > ballsOf(p)) for (const k of ["letterBalls", "wishes", "porunga", "porungaLeft"]) if (o[k] != null) p[k] = o[k];
+  return out;
+}
+
+module.exports = { handle, mergeLecture };
